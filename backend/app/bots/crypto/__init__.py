@@ -8,6 +8,7 @@ from .scalper_bot import CryptoScalperBot
 from .dca_bot import DcaBot
 from .grib_bot import GridBot
 from .whale_bot import WhaleBot
+from .tokenization_bot import TokenizationBot
 
 __all__ = [
     "ArbitrageBot",
@@ -15,4 +16,5 @@ __all__ = [
     "DcaBot",
     "GridBot",
     "WhaleBot",
+    "TokenizationBot",
 ]

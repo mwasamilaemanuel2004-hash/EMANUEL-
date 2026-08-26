@@ -14,6 +14,7 @@ from .crypto.scalper_bot import CryptoScalperBot
 from .crypto.dca_bot import DcaBot
 from .crypto.grib_bot import GridBot
 from .crypto.whale_bot import WhaleBot
+from .crypto.tokenization_bot import TokenizationBot
 from .stock_analyzer import AIStockAnalyzerBot
 from .metals_bot import MetalsBot
 from .commodities_bot import CommoditiesBot

@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ESMH.TRADE — Analysis (Tokenization & RWA)</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+         background: #0b0e13; color: #e6e8eb; padding: 20px; line-height: 1.5; }
+  .container { max-width: 1200px; margin: 0 auto; }
+  header { text-align: center; margin-bottom: 24px; padding: 24px;
+           background: linear-gradient(135deg, #1a1f2e 0%, #232a3f 100%);
+           border-radius: 12px; border: 1px solid #2d3548; }
+  header h1 { font-size: 28px; color: #4fc3f7; }
+  header p { color: #8b95a7; margin-top: 8px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+          gap: 20px; }
+  .card { background: #151924; border: 1px solid #2d3548; border-radius: 10px;
+          padding: 20px; transition: transform 0.15s, border-color 0.15s; }
+  .card:hover { transform: translateY(-2px); border-color: #4fc3f7; }
+  .card h2 { color: #4fc3f7; font-size: 20px; margin-bottom: 12px;
+             display: flex; align-items: center; gap: 8px; }
+  .score-bar { width: 100%; height: 24px; background: #1a1f2e; border-radius: 12px;
+               overflow: hidden; margin: 12px 0; position: relative; }
+  .score-fill { height: 100%; border-radius: 12px; transition: width 0.5s;
+                display: flex; align-items: center; justify-content: center;
+                font-weight: bold; font-size: 13px; }
+  .score-high { background: linear-gradient(90deg, #4caf50, #66bb6a); color: #fff; }
+  .score-med  { background: linear-gradient(90deg, #ff9800, #ffa726); color: #fff; }
+  .score-low  { background: linear-gradient(90deg, #f44336, #ef5350); color: #fff; }
+  .metric-row { display: flex; justify-content: space-between; padding: 6px 0;
+                border-bottom: 1px solid #1a1f2e; font-size: 14px; }
+  .metric-row .label { color: #8b95a7; }
+  .metric-row .value { color: #e6e8eb; font-weight: 500; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px;
+           font-weight: 600; }
+  .badge-clear { background: #1b5e20; color: #c8e6c9; }
+  .badge-compliant { background: #2e7d32; color: #c8e6c9; }
+  .badge-pending { background: #f57c00; color: #ffe0b2; }
+  .badge-unclear { background: #757575; color: #e0e0e0; }
+  .badge-hostile { background: #b71c1c; color: #ffcdd2; }
+  .badge-bull { background: #1b5e20; color: #c8e6c9; }
+  .badge-accum { background: #1976d2; color: #bbdefb; }
+  .badge-bear { background: #b71c1c; color: #ffcdd2; }
+  .badge-upgrade { background: #6a1b9a; color: #e1bee7; }
+  .recommendation { margin-top: 12px; padding: 12px; border-radius: 6px;
+                    text-align: center; font-weight: 600; }
+  .rec-trade { background: rgba(76, 175, 80, 0.15); color: #66bb6a; }
+  .rec-watch { background: rgba(255, 152, 0, 0.15); color: #ffa726; }
+  .rec-skip  { background: rgba(244, 67, 54, 0.15); color: #ef5350; }
+  .section-title { color: #4fc3f7; font-size: 22px; margin: 32px 0 16px;
+                   border-bottom: 2px solid #2d3548; padding-bottom: 8px; }
+  .explanation { color: #8b95a7; font-size: 13px; line-height: 1.6;
+                 margin-top: 8px; }
+  .api-info { background: #1a1f2e; border-left: 3px solid #4fc3f7;
+              padding: 12px; margin-top: 24px; border-radius: 4px; font-size: 13px; }
+  code { background: #1a1f2e; padding: 2px 6px; border-radius: 3px;
+         color: #4fc3f7; font-family: 'Courier New', monospace; font-size: 12px; }
+  footer { text-align: center; margin-top: 40px; color: #8b95a7; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>ESMH.TRADE — Tokenization & RWA Analysis</h1>
+    <p>Ultra-advanced fundamental analysis for crypto tokenization, RWA growth,
+       regulatory clarity, ecosystem adoption, macro liquidity, and timing.</p>
+  </header>
+
+  <div class="section-title">Token Analysis (Live TokenScore + Timing)</div>
+  <div id="token-grid" class="grid">
+    <!-- Filled by JS -->
+  </div>
+
+  <div class="section-title">Analysis Framework — 10 Weighted Factors</div>
+  <div class="grid">
+    <div class="card">
+      <h2>1. Regulatory Clarity</h2>
+      <p class="explanation">
+        Weight: gate (multiplier 0.5-1.5). Status levels:
+        <span class="badge badge-clear">CLEAR</span>
+        <span class="badge badge-compliant">COMPLIANT</span>
+        <span class="badge badge-pending">PENDING</span>
+        <span class="badge badge-unclear">UNCLEAR</span>
+        <span class="badge badge-hostile">HOSTILE</span><br>
+        Multiplier: CLEAR=1.5x, COMPLIANT=1.35x, PENDING=1.1x, UNCLEAR=0.85x, HOSTILE=0.6x.
+      </p>
+    </div>
+    <div class="card">
+      <h2>2. Tokenization & RWA Growth</h2>
+      <p class="explanation">
+        Weight: 15%. RWA TVL (real-world assets on-chain) and 30-day growth rate.
+        Higher TVL + positive growth = higher score. Captures the institutional
+        adoption of tokenized treasuries, bonds, and real estate.
+      </p>
+    </div>
+    <div class="card">
+      <h2>3. Product Launches</h2>
+      <p class="explanation">Weight: 10%. Recent protocol/token launches signal
+        ecosystem momentum. Each launch adds 20 points (capped at 100).</p>
+    </div>
+    <div class="card">
+      <h2>4. Ecosystem Adoption</h2>
+      <p class="explanation">Weight: 12%. Active users, developer activity, integrations.
+        Captures real usage vs. speculation.</p>
+    </div>
+    <div class="card">
+      <h2>5. Macro Liquidity</h2>
+      <p class="explanation">Weight: 10%. Fed policy, global M2, risk-on/off cycles.
+        High macro liquidity = bullish for crypto.</p>
+    </div>
+    <div class="card">
+      <h2>6. Network Upgrades</h2>
+      <p class="explanation">Weight: 8%. Protocol upgrades (Ethereum, Solana, L2s).
+        Catalysts like EIPs, restaking, or new VMs drive momentum.</p>
+    </div>
+    <div class="card">
+      <h2>7. Staking & ETFs</h2>
+      <p class="explanation">Weight: 8%. Institutional product availability (spot ETFs,
+        staking products). Binary: 100 if available, 50 otherwise.</p>
+    </div>
+    <div class="card">
+      <h2>8. Capital Flow</h2>
+      <p class="explanation">Weight: 12%. 30-day net on-chain flow (+ = inflow).
+        Positive flow = accumulation = bullish.</p>
+    </div>
+    <div class="card">
+      <h2>9. Market Cycle / Timing</h2>
+      <p class="explanation">Weight: 10%. Cycle phase:
+        <span class="badge badge-bull">BULL_RUN</span>
+        <span class="badge badge-upgrade">UPGRADE_CATALYST</span>
+        <span class="badge badge-accum">ACCUMULATION</span>
+        <span class="badge badge-bear">BEAR</span><br>
+        Plus timing quality: cycle + flow + upgrade catalyst.
+      </p>
+    </div>
+    <div class="card">
+      <h2>10. Real Usage</h2>
+      <p class="explanation">Weight: 15%. Active addresses, transaction volume,
+        fees burned. Measures actual on-chain utility vs. speculative trading.</p>
+    </div>
+  </div>
+
+  <div class="section-title">Risk Management (Applied to Every Trade)</div>
+  <div class="grid">
+    <div class="card">
+      <h2>Mandatory Smart Stop Loss</h2>
+      <p class="explanation">Every trade has an ATR-based or structure-based stop.
+        Never widened on a losing trade. Risk capped at 1R per position.</p>
+    </div>
+    <div class="card">
+      <h2>Breakeven Lock @ 1R</h2>
+      <p class="explanation">Once price moves +1R in favor, SL moves to entry.
+        Trade becomes risk-free.</p>
+    </div>
+    <div class="card">
+      <h2>UNLIMITED Runner</h2>
+      <p class="explanation">30-55% of position trails via ATR/structure. No small
+        fixed target — lets winners run 2-6R+. Asymmetric payoff.</p>
+    </div>
+    <div class="card">
+      <h2>News Filter</h2>
+      <p class="explanation">Blocks trading on NFP, FOMC, CPI, ECB days.
+        Avoids abnormal spreads/slippage on high-impact news.</p>
+    </div>
+  </div>
+
+  <div class="api-info">
+    <strong>API Endpoint:</strong> <code>GET /api/analysis?symbol=BTC</code><br>
+    <strong>Results:</strong> <code>GET /api/results</code> — backtest + forward test results.<br>
+    <strong>Signal:</strong> Returns <code>TradeSignal</code> if TokenScore ≥ 70 AND
+    timing_quality ≥ 0.55 AND technical confirmation (EMA trend aligned with cycle).
+  </div>
+
+  <footer>
+    ESMH.TRADE — Tokenization & RWA Analysis Engine.<br>
+    TokenScore = (weighted factors) × regulatory_multiplier. Timing = cycle + flow + catalyst.
+  </footer>
+</div>
+
+<script>
+const TOKENS = [
+  {symbol:"BTC",  reg:"CLEAR",      rwa_tvl:1.5e9,  growth:8,  launches:3, eco:95, macro:70, upgrade:75, etf:true,  flow:15,  cycle:"BULL_RUN",        active:5,  usage:90},
+  {symbol:"ETH",  reg:"COMPLIANT",  rwa_tvl:8e9,    growth:12, launches:4, eco:98, macro:68, upgrade:90, etf:true,  flow:10,  cycle:"UPGRADE_CATALYST",active:4,  usage:95},
+  {symbol:"SOL",  reg:"PENDING",    rwa_tvl:5e8,    growth:20, launches:5, eco:88, macro:65, upgrade:80, etf:true,  flow:20,  cycle:"UPGRADE_CATALYST",active:10, usage:85},
+  {symbol:"ONDO", reg:"COMPLIANT",  rwa_tvl:8e8,    growth:35, launches:3, eco:82, macro:70, upgrade:65, etf:false, flow:25,  cycle:"BULL_RUN",        active:15, usage:75},
+];
+
+const REG_MULT = {CLEAR:1.5, COMPLIANT:1.35, PENDING:1.1, UNCLEAR:0.85, HOSTILE:0.6};
+const CYCLE_SCORE = {BULL_RUN:90, UPGRADE_CATALYST:80, ACCUMULATION:60, DISTRIBUTION:40, BEAR:25};
+const WEIGHTS = {growth:0.15, launches:0.10, eco:0.12, macro:0.10, upgrade:0.08, etf:0.08, flow:0.12, cycle:0.10, usage:0.15};
+
+function score(t) {
+  const reg = {CLEAR:100, COMPLIANT:85, PENDING:60, UNCLEAR:35, HOSTILE:10}[t.reg] || 50;
+  const regMult = 0.5 + reg / 100;
+  const scores = {
+    reg: reg,
+    growth: Math.min(100, Math.max(0, 50 + t.growth)),
+    launches: Math.min(100, t.launches * 20),
+    eco: t.eco,
+    macro: t.macro,
+    upgrade: t.upgrade,
+    etf: t.etf ? 100 : 50,
+    flow: Math.min(100, Math.max(0, 50 + t.flow * 0.5)),
+    cycle: CYCLE_SCORE[t.cycle] || 50,
+    usage: t.usage,
+  };
+  let base = 0;
+  for (const k in WEIGHTS) base += scores[k === 'growth' ? 'growth' : k === 'launches' ? 'launches' : k === 'eco' ? 'eco' : k === 'macro' ? 'macro' : k === 'upgrade' ? 'upgrade' : k === 'etf' ? 'etf' : k === 'flow' ? 'flow' : k === 'cycle' ? 'cycle' : 'usage'] * WEIGHTS[k];
+  const total = Math.min(100, Math.max(0, base * regMult));
+  return {total: Math.round(total * 10) / 10, scores, regMult};
+}
+
+function timing(t) {
+  let x = 0.5;
+  if (t.cycle === 'BULL_RUN') x += 0.2;
+  if (t.cycle === 'UPGRADE_CATALYST') x += 0.15;
+  if (t.cycle === 'BEAR') x -= 0.2;
+  x += Math.min(0.15, Math.max(-0.15, t.flow * 0.01));
+  if (t.upgrade > 70) x += 0.1;
+  if (t.launches >= 2) x += 0.05;
+  return Math.min(1, Math.max(0, x));
+}
+
+function recommendation(total, timing) {
+  if (total >= 70 && timing >= 0.55) return {text: 'TRADE', cls: 'rec-trade'};
+  if (total >= 60) return {text: 'WATCH', cls: 'rec-watch'};
+  return {text: 'SKIP', cls: 'rec-skip'};
+}
+
+function render() {
+  const grid = document.getElementById('token-grid');
+  grid.innerHTML = TOKENS.map(t => {
+    const s = score(t);
+    const tm = timing(t);
+    const rec = recommendation(s.total, tm);
+    const cls = s.total >= 70 ? 'score-high' : s.total >= 50 ? 'score-med' : 'score-low';
+    return `<div class="card">
+      <h2>${t.symbol} <span class="badge badge-${t.reg.toLowerCase()}">${t.reg}</span></h2>
+      <div class="score-bar"><div class="score-fill ${cls}" style="width:${s.total}%">${s.total}</div></div>
+      <div class="metric-row"><span class="label">Cycle</span><span class="value"><span class="badge badge-${t.cycle.toLowerCase().includes('bull') ? 'bull' : t.cycle.toLowerCase().includes('accum') ? 'accum' : t.cycle.toLowerCase().includes('upgrade') ? 'upgrade' : 'bear'}">${t.cycle}</span></span></div>
+      <div class="metric-row"><span class="label">RWA TVL</span><span class="value">$${(t.rwa_tvl/1e9).toFixed(2)}B</span></div>
+      <div class="metric-row"><span class="label">RWA Growth (30d)</span><span class="value">${t.growth > 0 ? '+' : ''}${t.growth}%</span></div>
+      <div class="metric-row"><span class="label">Capital Flow (30d)</span><span class="value">${t.flow > 0 ? '+' : ''}${t.flow}%</span></div>
+      <div class="metric-row"><span class="label">Staking / ETF</span><span class="value">${t.etf ? 'Yes' : 'No'}</span></div>
+      <div class="metric-row"><span class="label">Ecosystem</span><span class="value">${t.eco}/100</span></div>
+      <div class="metric-row"><span class="label">Network Upgrades</span><span class="value">${t.upgrade}/100</span></div>
+      <div class="metric-row"><span class="label">Real Usage</span><span class="value">${t.usage}/100</span></div>
+      <div class="metric-row"><span class="label">Regulatory Mult</span><span class="value">${s.regMult}x</span></div>
+      <div class="metric-row"><span class="label">Timing Quality</span><span class="value">${(tm*100).toFixed(0)}%</span></div>
+      <div class="recommendation ${rec.cls}">${rec.text}</div>
+    </div>`;
+  }).join('');
+}
+render();
+</script>
+</body>
+</html>
