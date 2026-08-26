@@ -1,0 +1,21 @@
+import numpy as np, pandas as pd
+np.random.seed(42)
+n=1000
+returns = np.random.normal(0.0001, 0.02, n)
+price = 100*np.exp(np.cumsum(returns))
+data = pd.DataFrame({'close':price,'high':price*1.01,'low':price*0.99,'volume':np.random.uniform(1000,10000,n)})
+# proper ADX like backtest
+data['ema_fast']=data['close'].ewm(span=20).mean()
+data['ema_slow']=data['close'].ewm(span=50).mean()
+delta_high=data['high'].diff(); delta_low=data['low'].diff()
+tr=pd.concat([delta_high,delta_low],axis=1).abs().max(axis=1)
+up_move=data['high'].diff(); dn_move=-data['low'].diff()
+data['+dm']=np.where((up_move>dn_move)&(up_move>0),up_move,0.0)
+data['-dm']=np.where((dn_move>up_move)&(dn_move>0),dn_move,0.0)
+data['_pos']=data['+dm'].rolling(14).sum()
+data['_neg']=data['-dm'].rolling(14).sum()
+data['adx']=100*(data['_pos']-data['_neg']).abs()/(data['_pos']+data['_neg']).replace(0,np.nan)
+data['adx']=data['adx'].rolling(14).mean()
+print('ADX describe:')
+print(data['adx'].describe())
+print('ADX>10:',(data['adx']>10).sum(),'ADX>12:',(data['adx']>12).sum(),'ADX>15:',(data['adx']>15).sum())

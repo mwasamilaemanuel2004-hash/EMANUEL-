@@ -1,0 +1,520 @@
+"""
+BOT COORDINATOR - UPDATED EDITION v2.0
+Supports $5 Minimum Capital, Universal Capital Scaling
+All Bots Accessible from $5 to $1M+
+"""
+
+import numpy as np
+import pandas as pd
+from typing import Dict, List, Optional, Tuple, Any, Union, Set
+from datetime import datetime, timedelta
+from enum import Enum
+import logging
+from collections import deque
+import json
+import time
+import threading
+import asyncio
+from functools import lru_cache, partial
+import hashlib
+import warnings
+warnings.filterwarnings('ignore')
+
+# Import all bots
+from .base_bot import BaseBot, BotStatus, RiskParameters
+from .forex.trend_follower import TrendFollowerBot
+from .forex.scalper_forex import ForexScalperBot
+from .forex.smart_money_forex import SmartMoneyForexBot
+from .forex.breakout_forex import BreakoutForexBot
+from .forex.news_forex import NewsForexBot
+from .crypto.arbitrage_crypto import UltimateCryptoArbitrageBot
+from .crypto.dca_crypto import UltimateAdvancedDCABot
+from .crypto.grid_crypto import UltimateGridBot
+from .crypto.whale_crypto import SelfHealingWhaleBot
+from .crypto.scalper_crypto import SuperAdaptiveScalper
+from .stocks.ai_stock_analyzer import AIStockAnalyzerBot
+
+logger = logging.getLogger(__name__)
+
+class CapitalTier(Enum):
+    """Capital tiers - STARTING FROM $5"""
+    MICRO = "micro"           # $5 - $50
+    MINI = "mini"            # $50 - $500
+    SMALL = "small"          # $500 - $5,000
+    MEDIUM = "medium"        # $5,000 - $50,000
+    LARGE = "large"          # $50,000 - $500,000
+    INSTITUTIONAL = "institutional"  # $500,000+
+
+class CoordinatorMode(Enum):
+    """Coordinator operation modes"""
+    CONSERVATIVE = "conservative"
+    BALANCED = "balanced"
+    AGGRESSIVE = "aggressive"
+    ADAPTIVE = "adaptive"
+    MAXIMIZE = "maximize"
+    RECOVERY = "recovery"
+
+class AllocationStrategy(Enum):
+    """Portfolio allocation strategies"""
+    EQUAL_WEIGHT = "equal_weight"
+    RISK_PARITY = "risk_parity"
+    PERFORMANCE_BASED = "performance_based"
+    VOLATILITY_ADJUSTED = "volatility_adjusted"
+    SHARPE_OPTIMIZED = "sharpe_optimized"
+    ADAPTIVE = "adaptive"
+
+class BotCategory(Enum):
+    """Bot categories"""
+    FOREX = "forex"
+    CRYPTO = "crypto"
+    STOCKS = "stocks"
+
+@dataclass
+class BotAllocation:
+    """Bot allocation data"""
+    bot_id: str
+    bot_name: str
+    category: BotCategory
+    allocated_capital: float
+    risk_weight: float
+    performance_score: float = 0.0
+    sharpe_ratio: float = 0.0
+    sortino_ratio: float = 0.0
+    max_drawdown: float = 0.0
+    win_rate: float = 0.0
+    total_pnl: float = 0.0
+    correlation_score: float = 0.0
+    volatility: float = 0.0
+    status: str = "inactive"
+    min_capital_required: float = 5.0  # MINIMUM $5
+
+class BotCoordinator:
+    """
+    POWERFUL Bot Coordinator v2.0
+    Supports $5 Minimum Capital
+    Universal Capital Scaling
+    """
+    
+    def __init__(self,
+                 total_capital: float = 100.0,  # Can start with $5
+                 mode: CoordinatorMode = CoordinatorMode.ADAPTIVE,
+                 allocation_strategy: AllocationStrategy = AllocationStrategy.ADAPTIVE):
+        """
+        Initialize Bot Coordinator
+        
+        Args:
+            total_capital: Total capital ($5 minimum)
+            mode: Coordination mode
+            allocation_strategy: Portfolio allocation strategy
+        """
+        # Validate capital - MINIMUM $5
+        if total_capital < 5:
+            logger.warning(f"Capital ${total_capital} below minimum $5")
+            total_capital = 5.0
+            logger.info(f"Using minimum capital: $5")
+        
+        self.total_capital = total_capital
+        self.available_capital = total_capital
+        self.mode = mode
+        self.allocation_strategy = allocation_strategy
+        
+        # Detect capital tier
+        self.capital_tier = self._detect_capital_tier(total_capital)
+        
+        # Bot management
+        self.bots: Dict[str, BaseBot] = {}
+        self.allocations: Dict[str, BotAllocation] = {}
+        self.bot_categories: Dict[BotCategory, List[str]] = {
+            BotCategory.FOREX: [],
+            BotCategory.CRYPTO: [],
+            BotCategory.STOCKS: []
+        }
+        
+        # Risk management
+        self.risk_parameters = self._get_mode_parameters(mode, self.capital_tier)
+        self.risk_history = deque(maxlen=5000)
+        self.drawdown_history = deque(maxlen=1000)
+        
+        # Performance tracking
+        self.performance_history: List[Dict] = []
+        self.rebalance_history = deque(maxlen=1000)
+        self.allocation_history = deque(maxlen=1000)
+        
+        # Correlation matrix
+        self.correlation_matrix: Dict[str, Dict[str, float]] = {}
+        
+        # Threading
+        self.coordinator_lock = threading.RLock()
+        self.monitoring_thread = None
+        self.rebalance_thread = None
+        self.is_monitoring = False
+        
+        # Timing
+        self.start_time = datetime.now()
+        self.last_rebalance_time = datetime.now()
+        self.rebalance_interval = timedelta(hours=24)
+        self.monitoring_interval = 60  # seconds
+        
+        logger.info(f"✅ Bot Coordinator initialized with ${total_capital}")
+        logger.info(f"   Capital Tier: {self.capital_tier.value}")
+        logger.info(f"   Mode: {mode.value}")
+        logger.info(f"   Allocation Strategy: {allocation_strategy.value}")
+        logger.info(f"   MINIMUM CAPITAL: $5 SUPPORTED")
+    
+    def _detect_capital_tier(self, capital: float) -> CapitalTier:
+        """Detect capital tier"""
+        if capital < 50:
+            return CapitalTier.MICRO
+        elif capital < 500:
+            return CapitalTier.MINI
+        elif capital < 5000:
+            return CapitalTier.SMALL
+        elif capital < 50000:
+            return CapitalTier.MEDIUM
+        elif capital < 500000:
+            return CapitalTier.LARGE
+        else:
+            return CapitalTier.INSTITUTIONAL
+    
+    def _get_mode_parameters(self, mode: CoordinatorMode, tier: CapitalTier) -> Dict[str, Any]:
+        """Get risk parameters based on mode and capital tier"""
+        # Base parameters
+        base_params = {
+            CoordinatorMode.CONSERVATIVE: {
+                'max_total_exposure': 0.5,
+                'max_per_bot_allocation': 0.15,
+                'max_category_exposure': 0.25,
+                'max_correlation': 0.5,
+                'min_performance_score': 0.6,
+                'rebalance_threshold': 0.08,
+                'risk_free_rate': 0.02,
+                'max_drawdown_limit': 0.10,
+                'daily_loss_limit': 0.02,
+                'position_size_multiplier': 0.7
+            },
+            CoordinatorMode.BALANCED: {
+                'max_total_exposure': 0.7,
+                'max_per_bot_allocation': 0.25,
+                'max_category_exposure': 0.35,
+                'max_correlation': 0.6,
+                'min_performance_score': 0.5,
+                'rebalance_threshold': 0.12,
+                'risk_free_rate': 0.03,
+                'max_drawdown_limit': 0.15,
+                'daily_loss_limit': 0.03,
+                'position_size_multiplier': 1.0
+            },
+            CoordinatorMode.AGGRESSIVE: {
+                'max_total_exposure': 0.85,
+                'max_per_bot_allocation': 0.35,
+                'max_category_exposure': 0.45,
+                'max_correlation': 0.7,
+                'min_performance_score': 0.4,
+                'rebalance_threshold': 0.15,
+                'risk_free_rate': 0.04,
+                'max_drawdown_limit': 0.20,
+                'daily_loss_limit': 0.05,
+                'position_size_multiplier': 1.3
+            },
+            CoordinatorMode.ADAPTIVE: {
+                'max_total_exposure': 0.75,
+                'max_per_bot_allocation': 0.30,
+                'max_category_exposure': 0.40,
+                'max_correlation': 0.65,
+                'min_performance_score': 0.45,
+                'rebalance_threshold': 0.10,
+                'risk_free_rate': 0.035,
+                'max_drawdown_limit': 0.18,
+                'daily_loss_limit': 0.04,
+                'position_size_multiplier': 1.0
+            },
+            CoordinatorMode.MAXIMIZE: {
+                'max_total_exposure': 0.95,
+                'max_per_bot_allocation': 0.40,
+                'max_category_exposure': 0.50,
+                'max_correlation': 0.75,
+                'min_performance_score': 0.35,
+                'rebalance_threshold': 0.20,
+                'risk_free_rate': 0.045,
+                'max_drawdown_limit': 0.25,
+                'daily_loss_limit': 0.06,
+                'position_size_multiplier': 1.5
+            },
+            CoordinatorMode.RECOVERY: {
+                'max_total_exposure': 0.30,
+                'max_per_bot_allocation': 0.10,
+                'max_category_exposure': 0.15,
+                'max_correlation': 0.30,
+                'min_performance_score': 0.70,
+                'rebalance_threshold': 0.05,
+                'risk_free_rate': 0.015,
+                'max_drawdown_limit': 0.05,
+                'daily_loss_limit': 0.01,
+                'position_size_multiplier': 0.4
+            }
+        }
+        
+        params = base_params[mode]
+        
+        # Adjust for micro capital
+        tier_adjustments = {
+            CapitalTier.MICRO: {
+                'max_per_bot_allocation': 1.0,  # Allow 100% for micro
+                'max_category_exposure': 1.0,   # Allow 100% for micro
+                'position_size_multiplier': 2.0,  # Higher multiplier for small accounts
+                'min_performance_score': 0.3,    # Lower threshold
+                'rebalance_threshold': 0.02      # More frequent rebalancing
+            },
+            CapitalTier.MINI: {
+                'max_per_bot_allocation': 0.5,
+                'max_category_exposure': 0.6,
+                'position_size_multiplier': 1.5,
+                'min_performance_score': 0.35,
+                'rebalance_threshold': 0.05
+            },
+            CapitalTier.SMALL: {
+                'max_per_bot_allocation': 0.35,
+                'max_category_exposure': 0.45,
+                'position_size_multiplier': 1.2,
+                'min_performance_score': 0.4,
+                'rebalance_threshold': 0.08
+            },
+            CapitalTier.MEDIUM: {
+                'position_size_multiplier': 1.0,
+                'rebalance_threshold': 0.10
+            },
+            CapitalTier.LARGE: {
+                'position_size_multiplier': 0.9,
+                'rebalance_threshold': 0.12
+            },
+            CapitalTier.INSTITUTIONAL: {
+                'position_size_multiplier': 0.8,
+                'rebalance_threshold': 0.15
+            }
+        }
+        
+        if tier in tier_adjustments:
+            params.update(tier_adjustments[tier])
+        
+        return params
+    
+    def register_bot(self, 
+                     bot: BaseBot,
+                     category: BotCategory,
+                     allocation_percentage: Optional[float] = None) -> bool:
+        """
+        Register a bot with the coordinator
+        Supports $5 minimum capital
+        """
+        try:
+            with self.coordinator_lock:
+                # Validate bot
+                if bot.bot_id in self.bots:
+                    logger.error(f"Bot {bot.bot_name} already registered")
+                    return False
+                
+                # Calculate allocation
+                if allocation_percentage is None:
+                    allocation_percentage = self._calculate_default_allocation(category)
+                
+                # Apply maximum allocation limit
+                max_allocation = self.risk_parameters['max_per_bot_allocation']
+                allocation_percentage = min(allocation_percentage, max_allocation)
+                
+                # Calculate capital
+                allocated_capital = self.total_capital * allocation_percentage
+                
+                # Check MINIMUM $5
+                if allocated_capital < 5:
+                    allocated_capital = 5.0
+                    allocation_percentage = allocated_capital / self.total_capital
+                
+                # Check available capital
+                if allocated_capital > self.available_capital + 0.01:
+                    # Adjust to available
+                    allocated_capital = self.available_capital
+                    allocation_percentage = allocated_capital / self.total_capital
+                
+                # Create allocation
+                allocation = BotAllocation(
+                    bot_id=bot.bot_id,
+                    bot_name=bot.bot_name,
+                    category=category,
+                    allocated_capital=allocated_capital,
+                    risk_weight=allocation_percentage,
+                    status="active",
+                    min_capital_required=5.0
+                )
+                
+                # Register bot
+                self.bots[bot.bot_id] = bot
+                self.allocations[bot.bot_id] = allocation
+                self.bot_categories[category].append(bot.bot_id)
+                
+                # Update available capital
+                self.available_capital -= allocated_capital
+                
+                logger.info(f"✅ Registered bot: {bot.bot_name}")
+                logger.info(f"   Category: {category.value}")
+                logger.info(f"   Allocation: {allocation_percentage:.1%} (${allocated_capital:,.2f})")
+                
+                return True
+                
+        except Exception as e:
+            logger.error(f"Error registering bot: {e}")
+            return False
+    
+    def _calculate_default_allocation(self, category: BotCategory) -> float:
+        """Calculate default allocation for category"""
+        # Get current category exposure
+        category_exposure = sum(
+            self.allocations[bot_id].risk_weight
+            for bot_id in self.bot_categories[category]
+        )
+        
+        # Calculate remaining allocation
+        max_category = self.risk_parameters['max_category_exposure']
+        remaining = max_category - category_exposure
+        
+        # Distribute equally among bots in category
+        bot_count = max(1, len(self.bot_categories[category]) + 1)
+        
+        return max(0.05, min(remaining, remaining / bot_count))
+    
+    def register_multiple_bots(self, bot_configs: List[Dict[str, Any]]) -> Dict[str, bool]:
+        """
+        Register multiple bots at once
+        Supports $5 minimum capital distribution
+        """
+        results = {}
+        
+        for config in bot_configs:
+            bot = config.get('bot')
+            category = config.get('category', BotCategory.CRYPTO)
+            allocation = config.get('allocation', None)
+            
+            if bot:
+                results[bot.bot_id] = self.register_bot(bot, category, allocation)
+            else:
+                results['unknown'] = False
+        
+        return results
+    
+    def get_minimum_capital_info(self) -> Dict[str, Any]:
+        """Get minimum capital requirements for all bots"""
+        bot_minimums = {
+            'scalper': 5,      # $5 minimum
+            'grid': 10,        # $10 minimum
+            'dca': 10,         # $10 minimum
+            'whale': 50,       # $50 minimum
+            'arbitrage': 100,  # $100 minimum
+            'forex_scalper': 5,
+            'forex_trend': 10,
+            'smart_money': 20,
+            'breakout': 10,
+            'news': 20,
+            'stocks': 50
+        }
+        
+        return {
+            'minimum_capital': 5,
+            'bot_minimums': bot_minimums,
+            'current_capital': self.total_capital,
+            'capital_tier': self.capital_tier.value,
+            'can_run_all_bots': self.total_capital >= 500,
+            'can_run_most_bots': self.total_capital >= 100,
+            'can_run_basic_bots': self.total_capital >= 10,
+            'can_run_micro_bots': self.total_capital >= 5
+        }
+    
+    def optimize_for_small_capital(self) -> None:
+        """Optimize portfolio for small capital"""
+        if self.capital_tier in [CapitalTier.MICRO, CapitalTier.MINI]:
+            logger.info("Optimizing for small capital...")
+            
+            # Reduce number of bots
+            if len(self.bots) > 2:
+                logger.info("Reducing bot count for small capital")
+                
+                # Keep only best performing bots
+                self.update_performance_metrics()
+                
+                sorted_bots = sorted(
+                    self.allocations.items(),
+                    key=lambda x: x[1].performance_score,
+                    reverse=True
+                )
+                
+                # Remove underperforming bots
+                for bot_id, allocation in sorted_bots[2:]:
+                    self.unregister_bot(bot_id)
+            
+            # Increase position size multiplier
+            self.risk_parameters['position_size_multiplier'] *= 1.5
+            
+            # Reduce rebalance interval
+            self.rebalance_interval = timedelta(hours=6)
+            
+            logger.info("Small capital optimization completed")
+    
+    def get_portfolio_summary(self) -> Dict[str, Any]:
+        """Get comprehensive portfolio summary"""
+        summary = {
+            'total_capital': self.total_capital,
+            'available_capital': self.available_capital,
+            'allocated_capital': sum(a.allocated_capital for a in self.allocations.values()),
+            'total_pnl': sum(a.total_pnl for a in self.allocations.values()),
+            'total_pnl_percentage': sum(a.total_pnl for a in self.allocations.values()) / self.total_capital * 100 if self.total_capital > 0 else 0,
+            'active_bots': sum(1 for a in self.allocations.values() if a.status == "running"),
+            'total_bots': len(self.bots),
+            'mode': self.mode.value,
+            'allocation_strategy': self.allocation_strategy.value,
+            'capital_tier': self.capital_tier.value,
+            'minimum_capital_supported': 5,
+            'uptime': str(datetime.now() - self.start_time),
+            'bots': {}
+        }
+        
+        for bot_id, allocation in self.allocations.items():
+            summary['bots'][bot_id] = {
+                'name': allocation.bot_name,
+                'category': allocation.category.value,
+                'status': allocation.status,
+                'allocated_capital': allocation.allocated_capital,
+                'risk_weight': allocation.risk_weight,
+                'performance_score': allocation.performance_score,
+                'sharpe_ratio': allocation.sharpe_ratio,
+                'win_rate': allocation.win_rate,
+                'total_pnl': allocation.total_pnl,
+                'max_drawdown': allocation.max_drawdown,
+                'min_capital': allocation.min_capital_required
+            }
+        
+        return summary
+
+# ============ CONVENIENCE FUNCTIONS ============
+
+def create_coordinator_with_minimum_capital(total_capital: float = 5.0,
+                                           mode: CoordinatorMode = CoordinatorMode.ADAPTIVE) -> BotCoordinator:
+    """Create coordinator with minimum capital support"""
+    return BotCoordinator(
+        total_capital=max(5.0, total_capital),
+        mode=mode,
+        allocation_strategy=AllocationStrategy.ADAPTIVE
+    )
+
+def get_bot_minimum_capitals() -> Dict[str, int]:
+    """Get minimum capital requirements"""
+    return {
+        'super_scalper': 5,
+        'forex_scalper': 5,
+        'grid_bot': 10,
+        'dca_bot': 10,
+        'trend_follower': 10,
+        'breakout_bot': 10,
+        'smart_money': 20,
+        'news_bot': 20,
+        'whale_bot': 50,
+        'stock_analyzer': 50,
+        'arbitrage_bot': 100
+    }

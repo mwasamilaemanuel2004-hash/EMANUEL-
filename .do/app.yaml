@@ -1,0 +1,93 @@
+# DigitalOcean App Platform Configuration
+# Deploy with: doctl apps create --spec .do/app.yaml
+
+name: esmh-trade
+region: nyc  # Change to your preferred region: sfo, fra, blr, etc.
+
+services:
+  - name: api
+    source_dir: /
+    github:
+      repo: YOUR_USERNAME/ESMH.TRADE
+      branch: main
+      deploy_on_push: true
+    
+    # Build command
+    build_command: pip install -r backend/requirements.txt
+    
+    # Run command
+    run_command: uvicorn backend.app.main:app --host 0.0.0.0 --port 8080 --workers 4
+    
+    # Environment variables
+    envs:
+      - key: APP_NAME
+        value: ESMH.TRADE
+      - key: DEBUG
+        value: "false"
+      - key: LOG_LEVEL
+        value: INFO
+      - key: DATABASE_URL
+        value: sqlite:///./data/estrade.db
+      - key: SECRET_KEY
+        type: SECRET
+        value: ${SECRET_KEY}
+      - key: ENCRYPTION_KEY
+        type: SECRET
+        value: ${ENCRYPTION_KEY}
+      - key: SMTP_USER
+        type: SECRET
+        value: ${SMTP_USER}
+      - key: SMTP_PASSWORD
+        type: SECRET
+        value: ${SMTP_PASSWORD}
+      - key: BINANCE_API_KEY
+        type: SECRET
+        value: ${BINANCE_API_KEY}
+      - key: BINANCE_SECRET_KEY
+        type: SECRET
+        value: ${BINANCE_SECRET_KEY}
+    
+    # HTTP port
+    http_port: 8080
+    
+    # Health check
+    health_check:
+      http_path: /health
+      port: 8080
+    
+    # Instance size
+    instance_size_slug: basic-xs
+    instance_count: 1
+    
+    # Routes
+    routes:
+      - path: /
+    
+    # CORS
+    cors:
+      allow_origins:
+        - prefix: https://
+      allow_methods:
+        - GET
+      - POST
+      - PUT
+      - DELETE
+      - OPTIONS
+      allow_headers:
+        - "*"
+
+# Optional: Add a static site for frontend
+# static_sites:
+#   - name: frontend
+#     source_dir: /frontend
+#     output_dir: /
+#     routes:
+#       - path: /static
+
+# Optional: Add PostgreSQL database
+# databases:
+#   - name: db
+#     engine: PG
+#     version: "16"
+#     size: db-s-dev-database
+#     num_nodes: 1

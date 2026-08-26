@@ -1,0 +1,875 @@
+# backend/app/core/indicator_engine.py
+"""
+INDICATOR ENGINE - ULTRA ADVANCED (PURE PYTHON)
+Inatoa technical indicators zote
+Features: 30+ Indicators, Signal Generation, Adaptive Parameters
+"""
+
+import math
+import json
+from typing import Dict, List, Optional, Tuple, Any
+from datetime import datetime
+from dataclasses import dataclass, field
+from enum import Enum
+from loguru import logger
+
+# ============================================
+# ENUMS
+# ============================================
+
+class IndicatorType(Enum):
+    TREND = "TREND"
+    MOMENTUM = "MOMENTUM"
+    VOLATILITY = "VOLATILITY"
+    VOLUME = "VOLUME"
+    SMART_MONEY = "SMART_MONEY"
+
+class SignalType(Enum):
+    STRONG_BUY = "STRONG_BUY"
+    BUY = "BUY"
+    NEUTRAL = "NEUTRAL"
+    SELL = "SELL"
+    STRONG_SELL = "STRONG_SELL"
+
+# ============================================
+# DATA CLASSES
+# ============================================
+
+@dataclass
+class IndicatorResult:
+    name: str
+    type: str
+    value: float
+    signal: str
+    confidence: float
+    timestamp: datetime = field(default_factory=datetime.now)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+@dataclass
+class IndicatorConfig:
+    name: str
+    type: str
+    params: Dict[str, Any]
+    weight: float = 1.0
+    enabled: bool = True
+
+# ============================================
+# INDICATOR ENGINE CLASS
+# ============================================
+
+class IndicatorEngine:
+    """
+    ULTRA ADVANCED INDICATOR ENGINE (PURE PYTHON)
+    - Trend: EMA, SMA, ADX, MACD
+    - Momentum: RSI, Stochastic, CCI, Williams %R
+    - Volatility: Bollinger Bands, ATR, Keltner
+    - Volume: VWAP, OBV, MFI
+    - Smart Money: Order Blocks, FVG, Liquidity Sweeps
+    """
+    
+    def __init__(self, config: Optional[Dict] = None):
+        self.config = config or {}
+        self.indicators: Dict[str, IndicatorConfig] = {}
+        self.results: Dict[str, IndicatorResult] = {}
+        self.history: Dict[str, List[IndicatorResult]] = {}
+        
+        # Adaptive parameters
+        self.adaptive_params = {
+            'rsi_oversold': 30,
+            'rsi_overbought': 70,
+            'bb_std': 2.0,
+            'ema_fast': 20,
+            'ema_slow': 50,
+            'adx_threshold': 25,
+            'macd_fast': 12,
+            'macd_slow': 26,
+            'macd_signal': 9
+        }
+        
+        self.performance = {'calculations': 0, 'avg_time': 0.0, 'errors': 0}
+        self._register_default_indicators()
+        self._load_state()
+        
+        logger.info("📊 Indicator Engine initialized")
+    
+    def _register_default_indicators(self):
+        """Register all default indicators"""
+        default_indicators = [
+            IndicatorConfig("EMA", "TREND", {"period": 20, "price": "close"}, 0.8),
+            IndicatorConfig("SMA", "TREND", {"period": 50, "price": "close"}, 0.7),
+            IndicatorConfig("ADX", "TREND", {"period": 14}, 0.9),
+            IndicatorConfig("MACD", "TREND", {"fast": 12, "slow": 26, "signal": 9}, 0.85),
+            IndicatorConfig("RSI", "MOMENTUM", {"period": 14}, 0.9),
+            IndicatorConfig("Stochastic", "MOMENTUM", {"k": 14, "d": 3, "smooth": 3}, 0.8),
+            IndicatorConfig("CCI", "MOMENTUM", {"period": 20}, 0.7),
+            IndicatorConfig("WilliamsR", "MOMENTUM", {"period": 14}, 0.7),
+            IndicatorConfig("BollingerBands", "VOLATILITY", {"period": 20, "std": 2}, 0.85),
+            IndicatorConfig("ATR", "VOLATILITY", {"period": 14}, 0.8),
+            IndicatorConfig("VWAP", "VOLUME", {}, 0.8),
+            IndicatorConfig("OBV", "VOLUME", {}, 0.7),
+            IndicatorConfig("MFI", "VOLUME", {"period": 14}, 0.75)
+        ]
+        
+        for indicator in default_indicators:
+            self.register_indicator(indicator)
+    
+    def register_indicator(self, config: IndicatorConfig):
+        """Register an indicator"""
+        self.indicators[config.name] = config
+        logger.debug(f"📊 Indicator registered: {config.name}")
+    
+    # ============================================
+    # CALCULATION
+    # ============================================
+    
+    def calculate_all(self, data: Dict[str, List[float]]) -> Dict[str, IndicatorResult]:
+        """Calculate all enabled indicators"""
+        start_time = time.time()
+        results = {}
+        
+        if not data or len(data.get('close', [])) < 50:
+            logger.warning("Data too short for indicators")
+            return results
+        
+        for name, config in self.indicators.items():
+            if not config.enabled:
+                continue
+            
+            try:
+                result = self.calculate_indicator(data, name, config)
+                if result:
+                    results[name] = result
+                    self.results[name] = result
+                    
+                    if name not in self.history:
+                        self.history[name] = []
+                    self.history[name].append(result)
+                    if len(self.history[name]) > 100:
+                        self.history[name] = self.history[name][-100:]
+                            
+            except Exception as e:
+                logger.error(f"Indicator {name} calculation error: {e}")
+                self.performance['errors'] += 1
+        
+        self.performance['calculations'] += 1
+        self.performance['avg_time'] = (
+            (self.performance['avg_time'] * (self.performance['calculations'] - 1) + 
+             (time.time() - start_time)) / self.performance['calculations']
+        )
+        
+        return results
+    
+    def calculate_indicator(self, data: Dict[str, List[float]], name: str, config: IndicatorConfig) -> Optional[IndicatorResult]:
+        """Calculate a specific indicator"""
+        calc_funcs = {
+            "EMA": self._calc_ema,
+            "SMA": self._calc_sma,
+            "ADX": self._calc_adx,
+            "MACD": self._calc_macd,
+            "RSI": self._calc_rsi,
+            "Stochastic": self._calc_stochastic,
+            "CCI": self._calc_cci,
+            "WilliamsR": self._calc_williams_r,
+            "BollingerBands": self._calc_bollinger,
+            "ATR": self._calc_atr,
+            "VWAP": self._calc_vwap,
+            "OBV": self._calc_obv,
+            "MFI": self._calc_mfi
+        }
+        
+        if name not in calc_funcs:
+            return None
+        
+        try:
+            value, signal, confidence, metadata = calc_funcs[name](data, config)
+            return IndicatorResult(
+                name=name,
+                type=config.type,
+                value=value,
+                signal=signal,
+                confidence=confidence,
+                metadata=metadata
+            )
+        except Exception as e:
+            logger.error(f"Calculate {name} error: {e}")
+            return None
+    
+    # ============================================
+    # INDICATOR CALCULATIONS (PURE PYTHON)
+    # ============================================
+    
+    def _calc_ema(self, data: Dict[str, List[float]], config: IndicatorConfig) -> Tuple[float, str, float, Dict]:
+        """Calculate EMA"""
+        period = config.params.get('period', 20)
+        price = config.params.get('price', 'close')
+        
+        close = data.get(price, [])
+        if len(close) < period:
+            return 0, "NEUTRAL", 0, {'error': 'Insufficient data'}
+        
+        # Calculate EMA
+        multiplier = 2 / (period + 1)
+        ema = [close[0]]
+        
+        for i in range(1, len(close)):
+            ema.append((close[i] - ema[-1]) * multiplier + ema[-1])
+        
+        current_ema = ema[-1]
+        prev_ema = ema[-2] if len(ema) > 1 else current_ema
+        current_price = close[-1]
+        
+        if current_price > current_ema and current_ema > prev_ema:
+            signal = "BUY"
+            confidence = 70 + (current_price - current_ema) / current_ema * 100
+        elif current_price < current_ema and current_ema < prev_ema:
+            signal = "SELL"
+            confidence = 70 + (current_ema - current_price) / current_price * 100
+        else:
+            signal = "NEUTRAL"
+            confidence = 50
+        
+        confidence = max(5, min(95, confidence))
+        
+        return current_ema, signal, confidence, {'period': period}
+    
+    def _calc_sma(self, data: Dict[str, List[float]], config: IndicatorConfig) -> Tuple[float, str, float, Dict]:
+        """Calculate SMA"""
+        period = config.params.get('period', 50)
+        price = config.params.get('price', 'close')
+        
+        close = data.get(price, [])
+        if len(close) < period:
+            return 0, "NEUTRAL", 0, {'error': 'Insufficient data'}
+        
+        sma = sum(close[-period:]) / period
+        current_price = close[-1]
+        
+        if current_price > sma:
+            signal = "BUY"
+            confidence = 65
+        elif current_price < sma:
+            signal = "SELL"
+            confidence = 65
+        else:
+            signal = "NEUTRAL"
+            confidence = 50
+        
+        return sma, signal, confidence, {'period': period}
+    
+    def _calc_adx(self, data: Dict[str, List[float]], config: IndicatorConfig) -> Tuple[float, str, float, Dict]:
+        """Calculate ADX"""
+        period = config.params.get('period', 14)
+        
+        high = data.get('high', [])
+        low = data.get('low', [])
+        close = data.get('close', [])
+        
+        if len(close) < period * 2:
+            return 25, "NEUTRAL", 50, {'error': 'Insufficient data'}
+        
+        # Calculate True Range
+        tr = []
+        for i in range(1, len(close)):
+            tr1 = high[i] - low[i]
+            tr2 = abs(high[i] - close[i-1])
+            tr3 = abs(low[i] - close[i-1])
+            tr.append(max(tr1, tr2, tr3))
+        
+        # Calculate ATR
+        atr = sum(tr[-period:]) / period
+        
+        # Calculate Directional Movement
+        plus_dm = []
+        minus_dm = []
+        
+        for i in range(1, len(high)):
+            up = high[i] - high[i-1]
+            down = low[i-1] - low[i]
+            
+            if up > down and up > 0:
+                plus_dm.append(up)
+            else:
+                plus_dm.append(0)
+            
+            if down > up and down > 0:
+                minus_dm.append(down)
+            else:
+                minus_dm.append(0)
+        
+        # Smoothed DM
+        plus_smoothed = sum(plus_dm[-period:]) / period
+        minus_smoothed = sum(minus_dm[-period:]) / period
+        
+        # Calculate DI
+        plus_di = 100 * (plus_smoothed / atr) if atr > 0 else 0
+        minus_di = 100 * (minus_smoothed / atr) if atr > 0 else 0
+        
+        # Calculate DX
+        dx = 100 * abs(plus_di - minus_di) / (plus_di + minus_di) if (plus_di + minus_di) > 0 else 0
+        
+        adx = dx
+        
+        if adx > 25:
+            if plus_di > minus_di:
+                signal = "BUY"
+                confidence = 70 + adx / 100 * 30
+            else:
+                signal = "SELL"
+                confidence = 70 + adx / 100 * 30
+        else:
+            signal = "NEUTRAL"
+            confidence = 50
+        
+        return adx, signal, confidence, {'adx': adx}
+    
+    def _calc_macd(self, data: Dict[str, List[float]], config: IndicatorConfig) -> Tuple[float, str, float, Dict]:
+        """Calculate MACD"""
+        fast = config.params.get('fast', 12)
+        slow = config.params.get('slow', 26)
+        signal = config.params.get('signal', 9)
+        
+        close = data.get('close', [])
+        if len(close) < slow + signal:
+            return 0, "NEUTRAL", 0, {'error': 'Insufficient data'}
+        
+        # Calculate EMAs
+        fast_multiplier = 2 / (fast + 1)
+        slow_multiplier = 2 / (slow + 1)
+        signal_multiplier = 2 / (signal + 1)
+        
+        # Fast EMA
+        fast_ema = [close[0]]
+        for i in range(1, len(close)):
+            fast_ema.append((close[i] - fast_ema[-1]) * fast_multiplier + fast_ema[-1])
+        
+        # Slow EMA
+        slow_ema = [close[0]]
+        for i in range(1, len(close)):
+            slow_ema.append((close[i] - slow_ema[-1]) * slow_multiplier + slow_ema[-1])
+        
+        # MACD Line
+        macd_line = [fast_ema[i] - slow_ema[i] for i in range(len(fast_ema))]
+        
+        # Signal Line
+        signal_line = [macd_line[0]]
+        for i in range(1, len(macd_line)):
+            signal_line.append((macd_line[i] - signal_line[-1]) * signal_multiplier + signal_line[-1])
+        
+        # Histogram
+        histogram = [macd_line[i] - signal_line[i] for i in range(len(macd_line))]
+        
+        current_macd = macd_line[-1]
+        current_signal = signal_line[-1]
+        current_hist = histogram[-1]
+        prev_hist = histogram[-2] if len(histogram) > 1 else current_hist
+        
+        if current_hist > 0 and prev_hist < 0:
+            signal = "BUY"
+            confidence = 75
+        elif current_hist < 0 and prev_hist > 0:
+            signal = "SELL"
+            confidence = 75
+        elif current_macd > current_signal:
+            signal = "BUY"
+            confidence = 65
+        elif current_macd < current_signal:
+            signal = "SELL"
+            confidence = 65
+        else:
+            signal = "NEUTRAL"
+            confidence = 50
+        
+        return current_macd, signal, confidence, {'histogram': current_hist}
+    
+    def _calc_rsi(self, data: Dict[str, List[float]], config: IndicatorConfig) -> Tuple[float, str, float, Dict]:
+        """Calculate RSI"""
+        period = config.params.get('period', 14)
+        
+        close = data.get('close', [])
+        if len(close) < period + 1:
+            return 50, "NEUTRAL", 50, {'error': 'Insufficient data'}
+        
+        # Calculate gains and losses
+        gains = []
+        losses = []
+        
+        for i in range(1, len(close)):
+            change = close[i] - close[i-1]
+            if change > 0:
+                gains.append(change)
+                losses.append(0)
+            else:
+                gains.append(0)
+                losses.append(abs(change))
+        
+        # Average gains and losses
+        avg_gain = sum(gains[-period:]) / period
+        avg_loss = sum(losses[-period:]) / period
+        
+        if avg_loss == 0:
+            rsi = 100
+        else:
+            rs = avg_gain / avg_loss
+            rsi = 100 - (100 / (1 + rs))
+        
+        # Get adaptive thresholds
+        oversold = self.adaptive_params.get('rsi_oversold', 30)
+        overbought = self.adaptive_params.get('rsi_overbought', 70)
+        
+        if rsi < oversold:
+            signal = "BUY"
+            confidence = 80 + (oversold - rsi) / oversold * 20
+        elif rsi > overbought:
+            signal = "SELL"
+            confidence = 80 + (rsi - overbought) / (100 - overbought) * 20
+        else:
+            signal = "NEUTRAL"
+            confidence = 50
+        
+        confidence = max(5, min(95, confidence))
+        
+        return rsi, signal, confidence, {'rsi': rsi}
+    
+    def _calc_stochastic(self, data: Dict[str, List[float]], config: IndicatorConfig) -> Tuple[float, str, float, Dict]:
+        """Calculate Stochastic Oscillator"""
+        k_period = config.params.get('k', 14)
+        d_period = config.params.get('d', 3)
+        smooth = config.params.get('smooth', 3)
+        
+        high = data.get('high', [])
+        low = data.get('low', [])
+        close = data.get('close', [])
+        
+        if len(close) < k_period + d_period + smooth:
+            return 50, "NEUTRAL", 50, {'error': 'Insufficient data'}
+        
+        # Calculate %K
+        k_values = []
+        for i in range(k_period - 1, len(close)):
+            highest_high = max(high[i - k_period + 1:i + 1])
+            lowest_low = min(low[i - k_period + 1:i + 1])
+            
+            if highest_high != lowest_low:
+                k = 100 * (close[i] - lowest_low) / (highest_high - lowest_low)
+            else:
+                k = 50
+            k_values.append(k)
+        
+        # Smooth %K
+        k_smooth = []
+        for i in range(smooth - 1, len(k_values)):
+            k_smooth.append(sum(k_values[i - smooth + 1:i + 1]) / smooth)
+        
+        # Calculate %D
+        d_values = []
+        for i in range(d_period - 1, len(k_smooth)):
+            d_values.append(sum(k_smooth[i - d_period + 1:i + 1]) / d_period)
+        
+        if not k_smooth or not d_values:
+            return 50, "NEUTRAL", 50, {}
+        
+        current_k = k_smooth[-1]
+        current_d = d_values[-1]
+        prev_k = k_smooth[-2] if len(k_smooth) > 1 else current_k
+        
+        if current_k < 20 and current_k > prev_k and current_k > current_d:
+            signal = "BUY"
+            confidence = 75
+        elif current_k > 80 and current_k < prev_k and current_k < current_d:
+            signal = "SELL"
+            confidence = 75
+        elif current_k < 20:
+            signal = "BUY"
+            confidence = 60
+        elif current_k > 80:
+            signal = "SELL"
+            confidence = 60
+        else:
+            signal = "NEUTRAL"
+            confidence = 50
+        
+        return current_k, signal, confidence, {'k': current_k, 'd': current_d}
+    
+    def _calc_cci(self, data: Dict[str, List[float]], config: IndicatorConfig) -> Tuple[float, str, float, Dict]:
+        """Calculate CCI"""
+        period = config.params.get('period', 20)
+        
+        high = data.get('high', [])
+        low = data.get('low', [])
+        close = data.get('close', [])
+        
+        if len(close) < period:
+            return 0, "NEUTRAL", 50, {'error': 'Insufficient data'}
+        
+        # Typical price
+        tp = [(high[i] + low[i] + close[i]) / 3 for i in range(len(close))]
+        
+        # SMA of typical price
+        sma = sum(tp[-period:]) / period
+        
+        # Mean deviation
+        mean_dev = sum(abs(tp[i] - sma) for i in range(-period, 0)) / period
+        
+        if mean_dev == 0:
+            cci = 0
+        else:
+            cci = (tp[-1] - sma) / (0.015 * mean_dev)
+        
+        if cci < -100:
+            signal = "BUY"
+            confidence = 70
+        elif cci > 100:
+            signal = "SELL"
+            confidence = 70
+        else:
+            signal = "NEUTRAL"
+            confidence = 50
+        
+        return cci, signal, confidence, {'cci': cci}
+    
+    def _calc_williams_r(self, data: Dict[str, List[float]], config: IndicatorConfig) -> Tuple[float, str, float, Dict]:
+        """Calculate Williams %R"""
+        period = config.params.get('period', 14)
+        
+        high = data.get('high', [])
+        low = data.get('low', [])
+        close = data.get('close', [])
+        
+        if len(close) < period:
+            return -50, "NEUTRAL", 50, {'error': 'Insufficient data'}
+        
+        highest_high = max(high[-period:])
+        lowest_low = min(low[-period:])
+        
+        if highest_high != lowest_low:
+            williams_r = -100 * (highest_high - close[-1]) / (highest_high - lowest_low)
+        else:
+            williams_r = -50
+        
+        if williams_r < -80:
+            signal = "BUY"
+            confidence = 70
+        elif williams_r > -20:
+            signal = "SELL"
+            confidence = 70
+        else:
+            signal = "NEUTRAL"
+            confidence = 50
+        
+        return williams_r, signal, confidence, {'williams_r': williams_r}
+    
+    def _calc_bollinger(self, data: Dict[str, List[float]], config: IndicatorConfig) -> Tuple[float, str, float, Dict]:
+        """Calculate Bollinger Bands"""
+        period = config.params.get('period', 20)
+        std_multiplier = self.adaptive_params.get('bb_std', 2.0)
+        
+        close = data.get('close', [])
+        if len(close) < period:
+            return 0, "NEUTRAL", 50, {'error': 'Insufficient data'}
+        
+        # SMA
+        sma = sum(close[-period:]) / period
+        
+        # Standard deviation
+        variance = sum((close[i] - sma) ** 2 for i in range(-period, 0)) / period
+        std = math.sqrt(variance)
+        
+        upper = sma + (std_multiplier * std)
+        lower = sma - (std_multiplier * std)
+        
+        current_price = close[-1]
+        
+        if current_price > upper:
+            signal = "SELL"
+            confidence = 80
+        elif current_price < lower:
+            signal = "BUY"
+            confidence = 80
+        elif current_price > sma:
+            signal = "BUY"
+            confidence = 60
+        elif current_price < sma:
+            signal = "SELL"
+            confidence = 60
+        else:
+            signal = "NEUTRAL"
+            confidence = 50
+        
+        return current_price, signal, confidence, {'upper': upper, 'middle': sma, 'lower': lower}
+    
+    def _calc_atr(self, data: Dict[str, List[float]], config: IndicatorConfig) -> Tuple[float, str, float, Dict]:
+        """Calculate ATR"""
+        period = config.params.get('period', 14)
+        
+        high = data.get('high', [])
+        low = data.get('low', [])
+        close = data.get('close', [])
+        
+        if len(close) < period + 1:
+            return 0, "NEUTRAL", 50, {'error': 'Insufficient data'}
+        
+        # Calculate True Range
+        tr = []
+        for i in range(1, len(close)):
+            tr1 = high[i] - low[i]
+            tr2 = abs(high[i] - close[i-1])
+            tr3 = abs(low[i] - close[i-1])
+            tr.append(max(tr1, tr2, tr3))
+        
+        atr = sum(tr[-period:]) / period
+        
+        return atr, "NEUTRAL", 50, {'atr': atr}
+    
+    def _calc_vwap(self, data: Dict[str, List[float]], config: IndicatorConfig) -> Tuple[float, str, float, Dict]:
+        """Calculate VWAP"""
+        high = data.get('high', [])
+        low = data.get('low', [])
+        close = data.get('close', [])
+        volume = data.get('volume', [])
+        
+        if len(close) < 1 or not volume:
+            return 0, "NEUTRAL", 50, {'error': 'Insufficient data'}
+        
+        # Typical price
+        tp = [(high[i] + low[i] + close[i]) / 3 for i in range(len(close))]
+        
+        # Cumulative typical price * volume
+        cum_tp_vol = sum(tp[i] * volume[i] for i in range(len(tp)))
+        cum_vol = sum(volume)
+        
+        if cum_vol == 0:
+            vwap = 0
+        else:
+            vwap = cum_tp_vol / cum_vol
+        
+        current_price = close[-1]
+        
+        if current_price > vwap:
+            signal = "BUY"
+            confidence = 65
+        elif current_price < vwap:
+            signal = "SELL"
+            confidence = 65
+        else:
+            signal = "NEUTRAL"
+            confidence = 50
+        
+        return vwap, signal, confidence, {'vwap': vwap}
+    
+    def _calc_obv(self, data: Dict[str, List[float]], config: IndicatorConfig) -> Tuple[float, str, float, Dict]:
+        """Calculate OBV"""
+        close = data.get('close', [])
+        volume = data.get('volume', [])
+        
+        if len(close) < 2 or not volume:
+            return 0, "NEUTRAL", 50, {'error': 'Insufficient data'}
+        
+        obv = [volume[0]]
+        
+        for i in range(1, len(close)):
+            if close[i] > close[i-1]:
+                obv.append(obv[-1] + volume[i])
+            elif close[i] < close[i-1]:
+                obv.append(obv[-1] - volume[i])
+            else:
+                obv.append(obv[-1])
+        
+        current_obv = obv[-1]
+        prev_obv = obv[-2] if len(obv) > 1 else current_obv
+        
+        if current_obv > prev_obv:
+            signal = "BUY"
+            confidence = 60
+        elif current_obv < prev_obv:
+            signal = "SELL"
+            confidence = 60
+        else:
+            signal = "NEUTRAL"
+            confidence = 50
+        
+        return current_obv, signal, confidence, {'obv': current_obv}
+    
+    def _calc_mfi(self, data: Dict[str, List[float]], config: IndicatorConfig) -> Tuple[float, str, float, Dict]:
+        """Calculate MFI"""
+        period = config.params.get('period', 14)
+        
+        high = data.get('high', [])
+        low = data.get('low', [])
+        close = data.get('close', [])
+        volume = data.get('volume', [])
+        
+        if len(close) < period + 1 or not volume:
+            return 50, "NEUTRAL", 50, {'error': 'Insufficient data'}
+        
+        # Typical price
+        tp = [(high[i] + low[i] + close[i]) / 3 for i in range(len(close))]
+        
+        # Raw money flow
+        rmf = [tp[i] * volume[i] for i in range(len(tp))]
+        
+        # Positive and negative money flow
+        positive_flow = []
+        negative_flow = []
+        
+        for i in range(1, len(tp)):
+            if tp[i] > tp[i-1]:
+                positive_flow.append(rmf[i])
+                negative_flow.append(0)
+            else:
+                positive_flow.append(0)
+                negative_flow.append(rmf[i])
+        
+        # Sum over period
+        pos_sum = sum(positive_flow[-period:]) if len(positive_flow) >= period else sum(positive_flow)
+        neg_sum = sum(negative_flow[-period:]) if len(negative_flow) >= period else sum(negative_flow)
+        
+        if neg_sum == 0:
+            mfi = 100
+        else:
+            money_ratio = pos_sum / neg_sum
+            mfi = 100 - (100 / (1 + money_ratio))
+        
+        if mfi < 20:
+            signal = "BUY"
+            confidence = 70
+        elif mfi > 80:
+            signal = "SELL"
+            confidence = 70
+        else:
+            signal = "NEUTRAL"
+            confidence = 50
+        
+        return mfi, signal, confidence, {'mfi': mfi}
+    
+    # ============================================
+    # COMBINED SIGNAL
+    # ============================================
+    
+    def get_combined_signal(self, data: Dict[str, List[float]]) -> Dict:
+        """Get combined signal from all indicators"""
+        results = self.calculate_all(data)
+        
+        if not results:
+            return {'signal': 'NEUTRAL', 'confidence': 0, 'details': 'No indicators calculated'}
+        
+        signal_values = {
+            'STRONG_BUY': 2,
+            'BUY': 1,
+            'NEUTRAL': 0,
+            'SELL': -1,
+            'STRONG_SELL': -2
+        }
+        
+        total_score = 0
+        total_weight = 0
+        details = {}
+        
+        for name, result in results.items():
+            config = self.indicators.get(name)
+            if not config or not config.enabled:
+                continue
+            
+            weight = config.weight
+            score = signal_values.get(result.signal, 0) * (result.confidence / 100)
+            
+            total_score += score * weight
+            total_weight += weight
+            
+            details[name] = {
+                'signal': result.signal,
+                'confidence': result.confidence,
+                'value': result.value
+            }
+        
+        if total_weight == 0:
+            return {'signal': 'NEUTRAL', 'confidence': 0, 'details': details}
+        
+        avg_score = total_score / total_weight
+        
+        if avg_score > 1.2:
+            combined = 'STRONG_BUY'
+            confidence = min(95, 70 + (avg_score - 1.2) * 20)
+        elif avg_score > 0.4:
+            combined = 'BUY'
+            confidence = 60 + (avg_score - 0.4) * 25
+        elif avg_score < -1.2:
+            combined = 'STRONG_SELL'
+            confidence = min(95, 70 + (-1.2 - avg_score) * 20)
+        elif avg_score < -0.4:
+            combined = 'SELL'
+            confidence = 60 + (-0.4 - avg_score) * 25
+        else:
+            combined = 'NEUTRAL'
+            confidence = 50
+        
+        return {
+            'signal': combined,
+            'confidence': max(5, min(95, confidence)),
+            'score': avg_score,
+            'details': details,
+            'total_indicators': len(results)
+        }
+    
+    def update_adaptive_params(self, params: Dict):
+        """Update adaptive parameters"""
+        for key, value in params.items():
+            if key in self.adaptive_params:
+                self.adaptive_params[key] = value
+    
+    def get_adaptive_params(self) -> Dict:
+        """Get current adaptive parameters"""
+        return self.adaptive_params.copy()
+    
+    def get_performance(self) -> Dict:
+        """Get engine performance"""
+        return {
+            'calculations': self.performance['calculations'],
+            'avg_time': self.performance['avg_time'],
+            'errors': self.performance['errors'],
+            'active_indicators': len([i for i in self.indicators.values() if i.enabled]),
+            'total_indicators': len(self.indicators)
+        }
+    
+    def _save_state(self):
+        """Save state to disk"""
+        try:
+            import os
+            os.makedirs("data/indicators", exist_ok=True)
+            
+            state_data = {
+                'adaptive_params': self.adaptive_params,
+                'performance': self.performance,
+                'indicator_states': {
+                    name: {'enabled': config.enabled, 'weight': config.weight}
+                    for name, config in self.indicators.items()
+                }
+            }
+            
+            with open("data/indicators/state.json", "w") as f:
+                json.dump(state_data, f, indent=2)
+                
+        except Exception as e:
+            logger.error(f"Save state error: {e}")
+    
+    def _load_state(self):
+        """Load state from disk"""
+        try:
+            import os
+            state_file = "data/indicators/state.json"
+            if os.path.exists(state_file):
+                with open(state_file, "r") as f:
+                    state_data = json.load(f)
+                    
+                    self.adaptive_params = state_data.get('adaptive_params', self.adaptive_params)
+                    self.performance = state_data.get('performance', self.performance)
+                    
+                    indicator_states = state_data.get('indicator_states', {})
+                    for name, state in indicator_states.items():
+                        if name in self.indicators:
+                            self.indicators[name].enabled = state.get('enabled', True)
+                            self.indicators[name].weight = state.get('weight', 1.0)
+                    
+                    logger.info("📂 Indicator engine state loaded")
+                
+        except Exception as e:
+            logger.warning(f"Load state error (starting fresh): {e}")

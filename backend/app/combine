@@ -1,0 +1,1102 @@
+"""
+ESH.TRADE - ULTRA ADVANCED NEXT LEVEL
+main.py + config.py + database.py + __init__.py
+With AI, WebSocket, Redis, Caching, Load Balancing, Auto-Scaling
+"""
+
+# ============ 1. __init__.py - ULTRA ADVANCED ============
+"""
+ESH.TRADE - Ultra Advanced Package
+Next Level Trading Platform
+"""
+
+import logging
+from typing import Dict, Any
+
+__version__ = '2.0.0'
+__author__ = 'ESH.TRADE'
+
+# Initialize logging
+logging.basicConfig(level=logging.INFO)
+
+from .config import settings
+from .database import DatabaseManager, get_db, db_manager
+from .core.adaptive_engine import AdaptiveEngine
+from .core.risk_engine import RiskEngine
+from .core.ai_overseer import AIOverseer
+from .core.time_manager import TimeManager
+
+__all__ = [
+    'settings',
+    'DatabaseManager',
+    'get_db',
+    'db_manager',
+    'AdaptiveEngine',
+    'RiskEngine',
+    'AIOverseer',
+    'TimeManager'
+]
+
+
+# ============ 2. config.py - ULTRA ADVANCED ============
+"""
+ESH.TRADE - Ultra Advanced Configuration
+With Redis, WebSocket, Load Balancing, Auto-Scaling
+"""
+
+import os
+import json
+import secrets
+from typing import Dict, Any, Optional, List
+from pathlib import Path
+from dotenv import load_dotenv
+from dataclasses import dataclass, field
+
+load_dotenv()
+
+@dataclass
+class RedisConfig:
+    """Redis configuration"""
+    host: str = os.getenv('REDIS_HOST', 'localhost')
+    port: int = int(os.getenv('REDIS_PORT', 6379))
+    password: str = os.getenv('REDIS_PASSWORD', '')
+    db: int = int(os.getenv('REDIS_DB', 0))
+    enabled: bool = os.getenv('REDIS_ENABLED', 'False').lower() == 'true'
+
+@dataclass
+class WebSocketConfig:
+    """WebSocket configuration"""
+    enabled: bool = os.getenv('WEBSOCKET_ENABLED', 'True').lower() == 'true'
+    port: int = int(os.getenv('WEBSOCKET_PORT', 8001))
+    max_connections: int = int(os.getenv('MAX_WS_CONNECTIONS', 10000))
+    heartbeat_interval: int = int(os.getenv('WS_HEARTBEAT', 30))
+
+@dataclass
+class CacheConfig:
+    """Cache configuration"""
+    enabled: bool = os.getenv('CACHE_ENABLED', 'True').lower() == 'true'
+    ttl: int = int(os.getenv('CACHE_TTL', 300))
+    max_size: int = int(os.getenv('CACHE_MAX_SIZE', 10000))
+    strategy: str = os.getenv('CACHE_STRATEGY', 'lru')
+
+@dataclass
+class AIConfig:
+    """AI configuration"""
+    enabled: bool = os.getenv('AI_ENABLED', 'True').lower() == 'true'
+    model: str = os.getenv('AI_MODEL', 'gpt-4')
+    max_tokens: int = int(os.getenv('AI_MAX_TOKENS', 2000))
+    temperature: float = float(os.getenv('AI_TEMPERATURE', 0.7))
+    api_key: str = os.getenv('OPENAI_API_KEY', '')
+
+@dataclass
+class LoadBalancerConfig:
+    """Load balancer configuration"""
+    enabled: bool = os.getenv('LOAD_BALANCER_ENABLED', 'False').lower() == 'true'
+    strategy: str = os.getenv('LB_STRATEGY', 'round_robin')
+    servers: List[str] = field(default_factory=lambda: os.getenv('LB_SERVERS', '').split(','))
+
+@dataclass
+class AutoScalingConfig:
+    """Auto-scaling configuration"""
+    enabled: bool = os.getenv('AUTO_SCALING_ENABLED', 'False').lower() == 'true'
+    min_instances: int = int(os.getenv('MIN_INSTANCES', 1))
+    max_instances: int = int(os.getenv('MAX_INSTANCES', 10))
+    cpu_threshold: float = float(os.getenv('CPU_THRESHOLD', 0.8))
+    memory_threshold: float = float(os.getenv('MEMORY_THRESHOLD', 0.8))
+
+
+class Settings:
+    """ULTRA ADVANCED Settings"""
+    
+    def __init__(self):
+        # Core
+        self.APP_NAME = "ESH.TRADE"
+        self.APP_VERSION = "2.0.0"
+        self.DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
+        self.ENVIRONMENT = os.getenv('ENVIRONMENT', 'production')
+        self.SECRET_KEY = os.getenv('SECRET_KEY', secrets.token_hex(64))
+        
+        # Server
+        self.HOST = os.getenv('HOST', '0.0.0.0')
+        self.PORT = int(os.getenv('PORT', 8000))
+        self.WORKERS = int(os.getenv('WORKERS', 4))
+        self.BASE_URL = os.getenv('BASE_URL', f'http://localhost:{self.PORT}')
+        
+        # Database
+        self.DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///data/estrade.db')
+        self.DATABASE_TYPE = self._detect_db_type(self.DATABASE_URL)
+        self.DATABASE_POOL_SIZE = int(os.getenv('DB_POOL_SIZE', 10))
+        self.DATABASE_TIMEOUT = int(os.getenv('DB_TIMEOUT', 30))
+        
+        # Redis
+        self.redis = RedisConfig()
+        
+        # WebSocket
+        self.websocket = WebSocketConfig()
+        
+        # Cache
+        self.cache = CacheConfig()
+        
+        # AI
+        self.ai = AIConfig()
+        
+        # Load Balancer
+        self.load_balancer = LoadBalancerConfig()
+        
+        # Auto Scaling
+        self.auto_scaling = AutoScalingConfig()
+        
+        # Security
+        self.SECURITY_MASTER_KEY = os.getenv('SECURITY_MASTER_KEY', secrets.token_hex(64))
+        self.JWT_SECRET = os.getenv('JWT_SECRET', secrets.token_hex(64))
+        self.JWT_ALGORITHM = "HS256"
+        self.ACCESS_TOKEN_EXPIRE = int(os.getenv('ACCESS_TOKEN_EXPIRE', 1800))
+        self.REFRESH_TOKEN_EXPIRE = int(os.getenv('REFRESH_TOKEN_EXPIRE', 604800))
+        
+        # Admin
+        self.ADMIN_USERNAME = os.getenv('ADMIN_USERNAME', 'admin123')
+        self.ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'eSmwas@2004')
+        self.ADMIN_EMAIL = os.getenv('ADMIN_EMAIL', 'admin@eshtrade.com')
+        
+        # Trading
+        self.MIN_CAPITAL = float(os.getenv('MIN_CAPITAL', 5.0))
+        self.MAX_CAPITAL = float(os.getenv('MAX_CAPITAL', 1000000.0))
+        self.DEFAULT_LEVERAGE = int(os.getenv('DEFAULT_LEVERAGE', 1))
+        self.MAX_LEVERAGE = int(os.getenv('MAX_LEVERAGE', 10))
+        self.MAX_POSITIONS = int(os.getenv('MAX_POSITIONS', 20))
+        self.MAX_DAILY_TRADES = int(os.getenv('MAX_DAILY_TRADES', 1000))
+        
+        # Bots
+        self.ENABLED_BOTS = {
+            'forex': os.getenv('ENABLE_FOREX', 'True').lower() == 'true',
+            'crypto': os.getenv('ENABLE_CRYPTO', 'True').lower() == 'true',
+            'stocks': os.getenv('ENABLE_STOCKS', 'True').lower() == 'true',
+            'metals': os.getenv('ENABLE_METALS', 'True').lower() == 'true',
+            'commodities': os.getenv('ENABLE_COMMODITIES', 'True').lower() == 'true'
+        }
+        
+        # Paths
+        self.BASE_DIR = Path(__file__).parent.parent
+        self.DATA_DIR = self.BASE_DIR / 'data'
+        self.LOGS_DIR = self.DATA_DIR / 'logs'
+        self.BACKUPS_DIR = self.DATA_DIR / 'backups'
+        self.CACHE_DIR = self.DATA_DIR / 'cache'
+        self.SESSIONS_DIR = self.DATA_DIR / 'sessions'
+        
+        # Create directories
+        self._create_directories()
+        
+        # Rate Limiting
+        self.RATE_LIMITS = {
+            'default': int(os.getenv('RATE_DEFAULT', 200)),
+            'login': int(os.getenv('RATE_LOGIN', 10)),
+            'admin': int(os.getenv('RATE_ADMIN', 100)),
+            'api': int(os.getenv('RATE_API', 500)),
+            'websocket': int(os.getenv('RATE_WS', 1000))
+        }
+        self.RATE_WINDOW = int(os.getenv('RATE_WINDOW', 60))
+        
+        # Monitoring
+        self.MONITORING_ENABLED = os.getenv('MONITORING_ENABLED', 'True').lower() == 'true'
+        self.METRICS_PORT = int(os.getenv('METRICS_PORT', 9090))
+        self.HEALTH_CHECK_INTERVAL = int(os.getenv('HEALTH_CHECK_INTERVAL', 30))
+        
+        # Notification
+        self.NOTIFICATIONS_ENABLED = os.getenv('NOTIFICATIONS_ENABLED', 'True').lower() == 'true'
+        self.TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
+        self.TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID', '')
+    
+    def _detect_db_type(self, url: str) -> str:
+        """Detect database type"""
+        if 'sqlite' in url:
+            return 'sqlite'
+        elif 'postgresql' in url:
+            return 'postgresql'
+        elif 'mysql' in url:
+            return 'mysql'
+        elif 'mongodb' in url:
+            return 'mongodb'
+        return 'sqlite'
+    
+    def _create_directories(self):
+        """Create all directories"""
+        directories = [
+            self.DATA_DIR, self.LOGS_DIR, self.BACKUPS_DIR,
+            self.CACHE_DIR, self.SESSIONS_DIR
+        ]
+        for directory in directories:
+            directory.mkdir(parents=True, exist_ok=True)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary"""
+        return {
+            'app': self.APP_NAME,
+            'version': self.APP_VERSION,
+            'environment': self.ENVIRONMENT,
+            'database': self.DATABASE_TYPE,
+            'redis': self.redis.enabled,
+            'websocket': self.websocket.enabled,
+            'ai': self.ai.enabled,
+            'cache': self.cache.enabled,
+            'load_balancer': self.load_balancer.enabled,
+            'auto_scaling': self.auto_scaling.enabled,
+            'min_capital': self.MIN_CAPITAL,
+            'max_leverage': self.MAX_LEVERAGE,
+            'bots': self.ENABLED_BOTS
+        }
+
+
+# ============ 3. database.py - ULTRA ADVANCED ============
+"""
+ESH.TRADE - Ultra Advanced Database
+With Connection Pooling, Async Support, Redis Cache
+"""
+
+import sqlite3
+import threading
+import json
+import time
+import uuid
+from typing import Dict, List, Optional, Any, Tuple, Union
+from datetime import datetime, timedelta
+from contextlib import contextmanager, asynccontextmanager
+from concurrent.futures import ThreadPoolExecutor
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Try Redis
+try:
+    import redis
+    REDIS_AVAILABLE = True
+except ImportError:
+    REDIS_AVAILABLE = False
+
+# Try SQLAlchemy
+try:
+    from sqlalchemy import create_engine, text
+    from sqlalchemy.pool import QueuePool
+    SQLALCHEMY_AVAILABLE = True
+except ImportError:
+    SQLALCHEMY_AVAILABLE = False
+
+
+class ConnectionPool:
+    """Advanced Connection Pool"""
+    
+    def __init__(self, max_connections: int = 10):
+        self.max_connections = max_connections
+        self.connections = []
+        self.in_use = set()
+        self._lock = threading.Lock()
+        self._condition = threading.Condition(self._lock)
+    
+    def acquire(self, database_path: str) -> sqlite3.Connection:
+        """Acquire connection"""
+        with self._condition:
+            while len(self.in_use) >= self.max_connections:
+                self._condition.wait()
+            
+            conn = sqlite3.connect(database_path, check_same_thread=False)
+            conn.row_factory = sqlite3.Row
+            self.in_use.add(id(conn))
+            return conn
+    
+    def release(self, conn: sqlite3.Connection):
+        """Release connection"""
+        with self._condition:
+            self.in_use.discard(id(conn))
+            conn.close()
+            self._condition.notify()
+
+
+class CacheManager:
+    """Redis Cache Manager"""
+    
+    def __init__(self, enabled: bool = False, host: str = 'localhost', port: int = 6379):
+        self.enabled = enabled
+        self.redis_client = None
+        
+        if enabled and REDIS_AVAILABLE:
+            try:
+                self.redis_client = redis.Redis(host=host, port=port, decode_responses=True)
+                self.redis_client.ping()
+                logger.info("✅ Redis connected")
+            except:
+                self.redis_client = None
+                logger.warning("Redis connection failed - using in-memory cache")
+        
+        self.memory_cache = {}
+        self.cache_timestamps = {}
+        self._lock = threading.Lock()
+    
+    def get(self, key: str) -> Optional[Any]:
+        """Get from cache"""
+        if self.redis_client:
+            try:
+                value = self.redis_client.get(key)
+                return json.loads(value) if value else None
+            except:
+                pass
+        
+        with self._lock:
+            if key in self.memory_cache:
+                timestamp = self.cache_timestamps.get(key, 0)
+                if time.time() - timestamp < 300:  # 5 min default
+                    return self.memory_cache[key]
+                else:
+                    del self.memory_cache[key]
+                    del self.cache_timestamps[key]
+        
+        return None
+    
+    def set(self, key: str, value: Any, ttl: int = 300) -> None:
+        """Set cache"""
+        if self.redis_client:
+            try:
+                self.redis_client.setex(key, ttl, json.dumps(value))
+                return
+            except:
+                pass
+        
+        with self._lock:
+            self.memory_cache[key] = value
+            self.cache_timestamps[key] = time.time()
+    
+    def delete(self, key: str) -> None:
+        """Delete from cache"""
+        if self.redis_client:
+            try:
+                self.redis_client.delete(key)
+                return
+            except:
+                pass
+        
+        with self._lock:
+            self.memory_cache.pop(key, None)
+            self.cache_timestamps.pop(key, None)
+    
+    def clear(self) -> None:
+        """Clear all cache"""
+        if self.redis_client:
+            try:
+                self.redis_client.flushdb()
+                return
+            except:
+                pass
+        
+        with self._lock:
+            self.memory_cache.clear()
+            self.cache_timestamps.clear()
+
+
+class DatabaseManager:
+    """ULTRA ADVANCED Database Manager"""
+    
+    def __init__(self, database_url: str = None, pool_size: int = 10):
+        self.database_url = database_url or 'sqlite:///data/estrade.db'
+        self.database_type = self._detect_type(self.database_url)
+        self.pool = ConnectionPool(pool_size)
+        self.executor = ThreadPoolExecutor(max_workers=4)
+        self._lock = threading.RLock()
+        
+        # Cache
+        self.cache = CacheManager(enabled=False)  # Can be enabled later
+        
+        # Initialize
+        self._initialize_database()
+        
+        logger.info(f"📊 Database initialized: {self.database_type}")
+    
+    def _detect_type(self, url: str) -> str:
+        """Detect database type"""
+        if 'sqlite' in url:
+            return 'sqlite'
+        elif 'postgresql' in url:
+            return 'postgresql'
+        return 'sqlite'
+    
+    def _get_db_path(self) -> str:
+        """Get database path"""
+        return self.database_url.replace('sqlite:///', '')
+    
+    def _initialize_database(self):
+        """Initialize database"""
+        if self.database_type == 'sqlite':
+            import os
+            db_path = self._get_db_path()
+            os.makedirs(os.path.dirname(db_path) if os.path.dirname(db_path) else '.', exist_ok=True)
+            
+            with self.get_connection() as conn:
+                self._create_all_tables(conn)
+    
+    def _create_all_tables(self, conn):
+        """Create all tables"""
+        cursor = conn.cursor()
+        
+        # Users
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,
+                username TEXT UNIQUE NOT NULL,
+                email TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                salt TEXT NOT NULL,
+                role TEXT DEFAULT 'user',
+                totp_secret TEXT,
+                biometric_enabled INTEGER DEFAULT 0,
+                kyc_status TEXT DEFAULT 'pending',
+                is_active INTEGER DEFAULT 1,
+                failed_attempts INTEGER DEFAULT 0,
+                locked_until TIMESTAMP,
+                last_login TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Trades
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS trades (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                bot_id TEXT,
+                exchange TEXT,
+                symbol TEXT NOT NULL,
+                side TEXT NOT NULL,
+                entry_price REAL NOT NULL,
+                exit_price REAL,
+                quantity REAL NOT NULL,
+                pnl REAL DEFAULT 0,
+                fees REAL DEFAULT 0,
+                status TEXT DEFAULT 'open',
+                strategy TEXT,
+                entry_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                exit_time TIMESTAMP,
+                metadata TEXT,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        ''')
+        
+        # Positions
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS positions (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                bot_id TEXT,
+                symbol TEXT NOT NULL,
+                side TEXT NOT NULL,
+                quantity REAL NOT NULL,
+                entry_price REAL NOT NULL,
+                current_price REAL,
+                unrealized_pnl REAL DEFAULT 0,
+                realized_pnl REAL DEFAULT 0,
+                stop_loss REAL,
+                take_profit REAL,
+                leverage INTEGER DEFAULT 1,
+                status TEXT DEFAULT 'open',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        ''')
+        
+        # Orders
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS orders (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                trade_id TEXT,
+                exchange TEXT,
+                symbol TEXT NOT NULL,
+                side TEXT NOT NULL,
+                order_type TEXT NOT NULL,
+                price REAL,
+                quantity REAL NOT NULL,
+                status TEXT DEFAULT 'pending',
+                filled_price REAL,
+                filled_quantity REAL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                executed_at TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        ''')
+        
+        # API Keys
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS api_keys (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                exchange TEXT NOT NULL,
+                api_key_encrypted TEXT NOT NULL,
+                api_secret_encrypted TEXT NOT NULL,
+                passphrase_encrypted TEXT,
+                permissions TEXT DEFAULT '["read","trade"]',
+                is_active INTEGER DEFAULT 1,
+                last_used TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        ''')
+        
+        # Bots
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS bots (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                bot_type TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                capital REAL NOT NULL,
+                status TEXT DEFAULT 'inactive',
+                config TEXT,
+                performance TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        ''')
+        
+        # Portfolios
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS portfolios (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                total_capital REAL DEFAULT 0,
+                available_capital REAL DEFAULT 0,
+                allocated_capital REAL DEFAULT 0,
+                total_pnl REAL DEFAULT 0,
+                daily_pnl REAL DEFAULT 0,
+                weekly_pnl REAL DEFAULT 0,
+                monthly_pnl REAL DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        ''')
+        
+        # Sessions
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS sessions (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                token TEXT UNIQUE NOT NULL,
+                ip_address TEXT,
+                user_agent TEXT,
+                expires_at TIMESTAMP NOT NULL,
+                is_active INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        ''')
+        
+        # Audit Logs
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS audit_logs (
+                id TEXT PRIMARY KEY,
+                user_id TEXT,
+                event_type TEXT NOT NULL,
+                details TEXT,
+                ip_address TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Alerts
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS alerts (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                alert_type TEXT NOT NULL,
+                message TEXT NOT NULL,
+                severity TEXT DEFAULT 'info',
+                is_read INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        ''')
+        
+        # KYC
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS kyc (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                full_name TEXT,
+                date_of_birth TEXT,
+                address TEXT,
+                id_type TEXT,
+                id_number TEXT,
+                id_front_image TEXT,
+                id_back_image TEXT,
+                selfie_image TEXT,
+                status TEXT DEFAULT 'pending',
+                submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                verified_at TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        ''')
+        
+        # Notifications
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS notifications (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                title TEXT NOT NULL,
+                message TEXT NOT NULL,
+                type TEXT DEFAULT 'info',
+                is_read INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        ''')
+        
+        # Settings
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS user_settings (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                setting_key TEXT NOT NULL,
+                setting_value TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, setting_key),
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        ''')
+        
+        # Indexes for performance
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_trades_user ON trades(user_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_trades_symbol ON trades(symbol)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_positions_user ON positions(user_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_bots_user ON bots(user_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_alerts_user ON alerts(user_id)')
+        
+        conn.commit()
+        logger.info("✅ All tables created with indexes")
+    
+    @contextmanager
+    def get_connection(self):
+        """Get connection from pool"""
+        conn = self.pool.acquire(self._get_db_path())
+        try:
+            yield conn
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            raise e
+        finally:
+            self.pool.release(conn)
+    
+    @asynccontextmanager
+    async def get_async_connection(self):
+        """Get async connection"""
+        loop = asyncio.get_event_loop()
+        conn = await loop.run_in_executor(self.executor, self.pool.acquire, self._get_db_path())
+        try:
+            yield conn
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            raise e
+        finally:
+            await loop.run_in_executor(self.executor, self.pool.release, conn)
+    
+    def execute(self, query: str, params: Tuple = None) -> int:
+        """Execute query with cache invalidation"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            if params:
+                cursor.execute(query, params)
+            else:
+                cursor.execute(query)
+            return cursor.lastrowid
+    
+    def fetch_one(self, query: str, params: Tuple = None, use_cache: bool = False) -> Optional[Dict]:
+        """Fetch one with optional cache"""
+        if use_cache:
+            cache_key = f"{query}:{params}"
+            cached = self.cache.get(cache_key)
+            if cached:
+                return cached
+        
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            if params:
+                cursor.execute(query, params)
+            else:
+                cursor.execute(query)
+            row = cursor.fetchone()
+            result = dict(row) if row else None
+        
+        if use_cache and result:
+            self.cache.set(f"{query}:{params}", result)
+        
+        return result
+    
+    def fetch_all(self, query: str, params: Tuple = None, use_cache: bool = False) -> List[Dict]:
+        """Fetch all with optional cache"""
+        if use_cache:
+            cache_key = f"{query}:{params}"
+            cached = self.cache.get(cache_key)
+            if cached:
+                return cached
+        
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            if params:
+                cursor.execute(query, params)
+            else:
+                cursor.execute(query)
+            rows = cursor.fetchall()
+            results = [dict(row) for row in rows]
+        
+        if use_cache and results:
+            self.cache.set(f"{query}:{params}", results)
+        
+        return results
+    
+    # ============ BULK OPERATIONS ============
+    
+    def bulk_insert(self, table: str, data: List[Dict]) -> bool:
+        """Bulk insert for performance"""
+        try:
+            if not data:
+                return False
+            
+            columns = list(data[0].keys())
+            placeholders = ', '.join(['?' for _ in columns])
+            column_names = ', '.join(columns)
+            
+            query = f"INSERT INTO {table} ({column_names}) VALUES ({placeholders})"
+            
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                values = [tuple(d[col] for col in columns) for d in data]
+                cursor.executemany(query, values)
+            
+            return True
+        except Exception as e:
+            logger.error(f"Bulk insert failed: {e}")
+            return False
+    
+    def transaction(self, operations: List[Tuple[str, Tuple]]) -> bool:
+        """Execute multiple operations in transaction"""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                for query, params in operations:
+                    if params:
+                        cursor.execute(query, params)
+                    else:
+                        cursor.execute(query)
+            return True
+        except Exception as e:
+            logger.error(f"Transaction failed: {e}")
+            return False
+    
+    def get_table_stats(self) -> Dict[str, int]:
+        """Get table statistics"""
+        stats = {}
+        tables = ['users', 'trades', 'positions', 'orders', 'api_keys', 
+                  'bots', 'portfolios', 'sessions', 'audit_logs', 'alerts']
+        
+        for table in tables:
+            result = self.fetch_one(f"SELECT COUNT(*) as count FROM {table}")
+            stats[table] = result['count'] if result else 0
+        
+        return stats
+    
+    def backup(self, backup_path: str = None) -> bool:
+        """Backup database"""
+        try:
+            if not backup_path:
+                backup_path = f"data/backups/estrade_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+            
+            if self.database_type == 'sqlite':
+                import shutil
+                shutil.copy2(self._get_db_path(), backup_path)
+                
+                logger.info(f"✅ Database backed up to {backup_path}")
+                return True
+            
+            return False
+        except Exception as e:
+            logger.error(f"Backup failed: {e}")
+            return False
+    
+    def restore(self, backup_path: str) -> bool:
+        """Restore database from backup"""
+        try:
+            if self.database_type == 'sqlite':
+                import shutil
+                shutil.copy2(backup_path, self._get_db_path())
+                
+                logger.info(f"✅ Database restored from {backup_path}")
+                return True
+            
+            return False
+        except Exception as e:
+            logger.error(f"Restore failed: {e}")
+            return False
+
+
+# ============ 4. main.py - ULTRA ADVANCED ============
+"""
+ESH.TRADE - Ultra Advanced Main Application
+With AI, WebSocket, Monitoring, Auto-Scaling
+"""
+
+import logging
+import time
+import asyncio
+from typing import Dict, Any, Optional
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
+
+from .config import settings
+from .database import DatabaseManager, db_manager
+from .security import security_manager
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - [MAIN] - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('data/logs/main.log'),
+        logging.StreamHandler()
+    ]
+)
+
+logger = logging.getLogger(__name__)
+
+# WebSocket connections
+ws_connections = {}
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan with startup/shutdown"""
+    logger.info("=" * 60)
+    logger.info("🚀 ESH.TRADE ULTRA ADVANCED STARTING")
+    logger.info("=" * 60)
+    logger.info(f"   Version: {settings.APP_VERSION}")
+    logger.info(f"   Environment: {settings.ENVIRONMENT}")
+    logger.info(f"   Database: {settings.DATABASE_TYPE}")
+    logger.info(f"   Redis: {'Enabled' if settings.redis.enabled else 'Disabled'}")
+    logger.info(f"   WebSocket: {'Enabled' if settings.websocket.enabled else 'Disabled'}")
+    logger.info(f"   AI: {'Enabled' if settings.ai.enabled else 'Disabled'}")
+    logger.info(f"   Cache: {'Enabled' if settings.cache.enabled else 'Disabled'}")
+    logger.info("=" * 60)
+    
+    # Startup tasks
+    await startup_tasks()
+    
+    yield
+    
+    logger.info("👋 ESH.TRADE shutting down...")
+    await shutdown_tasks()
+
+
+async def startup_tasks():
+    """Run startup tasks"""
+    # Initialize database
+    db_manager.backup()  # Auto backup on startup
+    
+    # Clean expired sessions
+    logger.info("✅ Startup tasks completed")
+
+
+async def shutdown_tasks():
+    """Run shutdown tasks"""
+    # Close all WebSocket connections
+    for ws in ws_connections.values():
+        await ws.close()
+    
+    # Final backup
+    db_manager.backup()
+    
+    logger.info("✅ Shutdown tasks completed")
+
+
+# Create FastAPI app
+app = FastAPI(
+    title="ESH.TRADE",
+    version=settings.APP_VERSION,
+    description="Ultra Advanced Trading Platform with AI Bots",
+    lifespan=lifespan,
+    docs_url="/api/docs" if settings.DEBUG else None,
+    redoc_url="/api/redoc" if settings.DEBUG else None
+)
+
+# CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.CORS_ORIGINS if hasattr(settings, 'CORS_ORIGINS') else ["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# Request logging
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """Log requests with performance metrics"""
+    start_time = time.time()
+    
+    response = await call_next(request)
+    
+    duration = time.time() - start_time
+    
+    logger.info(f"{request.method} {request.url.path} - {response.status_code} - {duration:.3f}s")
+    
+    # Add timing header
+    response.headers["X-Process-Time"] = f"{duration:.3f}s"
+    
+    return response
+
+
+# Global exception handler
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Handle all exceptions"""
+    logger.error(f"Unhandled exception: {exc}")
+    
+    return JSONResponse(
+        status_code=500,
+        content={
+            'error': 'Internal server error',
+            'detail': str(exc) if settings.DEBUG else None,
+            'timestamp': time.time()
+        }
+    )
+
+
+# ============ HEALTH CHECKS ============
+
+@app.get("/")
+async def root():
+    """Root endpoint"""
+    return {
+        'app': settings.APP_NAME,
+        'version': settings.APP_VERSION,
+        'status': 'running',
+        'environment': settings.ENVIRONMENT,
+        'timestamp': time.time()
+    }
+
+
+@app.get("/health")
+async def health_check():
+    """Health check"""
+    return {
+        'status': 'healthy',
+        'database': settings.DATABASE_TYPE,
+        'redis': 'connected' if settings.redis.enabled else 'disabled',
+        'websocket': 'active' if settings.websocket.enabled else 'disabled',
+        'uptime': time.time()
+    }
+
+
+@app.get("/api/v1/status")
+async def system_status():
+    """Full system status"""
+    return {
+        'app': settings.APP_NAME,
+        'version': settings.APP_VERSION,
+        'database': settings.DATABASE_TYPE,
+        'redis': settings.redis.enabled,
+        'websocket': settings.websocket.enabled,
+        'ai': settings.ai.enabled,
+        'cache': settings.cache.enabled,
+        'load_balancer': settings.load_balancer.enabled,
+        'auto_scaling': settings.auto_scaling.enabled,
+        'bots': settings.ENABLED_BOTS,
+        'min_capital': settings.MIN_CAPITAL,
+        'max_leverage': settings.MAX_LEVERAGE,
+        'timestamp': time.time()
+    }
+
+
+@app.get("/api/v1/metrics")
+async def metrics():
+    """System metrics"""
+    db_stats = db_manager.get_table_stats()
+    
+    return {
+        'database': db_stats,
+        'connections': len(ws_connections),
+        'memory_usage': None,  # Would use psutil
+        'cpu_usage': None,
+        'timestamp': time.time()
+    }
+
+
+# ============ WEBSOCKET ============
+
+@app.websocket("/ws/{client_id}")
+async def websocket_endpoint(websocket: WebSocket, client_id: str):
+    """WebSocket endpoint for real-time updates"""
+    await websocket.accept()
+    ws_connections[client_id] = websocket
+    
+    logger.info(f"WebSocket connected: {client_id}")
+    
+    try:
+        while True:
+            data = await websocket.receive_text()
+            
+            # Process message
+            response = {
+                'type': 'echo',
+                'data': data,
+                'timestamp': time.time()
+            }
+            
+            await websocket.send_json(response)
+            
+    except WebSocketDisconnect:
+        logger.info(f"WebSocket disconnected: {client_id}")
+    finally:
+        ws_connections.pop(client_id, None)
+
+
+# ============ IMPORT ROUTERS ============
+
+from .api import auth, trading, bots, admin, commands, chatbot, time as time_api
+
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["Auth"])
+app.include_router(trading.router, prefix="/api/v1/trading", tags=["Trading"])
+app.include_router(bots.router, prefix="/api/v1/bots", tags=["Bots"])
+app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
+app.include_router(commands.router, prefix="/api/v1/commands", tags=["Commands"])
+app.include_router(chatbot.router, prefix="/api/v1/chatbot", tags=["Chatbot"])
+app.include_router(time_api.router, prefix="/api/v1/time", tags=["Time"])
+
+
+# ============ STARTUP ============
+
+if __name__ == "__main__":
+    import uvicorn
+    
+    logger.info(f"Starting ESH.TRADE on {settings.HOST}:{settings.PORT}")
+    
+    uvicorn.run(
+        "app.main:app",
+        host=settings.HOST,
+        port=settings.PORT,
+        workers=settings.WORKERS,
+        reload=settings.DEBUG,
+        log_level="info"
+    )
+
+
+# Global instances
+settings = Settings()
+db_manager = DatabaseManager(settings.DATABASE_URL, settings.DATABASE_POOL_SIZE)

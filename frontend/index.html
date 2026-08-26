@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESMH.TRADE - AI Trading Platform</title>
+    <link rel="manifest" href="pwa/manifest.json">
+    <link rel="stylesheet" href="stye/style.css">
+    <meta name="theme-color" content="#1a1a2e">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>">
+</head>
+
+<body>
+    <div id="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <span class="logo-icon">📈</span>
+                <span class="logo-text">ESMH.TRADE</span>
+            </div>
+            <nav class="nav">
+                <a href="#dashboard" class="nav-link active">Dashboard</a>
+                <a href="#terminal" class="nav-link">Terminal</a>
+                <a href="#bots" class="nav-link">Bots</a>
+                <a href="#backtest" class="nav-link">Backtest</a>
+                <a href="#settings" class="nav-link">Settings</a>
+            </nav>
+            <div class="header-actions">
+                <button class="btn btn-icon" id="notificationsBtn" title="Notifications">🔔</button>
+                <button class="btn btn-icon" id="settingsBtn" title="Settings">⚙️</button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Dashboard Section -->
+            <section id="dashboard" class="section active">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Total PnL</div>
+                        <div class="stat-value" id="totalPnl">$0.00</div>
+                        <div class="stat-change positive">+0.00%</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Win Rate</div>
+                        <div class="stat-value" id="winRate">0%</div>
+                        <div class="stat-change">Last 30 days</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Active Bots</div>
+                        <div class="stat-value" id="activeBots">0</div>
+                        <div class="stat-change">Running</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Open Positions</div>
+                        <div class="stat-value" id="openPositions">0</div>
+                        <div class="stat-change">Across all bots</div>
+                    </div>
+                </div>
+
+                <!-- Trading Panel -->
+                <div class="trading-panel">
+                    <div class="panel-header">
+                        <h2>Quick Trade</h2>
+                        <div class="panel-tabs">
+                            <button class="tab-btn active" data-tab="single">Single</button>
+                            <button class="tab-btn" data-tab="multi">Multi-Trade</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Single Trade Form -->
+                    <div class="tab-content active" id="singleTrade">
+                        <form id="tradeForm" class="trade-form">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="symbol">Symbol</label>
+                                    <input type="text" id="symbol" placeholder="BTCUSDT" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="side">Side</label>
+                                    <select id="side" required>
+                                        <option value="BUY">BUY</option>
+                                        <option value="SELL">SELL</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="quantity">Quantity</label>
+                                    <input type="number" id="quantity" placeholder="0.001" step="0.0001" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="price">Price (optional)</label>
+                                    <input type="number" id="price" placeholder="Market" step="0.01">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="stopLoss">Stop Loss</label>
+                                    <input type="number" id="stopLoss" placeholder="0.00" step="0.01">
+                                </div>
+                                <div class="form-group">
+                                    <label for="takeProfit">Take Profit</label>
+                                    <input type="number" id="takeProfit" placeholder="0.00" step="0.01">
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-block">Place Order</button>
+                        </form>
+                    </div>
+
+                    <!-- Multi Trade Form -->
+                    <div class="tab-content" id="multiTrade">
+                        <div class="multi-trade-header">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="enableMultiTrade">
+                                <span>Enable Multi-Trade Mode</span>
+                            </label>
+                            <p class="hint">Trade multiple pairs simultaneously (requires permission)</p>
+                        </div>
+                        <div id="multiTradeOrders" class="multi-trade-orders">
+                            <!-- Dynamic order rows will be added here -->
+                        </div>
+                        <button type="button" class="btn btn-secondary" id="addOrderRow">+ Add Order</button>
+                        <button type="button" class="btn btn-primary btn-block" id="placeMultiOrders">Place All Orders</button>
+                    </div>
+                </div>
+
+                <!-- Positions Table -->
+                <div class="panel">
+                    <div class="panel-header">
+                        <h2>Open Positions</h2>
+                        <button class="btn btn-sm" id="refreshPositions">Refresh</button>
+                    </div>
+                    <div class="table-container">
+                        <table class="data-table" id="positionsTable">
+                            <thead>
+                                <tr>
+                                    <th>Symbol</th>
+                                    <th>Side</th>
+                                    <th>Entry</th>
+                                    <th>Quantity</th>
+                                    <th>PnL</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="6" class="empty-state">No open positions</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Terminal Section -->
+            <section id="terminal" class="section">
+                <div class="terminal-container">
+                    <div class="terminal-header">
+                        <h2>Trading Terminal</h2>
+                        <div class="terminal-status">
+                            <span class="status-dot connected"></span>
+                            <span>Connected</span>
+                        </div>
+                    </div>
+                    <div class="terminal-output" id="terminalOutput">
+                        <div class="terminal-line">ESMH.TRADE Terminal v2.0.0</div>
+                        <div class="terminal-line">Type 'help' for available commands</div>
+                    </div>
+                    <div class="terminal-input">
+                        <span class="prompt">></span>
+                        <input type="text" id="terminalInput" placeholder="Enter command...">
+                    </div>
+                </div>
+            </section>
+
+            <!-- Bots Section -->
+            <section id="bots" class="section">
+                <div class="panel">
+                    <div class="panel-header">
+                        <h2>Trading Bots</h2>
+                        <button class="btn btn-primary" id="addBot">+ Add Bot</button>
+                    </div>
+                    <div class="bots-grid" id="botsGrid">
+                        <!-- Bot cards will be rendered here -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Backtest Section -->
+            <section id="backtest" class="section">
+                <div class="panel">
+                    <div class="panel-header">
+                        <h2>Backtesting</h2>
+                    </div>
+                    <form id="backtestForm" class="backtest-form">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="btSymbol">Symbol</label>
+                                <input type="text" id="btSymbol" placeholder="BTCUSDT" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="btStrategy">Strategy</label>
+                                <select id="btStrategy">
+                                    <option value="trend_follow">Trend Following</option>
+                                    <option value="mean_reversion">Mean Reversion</option>
+                                    <option value="breakout">Breakout</option>
+                                    <option value="arbitrage">Arbitrage</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="btStartDate">Start Date</label>
+                                <input type="date" id="btStartDate" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="btEndDate">End Date</label>
+                                <input type="date" id="btEndDate" required>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="btInitialCapital">Initial Capital</label>
+                                <input type="number" id="btInitialCapital" value="10000" step="100">
+                            </div>
+                            <div class="form-group">
+                                <label for="btRiskPerTrade">Risk Per Trade (%)</label>
+                                <input type="number" id="btRiskPerTrade" value="2" step="0.5" min="0.5" max="10">
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-block">Run Backtest</button>
+                    </form>
+                    <div id="backtestResults" class="backtest-results" style="display:none;">
+                        <!-- Results will be shown here -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Settings Section -->
+            <section id="settings" class="section">
+                <div class="panel">
+                    <div class="panel-header">
+                        <h2>Settings</h2>
+                    </div>
+                    <div class="settings-grid">
+                        <div class="setting-item">
+                            <label>Email Notifications</label>
+                            <label class="switch">
+                                <input type="checkbox" id="emailNotifications">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="setting-item">
+                            <label>Telegram Alerts</label>
+                            <label class="switch">
+                                <input type="checkbox" id="telegramAlerts">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="setting-item">
+                            <label>Multi-Trade Permission</label>
+                            <label class="switch">
+                                <input type="checkbox" id="multiTradePermission">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="setting-item">
+                            <label>Risk Level</label>
+                            <select id="riskLevel">
+                                <option value="low">Low (1% per trade)</option>
+                                <option value="medium" selected>Medium (2% per trade)</option>
+                                <option value="high">High (5% per trade)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Bottom Navigation (Mobile) -->
+        <nav class="bottom-nav">
+            <a href="#dashboard" class="bottom-nav-item active">
+                <span class="icon">📊</span>
+                <span class="label">Dashboard</span>
+            </a>
+            <a href="#terminal" class="bottom-nav-item">
+                <span class="icon">💻</span>
+                <span class="label">Terminal</span>
+            </a>
+            <a href="#bots" class="bottom-nav-item">
+                <span class="icon">🤖</span>
+                <span class="label">Bots</span>
+            </a>
+            <a href="#backtest" class="bottom-nav-item">
+                <span class="icon">📈</span>
+                <span class="label">Backtest</span>
+            </a>
+            <a href="#settings" class="bottom-nav-item">
+                <span class="icon">⚙️</span>
+                <span class="label">Settings</span>
+            </a>
+        </nav>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="footer-content">
+                <p>&copy; 2026 ESMH.TRADE - AI-Powered Trading Platform</p>
+                <div class="footer-links">
+                    <a href="#about">About</a>
+                    <a href="#docs">Documentation</a>
+                    <a href="#support">Support</a>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Notification Toast Container -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <!-- Modal Container -->
+    <div id="modalContainer" class="modal-container"></div>
+
+    <script src="script/app.js"></script>
+</body>
+
+</html>

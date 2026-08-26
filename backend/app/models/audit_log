@@ -1,0 +1,381 @@
+"""
+ESH.TRADE - Audit Log Model
+ULTRA ADVANCED EDITION
+Complete Audit Trail System
+"""
+
+import uuid
+import json
+import hashlib
+from datetime import datetime, timedelta
+from typing import Optional, Dict, Any, List, Tuple
+from enum import Enum
+import logging
+import threading
+
+logger = logging.getLogger(__name__)
+
+
+class AuditEventType(Enum):
+    """Audit event types"""
+    # Auth events
+    LOGIN = "login"
+    LOGOUT = "logout"
+    LOGIN_FAILED = "login_failed"
+    PASSWORD_CHANGED = "password_changed"
+    PASSWORD_RESET = "password_reset"
+    ACCOUNT_LOCKED = "account_locked"
+    ACCOUNT_UNLOCKED = "account_unlocked"
+    TWO_FACTOR_ENABLED = "two_factor_enabled"
+    TWO_FACTOR_DISABLED = "two_factor_disabled"
+    
+    # User events
+    USER_CREATED = "user_created"
+    USER_UPDATED = "user_updated"
+    USER_DELETED = "user_deleted"
+    USER_SUSPENDED = "user_suspended"
+    USER_ACTIVATED = "user_activated"
+    
+    # Trade events
+    TRADE_OPENED = "trade_opened"
+    TRADE_CLOSED = "trade_closed"
+    TRADE_CANCELLED = "trade_cancelled"
+    TRADE_FAILED = "trade_failed"
+    TRADE_OVERRIDDEN = "trade_overridden"
+    
+    # Bot events
+    BOT_STARTED = "bot_started"
+    BOT_STOPPED = "bot_stopped"
+    BOT_CONFIGURED = "bot_configured"
+    BOT_ERROR = "bot_error"
+    
+    # Security events
+    IP_BLOCKED = "ip_blocked"
+    IP_UNBLOCKED = "ip_unblocked"
+    FIREWALL_BLOCKED = "firewall_blocked"
+    INTRUSION_DETECTED = "intrusion_detected"
+    RATE_LIMITED = "rate_limited"
+    
+    # API events
+    API_KEY_CREATED = "api_key_created"
+    API_KEY_REVOKED = "api_key_revoked"
+    API_REQUEST = "api_request"
+    
+    # Admin events
+    ADMIN_ACTION = "admin_action"
+    SETTINGS_CHANGED = "settings_changed"
+    SYSTEM_UPDATE = "system_update"
+    EMERGENCY_STOP = "emergency_stop"
+    
+    # Data events
+    DATA_EXPORTED = "data_exported"
+    DATA_IMPORTED = "data_imported"
+    BACKUP_CREATED = "backup_created"
+    BACKUP_RESTORED = "backup_restored"
+
+
+class AuditSeverity(Enum):
+    """Audit severity levels"""
+    DEBUG = "debug"
+    INFO = "info"
+    WARNING = "warning"
+    ERROR = "error"
+    CRITICAL = "critical"
+
+
+class AuditLog:
+    """ULTRA ADVANCED Audit Log Model"""
+    
+    def __init__(self,
+                 event_type: AuditEventType,
+                 user_id: str = None,
+                 severity: AuditSeverity = AuditSeverity.INFO,
+                 description: str = None,
+                 details: Dict[str, Any] = None,
+                 ip_address: str = None,
+                 user_agent: str = None):
+        
+        # Basic
+        self.id = str(uuid.uuid4())
+        self.event_type = event_type
+        self.severity = severity
+        self.description = description or event_type.value
+        
+        # User info
+        self.user_id = user_id
+        self.ip_address = ip_address
+        self.user_agent = user_agent
+        
+        # Details
+        self.details = details or {}
+        
+        # Timestamps
+        self.created_at = datetime.utcnow()
+        
+        # Hash for integrity
+        self.hash = self._generate_hash()
+    
+    def _generate_hash(self) -> str:
+        """Generate hash for audit integrity"""
+        data = json.dumps({
+            'event_type': self.event_type.value,
+            'user_id': self.user_id,
+            'created_at': self.created_at.isoformat(),
+            'details': self.details
+        }, sort_keys=True)
+        
+        return hashlib.sha256(data.encode()).hexdigest()
+    
+    def verify_integrity(self) -> bool:
+        """Verify audit log integrity"""
+        return self.hash == self._generate_hash()
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary"""
+        return {
+            'id': self.id,
+            'event_type': self.event_type.value,
+            'severity': self.severity.value,
+            'description': self.description,
+            'user_id': self.user_id,
+            'ip_address': self.ip_address,
+            'user_agent': self.user_agent,
+            'details': self.details,
+            'created_at': self.created_at.isoformat(),
+            'hash': self.hash
+        }
+    
+    def to_json(self) -> str:
+        """Convert to JSON"""
+        return json.dumps(self.to_dict(), indent=2)
+    
+    def __repr__(self) -> str:
+        return f"<AuditLog {self.event_type.value} user={self.user_id}>"
+
+
+class AuditLogManager:
+    """ULTRA ADVANCED Audit Log Manager"""
+    
+    def __init__(self):
+        self.logs: List[AuditLog] = []
+        self._lock = threading.RLock()
+        self.max_logs = 10000
+    
+    def log(self, 
+            event_type: AuditEventType,
+            user_id: str = None,
+            severity: AuditSeverity = AuditSeverity.INFO,
+            description: str = None,
+            details: Dict[str, Any] = None,
+            ip_address: str = None,
+            user_agent: str = None) -> AuditLog:
+        """Create audit log"""
+        try:
+            with self._lock:
+                audit_log = AuditLog(
+                    event_type=event_type,
+                    user_id=user_id,
+                    severity=severity,
+                    description=description,
+                    details=details,
+                    ip_address=ip_address,
+                    user_agent=user_agent
+                )
+                
+                self.logs.append(audit_log)
+                
+                # Trim if needed
+                if len(self.logs) > self.max_logs:
+                    self.logs = self.logs[-self.max_logs:]
+                
+                logger.info(f"📝 Audit: {event_type.value} - {description or ''}")
+                
+                return audit_log
+                
+        except Exception as e:
+            logger.error(f"Error creating audit log: {e}")
+            return None
+    
+    def get_logs(self, 
+                 user_id: str = None,
+                 event_type: AuditEventType = None,
+                 severity: AuditSeverity = None,
+                 start_date: datetime = None,
+                 end_date: datetime = None,
+                 limit: int = 100) -> List[AuditLog]:
+        """Get filtered logs"""
+        try:
+            with self._lock:
+                filtered = self.logs
+                
+                if user_id:
+                    filtered = [l for l in filtered if l.user_id == user_id]
+                
+                if event_type:
+                    filtered = [l for l in filtered if l.event_type == event_type]
+                
+                if severity:
+                    filtered = [l for l in filtered if l.severity == severity]
+                
+                if start_date:
+                    filtered = [l for l in filtered if l.created_at >= start_date]
+                
+                if end_date:
+                    filtered = [l for l in filtered if l.created_at <= end_date]
+                
+                return filtered[-limit:]
+                
+        except Exception as e:
+            logger.error(f"Error getting logs: {e}")
+            return []
+    
+    def get_user_logs(self, user_id: str, limit: int = 100) -> List[AuditLog]:
+        """Get logs for specific user"""
+        return self.get_logs(user_id=user_id, limit=limit)
+    
+    def get_recent_logs(self, limit: int = 50) -> List[AuditLog]:
+        """Get recent logs"""
+        with self._lock:
+            return self.logs[-limit:]
+    
+    def get_logs_by_type(self, event_type: AuditEventType, limit: int = 100) -> List[AuditLog]:
+        """Get logs by type"""
+        return self.get_logs(event_type=event_type, limit=limit)
+    
+    def get_security_logs(self, limit: int = 100) -> List[AuditLog]:
+        """Get security-related logs"""
+        security_types = [
+            AuditEventType.LOGIN_FAILED,
+            AuditEventType.ACCOUNT_LOCKED,
+            AuditEventType.IP_BLOCKED,
+            AuditEventType.FIREWALL_BLOCKED,
+            AuditEventType.INTRUSION_DETECTED,
+            AuditEventType.RATE_LIMITED
+        ]
+        
+        with self._lock:
+            filtered = [l for l in self.logs if l.event_type in security_types]
+            return filtered[-limit:]
+    
+    def export_logs(self, filepath: str = None) -> bool:
+        """Export logs to file"""
+        try:
+            if not filepath:
+                filepath = f"data/logs/audit_export_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
+            
+            with self._lock:
+                data = [log.to_dict() for log in self.logs]
+                
+                with open(filepath, 'w') as f:
+                    json.dump(data, f, indent=2, default=str)
+                
+                logger.info(f"✅ Audit logs exported to {filepath}")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Error exporting logs: {e}")
+            return False
+    
+    def clear_logs(self, older_than: timedelta = None) -> int:
+        """Clear old logs"""
+        try:
+            with self._lock:
+                if older_than:
+                    cutoff = datetime.utcnow() - older_than
+                    removed = [l for l in self.logs if l.created_at < cutoff]
+                    self.logs = [l for l in self.logs if l.created_at >= cutoff]
+                else:
+                    removed = self.logs
+                    self.logs = []
+                
+                return len(removed)
+                
+        except Exception as e:
+            logger.error(f"Error clearing logs: {e}")
+            return 0
+    
+    def verify_integrity(self) -> Tuple[bool, List[str]]:
+        """Verify all log integrity"""
+        try:
+            with self._lock:
+                compromised = []
+                
+                for log in self.logs:
+                    if not log.verify_integrity():
+                        compromised.append(log.id)
+                
+                return len(compromised) == 0, compromised
+                
+        except Exception as e:
+            logger.error(f"Error verifying integrity: {e}")
+            return False, []
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """Get audit statistics"""
+        try:
+            with self._lock:
+                event_counts = {}
+                severity_counts = {}
+                user_counts = {}
+                
+                for log in self.logs:
+                    # Event type counts
+                    event_type = log.event_type.value
+                    event_counts[event_type] = event_counts.get(event_type, 0) + 1
+                    
+                    # Severity counts
+                    severity = log.severity.value
+                    severity_counts[severity] = severity_counts.get(severity, 0) + 1
+                    
+                    # User counts
+                    if log.user_id:
+                        user_counts[log.user_id] = user_counts.get(log.user_id, 0) + 1
+                
+                return {
+                    'total_logs': len(self.logs),
+                    'event_counts': event_counts,
+                    'severity_counts': severity_counts,
+                    'top_users': dict(sorted(user_counts.items(), key=lambda x: x[1], reverse=True)[:10]),
+                    'last_log': self.logs[-1].created_at.isoformat() if self.logs else None
+                }
+                
+        except Exception as e:
+            logger.error(f"Error getting stats: {e}")
+            return {}
+    
+    def search(self, query: str, limit: int = 100) -> List[AuditLog]:
+        """Search logs"""
+        try:
+            query = query.lower()
+            
+            with self._lock:
+                results = [
+                    log for log in self.logs
+                    if query in log.description.lower() or
+                       query in log.event_type.value.lower() or
+                       (log.user_id and query in log.user_id.lower()) or
+                       (log.ip_address and query in log.ip_address.lower())
+                ]
+                
+                return results[-limit:]
+                
+        except Exception as e:
+            logger.error(f"Error searching logs: {e}")
+            return []
+
+
+# Global audit manager
+audit_log_manager = AuditLogManager()
+
+
+def log_audit(event_type: AuditEventType, user_id: str = None, 
+             description: str = None, details: Dict = None, 
+             ip: str = None) -> AuditLog:
+    """Convenience function"""
+    return audit_log_manager.log(
+        event_type=event_type,
+        user_id=user_id,
+        description=description,
+        details=details,
+        ip_address=ip
+    )

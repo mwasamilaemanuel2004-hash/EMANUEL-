@@ -1,0 +1,271 @@
+# ============================================
+# ESH.TRADE - Complete .gitignore
+# ============================================
+
+# ============ PYTHON ============
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.whl
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-link
+MANIFEST
+
+# ============ VIRTUAL ENVIRONMENT ============
+venv/
+env/
+ENV/
+.venv/
+env.bak/
+venv.bak/
+pipenv/
+pipfile.lock
+poetry.lock
+.python-version
+
+# ============ ENVIRONMENT FILES ============
+.env
+.env.local
+.env.production
+.env.staging
+.env.development
+.env.test
+!.env.example
+*.env
+
+# ============ DATABASE ============
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+*.dump
+*.sql
+postgres_data/
+
+# ============ LOGS ============
+*.log
+logs/
+data/logs/*
+!data/logs/.gitkeep
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+*.log.*
+
+# ============ BACKUPS ============
+data/backups/*
+!data/backups/.gitkeep
+*.bak
+*.backup
+*.old
+backup/
+
+# ============ CACHE ============
+.cache/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+data/cache/*
+!data/cache/.gitkeep
+.cache_*/
+*.egg-info/
+
+# ============ IDE ============
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.*.swp
+.*.swo
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+*.sublime-project
+*.sublime-workspace
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# ============ DOCKER ============
+docker-compose.override.yml
+.dockerignore
+*.dockerignore
+
+# ============ FLY.IO ============
+.fly/
+fly.toml.local
+fly.secrets.toml
+
+# ============ TESTING ============
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
+# ============ JUPYTER ============
+.ipynb_checkpoints/
+*.ipynb
+
+# ============ SECRETS ============
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.jks
+*.keystore
+secrets/
+credentials/
+.ssh/
+id_rsa
+id_rsa.pub
+*.token
+*.secret
+
+# ============ DATA ============
+data/sessions/*
+!data/sessions/.gitkeep
+data/biometric/*
+!data/biometric/.gitkeep
+data/temp/*
+!data/temp/.gitkeep
+data/uploads/*
+!data/uploads/.gitkeep
+*.tmp
+*.temp
+
+# ============ OS ============
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+.DS_Store?
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# ============ NODE.JS ============
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+.pnp
+.pnp.js
+
+# ============ TYPESCRIPT ============
+*.tsbuildinfo
+next-env.d.ts
+
+# ============ COMPILED ============
+*.pyo
+*.pyd
+*.c
+*.cpp
+*.so
+*.dll
+*.dylib
+*.exe
+*.msi
+*.rpm
+*.deb
+
+# ============ MISC ============
+*.zip
+*.tar
+*.tar.gz
+*.rar
+*.7z
+*.iso
+*.dmg
+*.pkg
+
+# ============ PROJECT SPECIFIC ============
+# ESH.TRADE specific ignores
+data/estrade.db
+data/estrade.db-journal
+data/estrade.db-wal
+data/estrade.db-shm
+data/logs/security.log
+data/logs/audit.log
+data/logs/trading_bots.log
+data/logs/data_providers.log
+data/logs/main.log
+data/totp_qr_*.png
+data/biometric/*
+data/cache/*
+data/sessions/*
+data/backups/*
+
+# ============ KEEP FILES ============
+# Keep .gitkeep files
+!data/logs/.gitkeep
+!data/backups/.gitkeep
+!data/cache/.gitkeep
+!data/sessions/.gitkeep
+!data/biometric/.gitkeep
+!data/temp/.gitkeep
+
+# ============ FINAL ============
+# End of .gitignore

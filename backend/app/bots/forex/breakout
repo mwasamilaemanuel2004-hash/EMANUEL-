@@ -1,0 +1,1059 @@
+"""
+BREAKOUT FOREX BOT - ULTRA ADVANCED ADAPTIVE EDITION v3.0
+Self-Learning, Dynamic Adaptation, Real-Time Optimization
+Multi-Regime Breakout Detection with Adaptive Parameters
+"""
+
+import numpy as np
+import pandas as pd
+from typing import Dict, List, Optional, Tuple, Any, Union, Callable
+from datetime import datetime, timedelta
+from enum import Enum
+import logging
+from collections import deque
+import json
+import time
+import threading
+from functools import lru_cache, partial
+import hashlib
+import warnings
+warnings.filterwarnings('ignore')
+
+# Optimized imports
+try:
+    from numba import jit, njit, prange, vectorize, cuda
+    NUMBA_AVAILABLE = True
+except ImportError:
+    NUMBA_AVAILABLE = False
+
+try:
+    from scipy import signal, stats, optimize, interpolate
+    from scipy.signal import find_peaks, argrelextrema, savgol_filter
+    from scipy.ndimage import gaussian_filter1d
+    from scipy.stats import norm, percentileofscore
+    SCIPY_AVAILABLE = True
+except ImportError:
+    SCIPY_AVAILABLE = False
+
+try:
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.cluster import KMeans
+    from sklearn.decomposition import PCA
+    SKLEARN_AVAILABLE = True
+except ImportError:
+    SKLEARN_AVAILABLE = False
+
+from ..base_bot import (
+    UltraAdvancedBaseBot,
+    MarketRegime,
+    MarketPhase,
+    OrderFlowType,
+    TradeSide,
+    Position
+)
+
+logger = logging.getLogger(__name__)
+
+class AdaptiveState(Enum):
+    """Adaptive states for the bot"""
+    LEARNING = "learning"
+    OPTIMIZING = "optimizing"
+    TRADING = "trading"
+    CAUTIOUS = "cautious"
+    AGGRESSIVE = "aggressive"
+    RECOVERY = "recovery"
+    CONSERVATIVE = "conservative"
+
+class MarketCondition(Enum):
+    """Detailed market conditions"""
+    STRONG_TREND = "strong_trend"
+    WEAK_TREND = "weak_trend"
+    HIGH_VOLATILITY = "high_volatility"
+    LOW_VOLATILITY = "low_volatility"
+    RANGING = "ranging"
+    BREAKOUT_READY = "breakout_ready"
+    POST_BREAKOUT = "post_breakout"
+    FALSE_BREAKOUT_ZONE = "false_breakout_zone"
+    CONSOLIDATION = "consolidation"
+    EXPANSION = "expansion"
+
+@njit(cache=True, parallel=True)
+def adaptive_breakout_score_numba(prices: np.ndarray, volumes: np.ndarray, 
+                                 high: np.ndarray, low: np.ndarray,
+                                 breakout_level: float, direction: int,
+                                 lookback: int = 50) -> float:
+    """Numba optimized adaptive breakout scoring"""
+    if len(prices) < lookback:
+        return 0.0
+    
+    score = 0.0
+    
+    # Price momentum
+    momentum = abs(prices[-1] - breakout_level) / breakout_level
+    score += min(1.0, momentum * 50) * 0.3
+    
+    # Volume surge
+    avg_volume = np.mean(volumes[-lookback:])
+    current_volume = volumes[-1] if len(volumes) > 0 else 0
+    volume_ratio = current_volume / avg_volume if avg_volume > 0 else 1.0
+    score += min(1.0, (volume_ratio - 0.5) / 2) * 0.25
+    
+    # Volatility expansion
+    returns = np.diff(prices[-lookback:]) / prices[-lookback-1:-1]
+    current_vol = np.std(returns[-10:])
+    hist_vol = np.std(returns)
+    vol_expansion = current_vol / hist_vol if hist_vol > 0 else 1.0
+    score += min(1.0, vol_expansion) * 0.25
+    
+    # Candle strength
+    body = abs(prices[-1] - prices[-2])
+    range_candle = high[-1] - low[-1]
+    candle_strength = body / range_candle if range_candle > 0 else 0
+    score += candle_strength * 0.2
+    
+    return min(1.0, score)
+
+@njit(cache=True, parallel=True)
+def adaptive_false_breakout_filter_numba(prices: np.ndarray, high: np.ndarray, low: np.ndarray,
+                                         breakout_level: float, direction: int,
+                                         confirmation_bars: int = 3) -> Tuple[float, bool]:
+    """Numba optimized adaptive false breakout filter"""
+    if len(prices) < confirmation_bars:
+        return 1.0, False
+    
+    false_probability = 0.0
+    confirmed = True
+    
+    # Check confirmation bars
+    for i in range(confirmation_bars):
+        if direction == 1:  # Bullish
+            if prices[-1-i] < breakout_level:
+                false_probability += 0.3
+                confirmed = False
+        else:  # Bearish
+            if prices[-1-i] > breakout_level:
+                false_probability += 0.3
+                confirmed = False
+    
+    # Check wick rejection
+    if direction == 1:
+        upper_wick = high[-1] - max(prices[-1], prices[-2])
+        body = abs(prices[-1] - prices[-2])
+        if upper_wick > body * 1.5:
+            false_probability += 0.3
+            confirmed = False
+    else:
+        lower_wick = min(prices[-1], prices[-2]) - low[-1]
+        body = abs(prices[-1] - prices[-2])
+        if lower_wick > body * 1.5:
+            false_probability += 0.3
+            confirmed = False
+    
+    # Check volume confirmation
+    if volumes_available:
+        pass  # Will be handled separately
+    
+    return min(1.0, false_probability), confirmed
+
+class AdaptiveParameterOptimizer:
+    """Self-optimizing parameter system"""
+    
+    def __init__(self):
+        self.parameters = {}
+        self.performance_history = {}
+        self.optimization_history = deque(maxlen=1000)
+        self.best_parameters = {}
+        self.parameter_sensitivity = {}
+        
+    def initialize_parameters(self, base_params: Dict[str, Any]) -> None:
+        """Initialize adaptive parameters"""
+        self.parameters = base_params.copy()
+        self.best_parameters = base_params.copy()
+        
+        # Initialize sensitivity tracking
+        for key in base_params:
+            self.parameter_sensitivity[key] = {
+                'values': deque(maxlen=100),
+                'performance': deque(maxlen=100)
+            }
+    
+    def update_performance(self, params: Dict[str, Any], performance: float) -> None:
+        """Update parameter performance"""
+        for key, value in params.items():
+            if key in self.parameter_sensitivity:
+                self.parameter_sensitivity[key]['values'].append(value)
+                self.parameter_sensitivity[key]['performance'].append(performance)
+        
+        # Track optimization
+        self.optimization_history.append({
+            'timestamp': datetime.now(),
+            'params': params.copy(),
+            'performance': performance
+        })
+        
+        # Update best parameters
+        if performance > self.get_best_performance():
+            self.best_parameters = params.copy()
+    
+    def get_best_performance(self) -> float:
+        """Get best performance"""
+        if not self.optimization_history:
+            return -float('inf')
+        
+        return max(opt['performance'] for opt in self.optimization_history)
+    
+    def optimize_parameters(self, current_performance: float) -> Dict[str, Any]:
+        """Optimize parameters based on performance"""
+        optimized = self.parameters.copy()
+        
+        # Adjust based on recent performance
+        recent_performances = [opt['performance'] for opt in list(self.optimization_history)[-10:]]
+        
+        if len(recent_performances) < 5:
+            return optimized
+        
+        avg_performance = np.mean(recent_performances)
+        performance_trend = np.polyfit(range(len(recent_performances)), recent_performances, 1)[0]
+        
+        # Determine optimization direction
+        if performance_trend < 0:  # Declining performance
+            # Become more conservative
+            optimized['min_breakout_strength'] *= 1.1
+            optimized['max_false_probability'] *= 0.9
+            optimized['risk_per_trade'] *= 0.9
+            optimized['confirmation_bars'] += 1
+        else:  # Improving or stable performance
+            # Can be slightly more aggressive
+            if avg_performance > 0.6:
+                optimized['min_breakout_strength'] *= 0.95
+                optimized['max_false_probability'] *= 1.05
+                optimized['risk_per_trade'] *= 1.05
+        
+        # Clamp values
+        optimized['min_breakout_strength'] = np.clip(optimized['min_breakout_strength'], 0.4, 0.9)
+        optimized['max_false_probability'] = np.clip(optimized['max_false_probability'], 0.1, 0.5)
+        optimized['risk_per_trade'] = np.clip(optimized['risk_per_trade'], 0.005, 0.05)
+        optimized['confirmation_bars'] = int(np.clip(optimized['confirmation_bars'], 1, 5))
+        
+        return optimized
+
+class AdaptiveBreakoutAnalyzer:
+    """Self-adapting breakout analysis engine"""
+    
+    def __init__(self):
+        self.base_analyzer = BreakoutAnalyzer()
+        self.optimizer = AdaptiveParameterOptimizer()
+        self.market_conditions = deque(maxlen=1000)
+        self.breakout_patterns = {}
+        self.adaptive_levels = {}
+        self.regime_performance = {}
+        
+    def analyze_adaptively(self, market_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Perform adaptive breakout analysis"""
+        # Basic analysis
+        basic_analysis = self.base_analyzer.analyze_breakouts(market_data)
+        
+        # Adaptive analysis
+        adaptive_analysis = self._analyze_market_conditions(market_data)
+        
+        # Detect current market condition
+        market_condition = self.detect_market_condition(market_data)
+        
+        # Adapt parameters based on condition
+        adapted_params = self.adapt_parameters_for_condition(market_condition)
+        
+        # Enhanced breakout detection
+        enhanced_breakout = self.detect_adaptive_breakout(market_data, adapted_params)
+        
+        return {
+            **basic_analysis,
+            'adaptive': adaptive_analysis,
+            'market_condition': market_condition.value,
+            'adapted_params': adapted_params,
+            'enhanced_breakout': enhanced_breakout
+        }
+    
+    def _analyze_market_conditions(self, market_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Analyze current market conditions"""
+        prices = market_data.get('prices', [])
+        volumes = market_data.get('volumes', [])
+        
+        if len(prices) < 50:
+            return {}
+        
+        conditions = {
+            'trend_strength': self._calculate_trend_strength(prices),
+            'volatility_state': self._calculate_volatility_state(prices),
+            'volume_trend': self._calculate_volume_trend(volumes),
+            'range_position': self._calculate_range_position(prices),
+            'momentum': self._calculate_momentum(prices),
+            'market_efficiency': self._calculate_market_efficiency(prices)
+        }
+        
+        self.market_conditions.append(conditions)
+        
+        return conditions
+    
+    def _calculate_trend_strength(self, prices: List[float]) -> float:
+        """Calculate trend strength"""
+        if len(prices) < 50:
+            return 0.0
+        
+        # Use multiple timeframes
+        short_ma = np.mean(prices[-10:])
+        medium_ma = np.mean(prices[-30:])
+        long_ma = np.mean(prices[-50:])
+        
+        # Calculate alignment
+        alignment = 0
+        if short_ma > medium_ma > long_ma:
+            alignment = 1
+        elif short_ma < medium_ma < long_ma:
+            alignment = -1
+        
+        # Calculate strength
+        price_change = abs(prices[-1] - prices[-20]) / prices[-20]
+        
+        return alignment * min(1.0, price_change * 50)
+    
+    def _calculate_volatility_state(self, prices: List[float]) -> str:
+        """Calculate volatility state"""
+        if len(prices) < 30:
+            return 'normal'
+        
+        returns = np.diff(prices[-30:]) / prices[-30:-1]
+        current_vol = np.std(returns[-5:])
+        hist_vol = np.std(returns)
+        
+        ratio = current_vol / hist_vol if hist_vol > 0 else 1.0
+        
+        if ratio > 1.5:
+            return 'expanding'
+        elif ratio < 0.7:
+            return 'contracting'
+        elif current_vol > hist_vol * 1.2:
+            return 'high'
+        elif current_vol < hist_vol * 0.8:
+            return 'low'
+        else:
+            return 'normal'
+    
+    def _calculate_volume_trend(self, volumes: List[float]) -> str:
+        """Calculate volume trend"""
+        if len(volumes) < 20:
+            return 'unknown'
+        
+        recent_vol = np.mean(volumes[-5:])
+        hist_vol = np.mean(volumes[-20:])
+        
+        ratio = recent_vol / hist_vol if hist_vol > 0 else 1.0
+        
+        if ratio > 1.5:
+            return 'increasing'
+        elif ratio < 0.7:
+            return 'decreasing'
+        else:
+            return 'stable'
+    
+    def _calculate_range_position(self, prices: List[float]) -> float:
+        """Calculate position within range"""
+        if len(prices) < 50:
+            return 0.5
+        
+        range_high = np.max(prices[-50:])
+        range_low = np.min(prices[-50:])
+        
+        if range_high == range_low:
+            return 0.5
+        
+        return (prices[-1] - range_low) / (range_high - range_low)
+    
+    def _calculate_momentum(self, prices: List[float]) -> float:
+        """Calculate momentum"""
+        if len(prices) < 20:
+            return 0.0
+        
+        # Multi-period momentum
+        momentum_5 = (prices[-1] - prices[-5]) / prices[-5]
+        momentum_10 = (prices[-1] - prices[-10]) / prices[-10]
+        momentum_20 = (prices[-1] - prices[-20]) / prices[-20]
+        
+        return (momentum_5 + momentum_10 * 0.7 + momentum_20 * 0.3) / 2
+    
+    def _calculate_market_efficiency(self, prices: List[float]) -> float:
+        """Calculate market efficiency (Hurst exponent approximation)"""
+        if len(prices) < 100:
+            return 0.5
+        
+        # Simplified Hurst exponent calculation
+        lags = range(2, 20)
+        tau = [np.sqrt(np.std(np.subtract(prices[lag:], prices[:-lag]))) for lag in lags]
+        
+        if len(tau) < 2:
+            return 0.5
+        
+        # Linear fit
+        poly = np.polyfit(np.log(lags), np.log(tau), 1)
+        hurst = poly[0] * 2.0
+        
+        return np.clip(hurst, 0, 1)
+    
+    def detect_market_condition(self, market_data: Dict[str, Any]) -> MarketCondition:
+        """Detect current market condition"""
+        conditions = self._analyze_market_conditions(market_data)
+        
+        trend_strength = conditions.get('trend_strength', 0)
+        volatility_state = conditions.get('volatility_state', 'normal')
+        volume_trend = conditions.get('volume_trend', 'stable')
+        range_position = conditions.get('range_position', 0.5)
+        momentum = conditions.get('momentum', 0)
+        efficiency = conditions.get('market_efficiency', 0.5)
+        
+        # Determine condition
+        if abs(trend_strength) > 0.7 and volatility_state in ['expanding', 'high']:
+            return MarketCondition.STRONG_TREND
+        elif abs(trend_strength) > 0.3:
+            return MarketCondition.WEAK_TREND
+        elif volatility_state == 'expanding':
+            return MarketCondition.EXPANSION
+        elif volatility_state == 'contracting':
+            return MarketCondition.CONSOLIDATION
+        elif range_position > 0.8 or range_position < 0.2:
+            return MarketCondition.BREAKOUT_READY
+        elif efficiency < 0.4:
+            return MarketCondition.RANGING
+        else:
+            return MarketCondition.POST_BREAKOUT
+    
+    def adapt_parameters_for_condition(self, condition: MarketCondition) -> Dict[str, Any]:
+        """Adapt parameters based on market condition"""
+        base_params = {
+            'min_breakout_strength': 0.6,
+            'max_false_probability': 0.3,
+            'min_volume_confirmation': 1.5,
+            'confirmation_bars': 2,
+            'risk_per_trade': 0.02,
+            'trailing_stop_percentage': 0.015
+        }
+        
+        # Adapt based on condition
+        if condition == MarketCondition.STRONG_TREND:
+            base_params['min_breakout_strength'] = 0.5
+            base_params['max_false_probability'] = 0.35
+            base_params['risk_per_trade'] = 0.025
+            base_params['trailing_stop_percentage'] = 0.02
+        elif condition == MarketCondition.WEAK_TREND:
+            base_params['min_breakout_strength'] = 0.65
+            base_params['max_false_probability'] = 0.25
+        elif condition == MarketCondition.HIGH_VOLATILITY:
+            base_params['min_breakout_strength'] = 0.7
+            base_params['max_false_probability'] = 0.2
+            base_params['risk_per_trade'] = 0.015
+        elif condition == MarketCondition.LOW_VOLATILITY:
+            base_params['min_breakout_strength'] = 0.55
+            base_params['confirmation_bars'] = 3
+        elif condition == MarketCondition.BREAKOUT_READY:
+            base_params['min_breakout_strength'] = 0.5
+            base_params['min_volume_confirmation'] = 1.2
+            base_params['risk_per_trade'] = 0.03
+        elif condition == MarketCondition.FALSE_BREAKOUT_ZONE:
+            base_params['min_breakout_strength'] = 0.8
+            base_params['max_false_probability'] = 0.15
+            base_params['confirmation_bars'] = 4
+        elif condition == MarketCondition.CONSOLIDATION:
+            base_params['min_breakout_strength'] = 0.6
+            base_params['confirmation_bars'] = 3
+            
+        return base_params
+    
+    def detect_adaptive_breakout(self, market_data: Dict[str, Any], params: Dict[str, Any]) -> Dict[str, Any]:
+        """Detect breakout with adaptive parameters"""
+        prices = market_data.get('prices', [])
+        high = market_data.get('high', prices)
+        low = market_data.get('low', prices)
+        volumes = market_data.get('volumes', [])
+        
+        if len(prices) < 30:
+            return {}
+        
+        # Convert to numpy
+        prices_np = np.array(prices)
+        high_np = np.array(high)
+        low_np = np.array(low)
+        volumes_np = np.array(volumes) if volumes else np.ones_like(prices_np)
+        
+        # Get breakout levels from base analyzer
+        levels = self.base_analyzer.breakout_levels
+        
+        # Check each level
+        for level in levels:
+            level_price = level['price']
+            
+            # Check for breakout
+            if prices[-1] > level_price and level['type'] in ['resistance', 'channel_upper']:
+                direction = 1
+            elif prices[-1] < level_price and level['type'] in ['support', 'channel_lower']:
+                direction = -1
+            else:
+                continue
+            
+            # Calculate adaptive score
+            if NUMBA_AVAILABLE:
+                score = adaptive_breakout_score_numba(
+                    prices_np, volumes_np, high_np, low_np,
+                    level_price, direction
+                )
+                false_prob, confirmed = adaptive_false_breakout_filter_numba(
+                    prices_np, high_np, low_np,
+                    level_price, direction,
+                    int(params.get('confirmation_bars', 2))
+                )
+            else:
+                score = self._calculate_breakout_score_python(prices_np, volumes_np, level_price, direction)
+                false_prob, confirmed = self._filter_false_breakout_python(
+                    prices_np, high_np, low_np, level_price, direction,
+                    int(params.get('confirmation_bars', 2))
+                )
+            
+            return {
+                'active': True,
+                'direction': 'long' if direction == 1 else 'short',
+                'level': level_price,
+                'strength': score,
+                'false_probability': false_prob,
+                'confirmed': confirmed,
+                'type': level.get('breakout_type', 'unknown')
+            }
+        
+        return {'active': False}
+    
+    def _calculate_breakout_score_python(self, prices: np.ndarray, volumes: np.ndarray, level: float, direction: int) -> float:
+        """Python fallback for breakout score"""
+        momentum = abs(prices[-1] - level) / level
+        avg_volume = np.mean(volumes[-20:])
+        volume_ratio = volumes[-1] / avg_volume if avg_volume > 0 else 1.0
+        
+        score = min(1.0, momentum * 50) * 0.3 + min(1.0, (volume_ratio - 0.5) / 2) * 0.25 + 0.45
+        return min(1.0, score)
+    
+    def _filter_false_breakout_python(self, prices: np.ndarray, high: np.ndarray, low: np.ndarray, 
+                                      level: float, direction: int, bars: int) -> Tuple[float, bool]:
+        """Python fallback for false breakout filter"""
+        false_prob = 0.0
+        confirmed = True
+        
+        for i in range(bars):
+            if direction == 1:
+                if prices[-1-i] < level:
+                    false_prob += 0.3
+                    confirmed = False
+            else:
+                if prices[-1-i] > level:
+                    false_prob += 0.3
+                    confirmed = False
+        
+        return min(1.0, false_prob), confirmed
+
+class UltraAdaptiveBreakoutBot(UltraAdvancedBaseBot):
+    """
+    Ultra Advanced Adaptive Breakout Bot v3.0
+    Self-learning, dynamically adapting breakout trading system
+    """
+    
+    def __init__(self,
+                 symbol: str = "EURUSD",
+                 initial_capital: float = 10000.0,
+                 config: Optional[Dict[str, Any]] = None):
+        """
+        Initialize Adaptive Breakout Bot
+        """
+        super().__init__(
+            bot_name=f"AdaptiveBreakout_{symbol}",
+            symbol=symbol,
+            initial_capital=initial_capital
+        )
+        
+        # Initialize adaptive components
+        self.adaptive_analyzer = AdaptiveBreakoutAnalyzer()
+        self.parameter_optimizer = AdaptiveParameterOptimizer()
+        
+        # Adaptive state
+        self.adaptive_state = AdaptiveState.LEARNING
+        self.state_history = deque(maxlen=1000)
+        self.adaptation_count = 0
+        
+        # Configuration
+        self.config = self._load_config(config)
+        self.parameter_optimizer.initialize_parameters(self.config)
+        
+        # Performance tracking
+        self.adaptive_performance = deque(maxlen=1000)
+        self.regime_performance = {}
+        self.adaptation_effectiveness = deque(maxlen=100)
+        
+        # Learning history
+        self.learning_episodes = deque(maxlen=1000)
+        self.successful_adaptations = 0
+        self.failed_adaptations = 0
+        
+        # Threading
+        self.adaptive_lock = threading.Lock()
+        self.optimization_thread = None
+        self.is_optimizing = False
+        
+        self.logger.info(f"Adaptive Breakout Bot initialized for {symbol}")
+        self.logger.info(f"Initial state: {self.adaptive_state.value}")
+    
+    def _load_config(self, config: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        """Load configuration"""
+        default_config = {
+            # Core parameters
+            'min_breakout_strength': 0.6,
+            'max_false_probability': 0.3,
+            'min_volume_confirmation': 1.5,
+            'confirmation_bars': 2,
+            'risk_reward_min': 2.0,
+            
+            # Risk management
+            'risk_per_trade': 0.02,
+            'max_daily_risk': 0.06,
+            'max_position_size': 0.15,
+            'trailing_stop_percentage': 0.015,
+            'max_holding_time': 14400,
+            
+            # Adaptive parameters
+            'learning_rate': 0.1,
+            'adaptation_threshold': 10,
+            'optimization_interval': 3600,  # 1 hour
+            'min_trades_for_optimization': 20,
+            'adaptation_sensitivity': 0.5,
+            
+            # Market filters
+            'trade_london_breakout': True,
+            'trade_ny_breakout': True,
+            'trade_asian_breakout': False,
+            'min_volatility_ratio': 0.8,
+            'max_volatility_ratio': 2.5,
+            
+            # Performance targets
+            'target_win_rate': 0.55,
+            'target_profit_factor': 1.5,
+            'max_drawdown_limit': 0.15
+        }
+        
+        if config:
+            default_config.update(config)
+        
+        return default_config
+    
+    def analyze_market(self, market_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Perform adaptive market analysis"""
+        try:
+            # Adaptive analysis
+            adaptive_analysis = self.adaptive_analyzer.analyze_adaptively(market_data)
+            
+            # Order flow
+            order_flows = self.order_flow_detector.detect_order_flow(market_data)
+            
+            # Neural prediction
+            nn_features = self.neural_engine.prepare_features(market_data)
+            nn_prediction = self.neural_engine.predict(nn_features)
+            
+            # Get current adaptive state
+            current_state = self._determine_adaptive_state()
+            
+            return {
+                'adaptive': adaptive_analysis,
+                'order_flows': order_flows,
+                'neural_prediction': nn_prediction,
+                'adaptive_state': current_state.value,
+                'adaptation_count': self.adaptation_count,
+                'timestamp': datetime.now()
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error in analyze_market: {e}")
+            return self._get_fallback_analysis()
+    
+    def _determine_adaptive_state(self) -> AdaptiveState:
+        """Determine current adaptive state"""
+        # Check recent performance
+        recent_performance = list(self.adaptive_performance)[-20:]
+        
+        if len(recent_performance) < 5:
+            return AdaptiveState.LEARNING
+        
+        win_rate = sum(1 for p in recent_performance if p > 0) / len(recent_performance)
+        avg_pnl = np.mean(recent_performance)
+        
+        # Check drawdown
+        current_drawdown = self.max_drawdown
+        
+        if current_drawdown > self.config.get('max_drawdown_limit', 0.15):
+            return AdaptiveState.RECOVERY
+        
+        if win_rate > 0.65 and avg_pnl > 0:
+            return AdaptiveState.AGGRESSIVE
+        
+        if win_rate > self.config.get('target_win_rate', 0.55):
+            return AdaptiveState.TRADING
+        
+        if win_rate < 0.4:
+            return AdaptiveState.CONSERVATIVE
+        
+        return AdaptiveState.OPTIMIZING
+    
+    def generate_signal(self, analysis: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate adaptive trading signal"""
+        try:
+            adaptive = analysis.get('adaptive', {})
+            enhanced_breakout = adaptive.get('enhanced_breakout', {})
+            market_condition = adaptive.get('market_condition', 'unknown')
+            adapted_params = adaptive.get('adapted_params', {})
+            
+            # Initialize signal
+            signal = {
+                'action': 'neutral',
+                'confidence': 0,
+                'strength': 0,
+                'reasons': [],
+                'adaptive_adjustments': {},
+                'timestamp': datetime.now()
+            }
+            
+            # Check breakout
+            if not enhanced_breakout.get('active', False):
+                return signal
+            
+            # Check confirmation
+            if not enhanced_breakout.get('confirmed', False):
+                signal['reasons'].append('not_confirmed')
+                return signal
+            
+            # Apply adaptive parameters
+            min_strength = adapted_params.get('min_breakout_strength', self.config['min_breakout_strength'])
+            max_false_prob = adapted_params.get('max_false_probability', self.config['max_false_probability'])
+            
+            # Check strength
+            strength = enhanced_breakout.get('strength', 0)
+            if strength < min_strength:
+                signal['reasons'].append('insufficient_strength')
+                return signal
+            
+            # Check false probability
+            false_prob = enhanced_breakout.get('false_probability', 0)
+            if false_prob > max_false_prob:
+                signal['reasons'].append('high_false_probability')
+                return signal
+            
+            # Determine action
+            direction = enhanced_breakout.get('direction', 'neutral')
+            
+            # Adjust confidence based on adaptive state
+            state_multiplier = self._get_state_confidence_multiplier()
+            
+            if direction == 'long':
+                signal['action'] = 'long'
+                signal['strength'] = strength
+                signal['confidence'] = (strength * 0.6 + (1 - false_prob) * 0.4) * state_multiplier
+            elif direction == 'short':
+                signal['action'] = 'short'
+                signal['strength'] = strength
+                signal['confidence'] = (strength * 0.6 + (1 - false_prob) * 0.4) * state_multiplier
+            
+            # Record adaptive adjustments
+            signal['adaptive_adjustments'] = {
+                'base_strength_threshold': self.config['min_breakout_strength'],
+                'adapted_strength_threshold': min_strength,
+                'base_false_probability': self.config['max_false_probability'],
+                'adapted_false_probability': max_false_prob,
+                'market_condition': market_condition,
+                'state_multiplier': state_multiplier
+            }
+            
+            signal['reasons'].append(f'adaptive_breakout_{direction}')
+            
+            return signal
+            
+        except Exception as e:
+            self.logger.error(f"Error in generate_signal: {e}")
+            return {'action': 'neutral', 'confidence': 0, 'strength': 0}
+    
+    def _get_state_confidence_multiplier(self) -> float:
+        """Get confidence multiplier based on adaptive state"""
+        state = self._determine_adaptive_state()
+        
+        multipliers = {
+            AdaptiveState.LEARNING: 0.7,
+            AdaptiveState.OPTIMIZING: 0.8,
+            AdaptiveState.TRADING: 1.0,
+            AdaptiveState.CAUTIOUS: 0.6,
+            AdaptiveState.AGGRESSIVE: 1.2,
+            AdaptiveState.RECOVERY: 0.5,
+            AdaptiveState.CONSERVATIVE: 0.7
+        }
+        
+        return multipliers.get(state, 0.8)
+    
+    def execute_strategy(self, market_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute adaptive breakout strategy"""
+        try:
+            with self.adaptive_lock:
+                # Analyze market
+                analysis = self.analyze_market(market_data)
+                
+                # Generate signal
+                signal = self.generate_signal(analysis)
+                
+                if signal['action'] == 'neutral':
+                    return {
+                        'action': 'hold',
+                        'reason': signal.get('reasons', ['no_signal'])[0],
+                        'analysis': analysis,
+                        'signal': signal
+                    }
+                
+                # Get current price
+                prices = market_data.get('prices', [])
+                if not prices:
+                    return {'action': 'hold', 'reason': 'no_price'}
+                
+                current_price = prices[-1]
+                
+                # Calculate adaptive position size
+                position_size = self._calculate_adaptive_position_size(
+                    current_price,
+                    signal['confidence'],
+                    analysis
+                )
+                
+                # Calculate adaptive stop loss and take profit
+                stop_loss, take_profit = self._calculate_adaptive_levels(
+                    signal['action'],
+                    current_price,
+                    analysis
+                )
+                
+                # Open position
+                position = self.open_position(
+                    signal['action'],
+                    current_price,
+                    signal['confidence'],
+                    position_size
+                )
+                
+                if position:
+                    position.stop_loss = stop_loss
+                    position.take_profit = take_profit
+                    
+                    # Record trade
+                    self.adaptive_performance.append(0)  # Will update on close
+                    
+                    return {
+                        'action': 'buy' if signal['action'] == 'long' else 'sell',
+                        'reason': 'adaptive_breakout_signal',
+                        'analysis': analysis,
+                        'signal': signal,
+                        'position': position
+                    }
+                
+                return {
+                    'action': 'hold',
+                    'reason': 'position_not_opened',
+                    'signal': signal
+                }
+                
+        except Exception as e:
+            self.logger.error(f"Error in execute_strategy: {e}")
+            return {'action': 'hold', 'reason': 'error', 'error': str(e)}
+    
+    def _calculate_adaptive_position_size(self, price: float, confidence: float, analysis: Dict[str, Any]) -> float:
+        """Calculate adaptive position size"""
+        base_risk = self.config.get('risk_per_trade', 0.02)
+        adapted_params = analysis.get('adaptive', {}).get('adapted_params', {})
+        
+        # Use adapted risk if available
+        risk_per_trade = adapted_params.get('risk_per_trade', base_risk)
+        
+        # Get state multiplier
+        state_multiplier = self._get_state_confidence_multiplier()
+        
+        # Calculate position size
+        risk_amount = self.current_capital * risk_per_trade
+        position_value = risk_amount * (0.5 + confidence) * state_multiplier * 5
+        position_size = position_value / price
+        
+        # Apply maximum
+        max_value = self.current_capital * self.config.get('max_position_size', 0.15)
+        max_size = max_value / price
+        
+        return min(position_size, max_size)
+    
+    def _calculate_adaptive_levels(self, action: str, current_price: float, analysis: Dict[str, Any]) -> Tuple[float, float]:
+        """Calculate adaptive stop loss and take profit"""
+        adaptive = analysis.get('adaptive', {})
+        enhanced_breakout = adaptive.get('enhanced_breakout', {})
+        breakout_level = enhanced_breakout.get('level', current_price)
+        
+        # Get ATR for dynamic stops
+        volatility = analysis.get('volatility', {})
+        atr = volatility.get('atr', current_price * 0.005)
+        
+        # Adaptive trailing stop percentage
+        adapted_params = adaptive.get('adapted_params', {})
+        trailing_pct = adapted_params.get('trailing_stop_percentage', self.config.get('trailing_stop_percentage', 0.015))
+        
+        if action == 'long':
+            stop_loss = min(breakout_level - atr * 0.5, current_price - atr * 1.5)
+            measured_move = abs(current_price - breakout_level) * 2
+            take_profit = current_price + measured_move
+        else:
+            stop_loss = max(breakout_level + atr * 0.5, current_price + atr * 1.5)
+            measured_move = abs(breakout_level - current_price) * 2
+            take_profit = current_price - measured_move
+        
+        return stop_loss, take_profit
+    
+    def close_position(self, position_id: str, price: float, reason: str) -> Optional[Position]:
+        """Close position and update adaptive learning"""
+        position = super().close_position(position_id, price, reason)
+        
+        if position:
+            # Update adaptive performance
+            self.adaptive_performance.append(position.realized_pnl)
+            
+            # Update parameter optimizer
+            current_performance = self._calculate_current_performance()
+            self.parameter_optimizer.update_performance(self.config, current_performance)
+            
+            # Trigger adaptation if needed
+            if len(self.closed_positions) >= self.config.get('adaptation_threshold', 10):
+                self._trigger_adaptation()
+        
+        return position
+    
+    def _calculate_current_performance(self) -> float:
+        """Calculate current performance score"""
+        recent_trades = self.closed_positions[-20:]
+        
+        if not recent_trades:
+            return 0.0
+        
+        win_rate = sum(1 for t in recent_trades if t.realized_pnl > 0) / len(recent_trades)
+        profit_factor = self._calculate_profit_factor(recent_trades)
+        
+        # Combined performance score
+        performance = (win_rate * 0.5 + min(1.0, profit_factor / 3) * 0.5)
+        
+        return performance
+    
+    def _calculate_profit_factor(self, trades: List[Position]) -> float:
+        """Calculate profit factor"""
+        gross_profit = sum(t.realized_pnl for t in trades if t.realized_pnl > 0)
+        gross_loss = abs(sum(t.realized_pnl for t in trades if t.realized_pnl < 0))
+        
+        return gross_profit / gross_loss if gross_loss > 0 else float('inf')
+    
+    def _trigger_adaptation(self) -> None:
+        """Trigger parameter adaptation"""
+        if self.is_optimizing:
+            return
+        
+        self.is_optimizing = True
+        self.optimization_thread = threading.Thread(target=self._perform_adaptation)
+        self.optimization_thread.start()
+    
+    def _perform_adaptation(self) -> None:
+        """Perform adaptive optimization"""
+        try:
+            self.adaptation_count += 1
+            current_performance = self._calculate_current_performance()
+            
+            # Optimize parameters
+            optimized_params = self.parameter_optimizer.optimize_parameters(current_performance)
+            
+            # Update config with optimized parameters
+            old_config = self.config.copy()
+            self.config.update(optimized_params)
+            
+            # Track adaptation effectiveness
+            self.learning_episodes.append({
+                'timestamp': datetime.now(),
+                'old_params': old_config,
+                'new_params': optimized_params,
+                'performance': current_performance
+            })
+            
+            # Update adaptive state
+            self.adaptive_state = self._determine_adaptive_state()
+            
+            self.logger.info(f"Adaptation #{self.adaptation_count} completed")
+            self.logger.info(f"Performance: {current_performance:.2f}")
+            self.logger.info(f"State: {self.adaptive_state.value}")
+            
+        except Exception as e:
+            self.logger.error(f"Error in adaptation: {e}")
+            self.failed_adaptations += 1
+        finally:
+            self.is_optimizing = False
+    
+    def get_performance_metrics(self) -> Dict[str, Any]:
+        """Get enhanced adaptive performance metrics"""
+        metrics = super().get_performance_metrics()
+        
+        # Adaptive metrics
+        adaptive_metrics = {
+            'adaptation_count': self.adaptation_count,
+            'adaptive_state': self.adaptive_state.value,
+            'successful_adaptations': self.successful_adaptations,
+            'failed_adaptations': self.failed_adaptations,
+            'adaptation_effectiveness': np.mean(self.adaptation_effectiveness) if self.adaptation_effectiveness else 0,
+            'learning_episodes': len(self.learning_episodes),
+            'current_performance_score': self._calculate_current_performance(),
+            'parameter_changes': len(self.parameter_optimizer.optimization_history),
+            'best_performance': self.parameter_optimizer.get_best_performance() if self.parameter_optimizer.optimization_history else 0
+        }
+        
+        metrics.update(adaptive_metrics)
+        return metrics
+    
+    def save_state(self, filename: str = None) -> None:
+        """Save bot state including adaptive parameters"""
+        try:
+            if filename is None:
+                filename = f"adaptive_breakout_{self.symbol}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            
+            state = {
+                'bot_id': self.bot_id,
+                'bot_name': self.bot_name,
+                'symbol': self.symbol,
+                'capital': self.current_capital,
+                'performance': self.get_performance_metrics(),
+                'positions': [p.to_dict() for p in self.positions.values()],
+                'trade_count': self.total_trades,
+                'config': self.config,
+                'adaptive_state': self.adaptive_state.value,
+                'adaptation_count': self.adaptation_count,
+                'best_parameters': self.parameter_optimizer.best_parameters,
+                'learning_episodes': list(self.learning_episodes)[-10:]  # Last 10 episodes
+            }
+            
+            with open(filename, 'w') as f:
+                json.dump(state, f, indent=2, default=str)
+            
+            self.logger.info(f"State saved to {filename}")
+            
+        except Exception as e:
+            self.logger.error(f"Error saving state: {e}")
+    
+    def reset_adaptation(self) -> None:
+        """Reset adaptive learning"""
+        self.adaptive_state = AdaptiveState.LEARNING
+        self.adaptation_count = 0
+        self.successful_adaptations = 0
+        self.failed_adaptations = 0
+        self.learning_episodes.clear()
+        self.adaptive_performance.clear()
+        self.parameter_optimizer.optimization_history.clear()
+        
+        self.logger.info("Adaptive learning reset")

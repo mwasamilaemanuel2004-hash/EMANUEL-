@@ -1,0 +1,1125 @@
+"""
+FOREX SCALPER BOT - ULTRA ADVANCED EDITION
+High-Frequency Scalping, Micro-Market Structure, Institutional Flow Detection
+Optimized for Maximum Performance
+"""
+
+import numpy as np
+import pandas as pd
+from typing import Dict, List, Optional, Tuple, Any, Union
+from datetime import datetime, timedelta
+from enum import Enum
+import logging
+from collections import deque
+import json
+import time
+import threading
+from functools import lru_cache
+import hashlib
+import warnings
+warnings.filterwarnings('ignore')
+
+# Optimized imports
+try:
+    from numba import jit, njit, prange, vectorize
+    NUMBA_AVAILABLE = True
+except ImportError:
+    NUMBA_AVAILABLE = False
+    
+try:
+    from scipy import signal, stats, optimize
+    from scipy.ndimage import gaussian_filter1d
+    SCIPY_AVAILABLE = True
+except ImportError:
+    SCIPY_AVAILABLE = False
+
+from ..base_bot import (
+    UltraAdvancedBaseBot,
+    MarketRegime,
+    MarketPhase,
+    OrderFlowType,
+    TradeSide,
+    Position
+)
+
+logger = logging.getLogger(__name__)
+
+class ScalpStrategy(Enum):
+    """Scalping strategy types"""
+    MOMENTUM_SCALP = "momentum_scalp"
+    MEAN_REVERSION_SCALP = "mean_reversion_scalp"
+    BREAKOUT_SCALP = "breakout_scalp"
+    RANGE_SCALP = "range_scalp"
+    NEWS_SCALP = "news_scalp"
+    LIQUIDITY_SCALP = "liquidity_scalp"
+    ORDER_FLOW_SCALP = "order_flow_scalp"
+    TICK_SCALP = "tick_scalp"
+    SPREAD_SCALP = "spread_scalp"
+    ARBITRAGE_SCALP = "arbitrage_scalp"
+
+class MicroMarketStructure:
+    """Micro market structure analysis for scalping"""
+    
+    def __init__(self):
+        self.order_book = {}
+        self.tick_history = deque(maxlen=10000)
+        self.micro_trends = {}
+        self.liquidity_levels = {'bid': [], 'ask': []}
+        self.imbalance_ratio = 0.0
+        self.flow_toxicity = 0.0  # VPIN-like metric
+        
+    def update_order_book(self, bids: List[Tuple[float, float]], asks: List[Tuple[float, float]]) -> None:
+        """Update order book data"""
+        self.order_book = {
+            'bids': sorted(bids, key=lambda x: x[0], reverse=True),
+            'asks': sorted(asks, key=lambda x: x[0])
+        }
+        
+        # Calculate imbalance
+        total_bid_volume = sum(volume for _, volume in bids[:10])
+        total_ask_volume = sum(volume for _, volume in asks[:10])
+        
+        if total_bid_volume + total_ask_volume > 0:
+            self.imbalance_ratio = (total_bid_volume - total_ask_volume) / (total_bid_volume + total_ask_volume)
+        
+        # Update liquidity levels
+        self.liquidity_levels = {
+            'bid': [price for price, _ in bids[:5]],
+            'ask': [price for price, _ in asks[:5]]
+        }
+    
+    def analyze_tick_flow(self, ticks: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Analyze tick flow for scalping signals"""
+        if not ticks:
+            return {}
+        
+        # Extract tick data
+        prices = [tick.get('price', 0) for tick in ticks]
+        volumes = [tick.get('volume', 0) for tick in ticks]
+        sides = [tick.get('side', 'neutral') for tick in ticks]
+        
+        # Calculate tick velocity
+        tick_velocity = self.calculate_tick_velocity(prices)
+        
+        # Calculate volume weighted average price
+        vwap = self.calculate_vwap(prices, volumes)
+        
+        # Calculate flow toxicity
+        self.flow_toxicity = self.calculate_flow_toxicity(volumes, sides)
+        
+        return {
+            'tick_velocity': tick_velocity,
+            'vwap': vwap,
+            'flow_toxicity': self.flow_toxicity,
+            'price_impact': self.calculate_price_impact(prices, volumes),
+            'micro_trend': self.detect_micro_trend(prices)
+        }
+    
+    def calculate_tick_velocity(self, prices: List[float]) -> float:
+        """Calculate tick velocity"""
+        if len(prices) < 2:
+            return 0.0
+        
+        # Calculate rate of price change
+        price_changes = np.diff(prices)
+        time_intervals = np.ones_like(price_changes)  # Assume uniform time
+        
+        velocity = np.mean(price_changes) / np.mean(time_intervals)
+        return velocity
+    
+    def calculate_vwap(self, prices: List[float], volumes: List[float]) -> float:
+        """Calculate Volume Weighted Average Price"""
+        if not prices or not volumes:
+            return 0.0
+        
+        total_volume = sum(volumes)
+        if total_volume == 0:
+            return np.mean(prices)
+        
+        vwap = sum(p * v for p, v in zip(prices, volumes)) / total_volume
+        return vwap
+    
+    def calculate_flow_toxicity(self, volumes: List[float], sides: List[str]) -> float:
+        """Calculate flow toxicity (VPIN)"""
+        if not volumes:
+            return 0.0
+        
+        buy_volume = sum(v for v, s in zip(volumes, sides) if s == 'buy')
+        sell_volume = sum(v for v, s in zip(volumes, sides) if s == 'sell')
+        
+        total_volume = buy_volume + sell_volume
+        if total_volume == 0:
+            return 0.0
+        
+        toxicity = abs(buy_volume - sell_volume) / total_volume
+        return toxicity
+    
+    def calculate_price_impact(self, prices: List[float], volumes: List[float]) -> float:
+        """Calculate price impact of trades"""
+        if len(prices) < 2 or not volumes:
+            return 0.0
+        
+        # Kyle's Lambda approximation
+        price_changes = np.abs(np.diff(prices))
+        avg_volume = np.mean(volumes)
+        
+        if avg_volume == 0:
+            return 0.0
+        
+        impact = np.mean(price_changes) / avg_volume
+        return impact
+    
+    def detect_micro_trend(self, prices: List[float]) -> str:
+        """Detect micro trend from tick data"""
+        if len(prices) < 5:
+            return 'neutral'
+        
+        # Short-term trend detection
+        short_ma = np.mean(prices[-3:])
+        long_ma = np.mean(prices[-5:])
+        
+        if short_ma > long_ma * 1.0001:
+            return 'up'
+        elif short_ma < long_ma * 0.9999:
+            return 'down'
+        else:
+            return 'neutral'
+
+@njit(cache=True, parallel=True)
+def calculate_momentum_numba(prices: np.ndarray, period: int = 5) -> float:
+    """Numba optimized momentum calculation"""
+    if len(prices) < period:
+        return 0.0
+    
+    momentum = (prices[-1] - prices[-period]) / prices[-period]
+    return momentum
+
+@njit(cache=True, parallel=True)
+def calculate_volatility_numba(prices: np.ndarray, period: int = 20) -> float:
+    """Numba optimized volatility calculation"""
+    if len(prices) < period:
+        return 0.0
+    
+    returns = np.diff(prices[-period-1:]) / prices[-period-1:-1]
+    volatility = np.std(returns) * np.sqrt(252)  # Annualized
+    return volatility
+
+@njit(cache=True, parallel=True)
+def calculate_zscore_numba(prices: np.ndarray, period: int = 20) -> float:
+    """Numba optimized Z-Score calculation"""
+    if len(prices) < period:
+        return 0.0
+    
+    window = prices[-period:]
+    mean = np.mean(window)
+    std = np.std(window)
+    
+    if std == 0:
+        return 0.0
+    
+    zscore = (prices[-1] - mean) / std
+    return zscore
+
+@vectorize(['float64(float64, float64)'], target='parallel')
+def calculate_spread_vectorized(bid: float, ask: float) -> float:
+    """Vectorized spread calculation"""
+    return (ask - bid) / ask
+
+class UltraScalpIndicators:
+    """Ultra-fast scalping indicators"""
+    
+    def __init__(self):
+        self._cache = {}
+        self._cache_timestamps = {}
+        self._cache_duration = 0.1  # 100ms for scalping
+        
+    @lru_cache(maxsize=512)
+    def calculate_ema_scalp(self, prices_tuple: Tuple[float, ...], period: int) -> float:
+        """Ultra-fast EMA for scalping"""
+        prices = np.array(prices_tuple)
+        if len(prices) < period:
+            return prices[-1] if len(prices) > 0 else 0.0
+        
+        alpha = 2.0 / (period + 1)
+        ema = prices[0]
+        
+        for price in prices[1:]:
+            ema = alpha * price + (1 - alpha) * ema
+        
+        return ema
+    
+    @lru_cache(maxsize=512)
+    def calculate_rsi_scalp(self, prices_tuple: Tuple[float, ...], period: int = 14) -> float:
+        """Ultra-fast RSI for scalping"""
+        prices = np.array(prices_tuple)
+        
+        if NUMBA_AVAILABLE:
+            from ..base_bot import calculate_rsi_numba
+            return calculate_rsi_numba(prices, period)
+        
+        if len(prices) < period + 1:
+            return 50.0
+        
+        deltas = np.diff(prices[-period-1:])
+        gains = np.where(deltas > 0, deltas, 0)
+        losses = np.where(deltas < 0, -deltas, 0)
+        
+        avg_gain = np.mean(gains)
+        avg_loss = np.mean(losses)
+        
+        if avg_loss == 0:
+            return 100.0
+        
+        rs = avg_gain / avg_loss
+        return 100.0 - (100.0 / (1.0 + rs))
+    
+    @lru_cache(maxsize=256)
+    def calculate_bollinger_scalp(self, prices_tuple: Tuple[float, ...], period: int = 20, std_dev: float = 2.0) -> Tuple[float, float, float]:
+        """Ultra-fast Bollinger Bands for scalping"""
+        prices = np.array(prices_tuple)
+        
+        if len(prices) < period:
+            middle = np.mean(prices)
+            return middle, middle, middle
+        
+        middle = np.mean(prices[-period:])
+        std = np.std(prices[-period:])
+        
+        upper = middle + std_dev * std
+        lower = middle - std_dev * std
+        
+        return upper, middle, lower
+    
+    def calculate_all_scalp_indicators(self, prices: List[float]) -> Dict[str, float]:
+        """Calculate all scalping indicators in parallel"""
+        if not prices:
+            return {}
+        
+        prices_tuple = tuple(prices[-50:])  # Keep last 50 for calculation
+        
+        # Submit parallel calculations
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            futures = {
+                'ema_5': executor.submit(self.calculate_ema_scalp, prices_tuple, 5),
+                'ema_10': executor.submit(self.calculate_ema_scalp, prices_tuple, 10),
+                'ema_20': executor.submit(self.calculate_ema_scalp, prices_tuple, 20),
+                'rsi': executor.submit(self.calculate_rsi_scalp, prices_tuple, 14),
+                'bollinger': executor.submit(self.calculate_bollinger_scalp, prices_tuple, 20, 2.0)
+            }
+            
+            results = {}
+            for key, future in futures.items():
+                try:
+                    results[key] = future.result(timeout=0.5)
+                except Exception as e:
+                    results[key] = None
+        
+        # Add momentum and volatility
+        prices_np = np.array(prices[-50:])
+        if NUMBA_AVAILABLE:
+            results['momentum'] = calculate_momentum_numba(prices_np, 5)
+            results['volatility'] = calculate_volatility_numba(prices_np, 20)
+            results['zscore'] = calculate_zscore_numba(prices_np, 20)
+        else:
+            results['momentum'] = (prices[-1] - prices[-5]) / prices[-5] if len(prices) >= 5 else 0
+            results['volatility'] = np.std(np.diff(prices[-21:])) if len(prices) >= 21 else 0
+            results['zscore'] = (prices[-1] - np.mean(prices[-20:])) / np.std(prices[-20:]) if len(prices) >= 20 and np.std(prices[-20:]) > 0 else 0
+        
+        return results
+
+class ScalpSignalGenerator:
+    """Advanced scalp signal generator"""
+    
+    def __init__(self):
+        self.signal_history = deque(maxlen=1000)
+        self.signal_accuracy = deque(maxlen=100)
+        self.strategy_performance = {}
+    
+    def generate_scalp_signal(self, 
+                             market_data: Dict[str, Any],
+                             indicators: Dict[str, float],
+                             micro_structure: Dict[str, Any],
+                             order_flows: List[OrderFlowType]) -> Dict[str, Any]:
+        """Generate scalp signal using multiple strategies"""
+        
+        signals = {}
+        
+        # 1. Momentum Scalp Signal
+        momentum_signal = self.generate_momentum_signal(indicators)
+        signals['momentum'] = momentum_signal
+        
+        # 2. Mean Reversion Signal
+        mean_reversion_signal = self.generate_mean_reversion_signal(indicators)
+        signals['mean_reversion'] = mean_reversion_signal
+        
+        # 3. Breakout Signal
+        breakout_signal = self.generate_breakout_signal(indicators, market_data)
+        signals['breakout'] = breakout_signal
+        
+        # 4. Order Flow Signal
+        order_flow_signal = self.generate_order_flow_signal(order_flows, micro_structure)
+        signals['order_flow'] = order_flow_signal
+        
+        # 5. Micro Structure Signal
+        micro_signal = self.generate_micro_structure_signal(micro_structure)
+        signals['micro_structure'] = micro_signal
+        
+        # Combine signals
+        combined_signal = self.combine_scalp_signals(signals)
+        
+        return {
+            'individual_signals': signals,
+            'combined_signal': combined_signal,
+            'best_strategy': combined_signal.get('strategy', 'none'),
+            'confidence': combined_signal.get('confidence', 0),
+            'direction': combined_signal.get('direction', 'neutral'),
+            'timestamp': datetime.now()
+        }
+    
+    def generate_momentum_signal(self, indicators: Dict[str, float]) -> Dict[str, Any]:
+        """Generate momentum-based signal"""
+        momentum = indicators.get('momentum', 0)
+        ema_5 = indicators.get('ema_5', 0)
+        ema_20 = indicators.get('ema_20', 0)
+        rsi = indicators.get('rsi', 50)
+        
+        signal_strength = 0
+        direction = 'neutral'
+        
+        # Strong momentum
+        if momentum > 0.0005 and ema_5 > ema_20 and rsi > 50:
+            direction = 'long'
+            signal_strength = min(1.0, momentum * 100 + 0.3)
+        elif momentum < -0.0005 and ema_5 < ema_20 and rsi < 50:
+            direction = 'short'
+            signal_strength = min(1.0, abs(momentum) * 100 + 0.3)
+        
+        return {
+            'direction': direction,
+            'strength': signal_strength,
+            'confidence': signal_strength * 0.8
+        }
+    
+    def generate_mean_reversion_signal(self, indicators: Dict[str, float]) -> Dict[str, Any]:
+        """Generate mean reversion signal"""
+        zscore = indicators.get('zscore', 0)
+        upper_bb, middle_bb, lower_bb = indicators.get('bollinger', (0, 0, 0))
+        current_price = indicators.get('current_price', 0)
+        
+        signal_strength = 0
+        direction = 'neutral'
+        
+        # Overbought/Oversold conditions
+        if zscore > 2 and current_price > upper_bb:
+            direction = 'short'
+            signal_strength = min(1.0, (zscore - 2) * 0.3)
+        elif zscore < -2 and current_price < lower_bb:
+            direction = 'long'
+            signal_strength = min(1.0, (-zscore - 2) * 0.3)
+        
+        return {
+            'direction': direction,
+            'strength': signal_strength,
+            'confidence': signal_strength * 0.7
+        }
+    
+    def generate_breakout_signal(self, indicators: Dict[str, float], market_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate breakout signal"""
+        upper_bb, middle_bb, lower_bb = indicators.get('bollinger', (0, 0, 0))
+        current_price = indicators.get('current_price', 0)
+        volume_ratio = indicators.get('volume_ratio', 1)
+        
+        signal_strength = 0
+        direction = 'neutral'
+        
+        # Breakout with volume confirmation
+        if current_price > upper_bb and volume_ratio > 1.5:
+            direction = 'long'
+            signal_strength = min(1.0, volume_ratio * 0.3)
+        elif current_price < lower_bb and volume_ratio > 1.5:
+            direction = 'short'
+            signal_strength = min(1.0, volume_ratio * 0.3)
+        
+        return {
+            'direction': direction,
+            'strength': signal_strength,
+            'confidence': signal_strength * 0.85
+        }
+    
+    def generate_order_flow_signal(self, order_flows: List[OrderFlowType], micro_structure: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate order flow based signal"""
+        signal_strength = 0
+        direction = 'neutral'
+        
+        # Count bullish and bearish flows
+        bullish_flows = sum(1 for flow in order_flows if flow in [
+            OrderFlowType.INSTITUTIONAL_BUY,
+            OrderFlowType.ACCUMULATION_ZONE,
+            OrderFlowType.MOMENTUM_IGNITION
+        ])
+        
+        bearish_flows = sum(1 for flow in order_flows if flow in [
+            OrderFlowType.INSTITUTIONAL_SELL,
+            OrderFlowType.DISTRIBUTION_ZONE,
+            OrderFlowType.MOMENTUM_IGNITION
+        ])
+        
+        # Order book imbalance
+        imbalance = micro_structure.get('imbalance_ratio', 0)
+        
+        if bullish_flows > bearish_flows or imbalance > 0.3:
+            direction = 'long'
+            signal_strength = min(1.0, 0.4 + imbalance)
+        elif bearish_flows > bullish_flows or imbalance < -0.3:
+            direction = 'short'
+            signal_strength = min(1.0, 0.4 + abs(imbalance))
+        
+        return {
+            'direction': direction,
+            'strength': signal_strength,
+            'confidence': signal_strength * 0.9
+        }
+    
+    def generate_micro_structure_signal(self, micro_structure: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate micro structure signal"""
+        tick_velocity = micro_structure.get('tick_velocity', 0)
+        flow_toxicity = micro_structure.get('flow_toxicity', 0)
+        micro_trend = micro_structure.get('micro_trend', 'neutral')
+        price_impact = micro_structure.get('price_impact', 0)
+        
+        signal_strength = 0
+        direction = 'neutral'
+        
+        # Combine micro structure signals
+        if micro_trend == 'up' and tick_velocity > 0 and flow_toxicity < 0.5:
+            direction = 'long'
+            signal_strength = min(1.0, abs(tick_velocity) * 100 + 0.3)
+        elif micro_trend == 'down' and tick_velocity < 0 and flow_toxicity < 0.5:
+            direction = 'short'
+            signal_strength = min(1.0, abs(tick_velocity) * 100 + 0.3)
+        
+        # Adjust for price impact
+        if price_impact > 0.01:
+            signal_strength *= 0.8  # Reduce size for high impact
+        
+        return {
+            'direction': direction,
+            'strength': signal_strength,
+            'confidence': signal_strength * 0.75
+        }
+    
+    def combine_scalp_signals(self, signals: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+        """Combine all scalp signals"""
+        long_score = 0
+        short_score = 0
+        total_confidence = 0
+        
+        weights = {
+            'momentum': 0.25,
+            'mean_reversion': 0.15,
+            'breakout': 0.20,
+            'order_flow': 0.25,
+            'micro_structure': 0.15
+        }
+        
+        for strategy, signal_data in signals.items():
+            weight = weights.get(strategy, 0.15)
+            direction = signal_data.get('direction', 'neutral')
+            strength = signal_data.get('strength', 0)
+            confidence = signal_data.get('confidence', 0)
+            
+            if direction == 'long':
+                long_score += strength * weight
+            elif direction == 'short':
+                short_score += strength * weight
+            
+            total_confidence += confidence * weight
+        
+        # Determine final direction
+        if long_score > short_score * 1.2:
+            direction = 'long'
+            strength = min(1.0, long_score)
+            strategy = self.get_best_strategy(signals, 'long')
+        elif short_score > long_score * 1.2:
+            direction = 'short'
+            strength = min(1.0, short_score)
+            strategy = self.get_best_strategy(signals, 'short')
+        else:
+            direction = 'neutral'
+            strength = 0
+            strategy = 'none'
+        
+        return {
+            'direction': direction,
+            'strength': strength,
+            'confidence': min(1.0, total_confidence),
+            'strategy': strategy,
+            'long_score': long_score,
+            'short_score': short_score
+        }
+    
+    def get_best_strategy(self, signals: Dict[str, Dict[str, Any]], direction: str) -> str:
+        """Get best performing strategy"""
+        best_strategy = 'none'
+        best_strength = 0
+        
+        for strategy, signal_data in signals.items():
+            if signal_data.get('direction') == direction:
+                strength = signal_data.get('strength', 0)
+                if strength > best_strength:
+                    best_strength = strength
+                    best_strategy = strategy
+        
+        return best_strategy
+
+class UltraScalperBot(UltraAdvancedBaseBot):
+    """
+    Ultra Advanced Forex Scalper Bot
+    High-frequency trading with micro-market structure analysis
+    """
+    
+    def __init__(self,
+                 symbol: str = "EURUSD",
+                 initial_capital: float = 10000.0,
+                 config: Optional[Dict[str, Any]] = None):
+        """
+        Initialize Ultra Scalper Bot
+        
+        Args:
+            symbol: Forex pair
+            initial_capital: Starting capital
+            config: Configuration dictionary
+        """
+        super().__init__(
+            bot_name=f"UltraScalper_{symbol}",
+            symbol=symbol,
+            initial_capital=initial_capital
+        )
+        
+        # Initialize components
+        self.micro_structure = MicroMarketStructure()
+        self.scalp_indicators = UltraScalpIndicators()
+        self.signal_generator = ScalpSignalGenerator()
+        
+        # Scalping configuration
+        self.config = self._load_config(config)
+        self.scalp_strategies = self._initialize_strategies()
+        
+        # Performance tracking
+        self.scalp_trades = deque(maxlen=1000)
+        self.scalp_pnl = deque(maxlen=1000)
+        self.win_streak = 0
+        self.loss_streak = 0
+        self.max_win_streak = 0
+        self.max_loss_streak = 0
+        self.avg_trade_duration = deque(maxlen=100)
+        
+        # Risk management for scalping
+        self.max_daily_trades = self.config.get('max_daily_trades', 100)
+        self.max_consecutive_losses = self.config.get('max_consecutive_losses', 5)
+        self.trades_today = 0
+        self.daily_pnl_target = self.config.get('daily_pnl_target', 0.02)  # 2%
+        self.daily_pnl_stop = self.config.get('daily_pnl_stop', 0.04)  # 4%
+        
+        # Threading
+        self.scalp_lock = threading.Lock()
+        self.execution_queue = deque(maxlen=100)
+        self.execution_thread = None
+        
+        self.logger.info(f"Ultra Scalper initialized for {symbol}")
+        self.logger.info(f"Config: {self.config}")
+    
+    def _load_config(self, config: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        """Load scalping configuration"""
+        default_config = {
+            # Strategy settings
+            'min_signal_strength': 0.6,
+            'min_confidence': 0.55,
+            'use_micro_structure': True,
+            'use_order_flow': True,
+            'use_ml': True,
+            
+            # Entry/Exit
+            'scalp_target_pips': 5,
+            'scalp_stop_pips': 3,
+            'max_spread_pips': 1.5,
+            'slippage_pips': 0.5,
+            'trailing_stop_pips': 2,
+            
+            # Risk management
+            'risk_per_trade': 0.005,  # 0.5% per scalp
+            'max_position_size': 0.05,  # 5% max
+            'max_daily_trades': 100,
+            'max_consecutive_losses': 5,
+            'daily_pnl_target': 0.02,
+            'daily_pnl_stop': 0.04,
+            
+            # Session filters
+            'trade_asian_session': True,
+            'trade_london_session': True,
+            'trade_ny_session': True,
+            
+            # Performance
+            'cooldown_after_loss': 60,  # seconds
+            'cooldown_after_win': 15,  # seconds
+            'max_trade_duration': 300  # 5 minutes max
+        }
+        
+        if config:
+            default_config.update(config)
+        
+        return default_config
+    
+    def _initialize_strategies(self) -> Dict[str, Dict[str, Any]]:
+        """Initialize scalping strategies"""
+        return {
+            'momentum_scalp': {
+                'enabled': True,
+                'weight': 0.25,
+                'min_strength': 0.5
+            },
+            'mean_reversion_scalp': {
+                'enabled': True,
+                'weight': 0.15,
+                'min_strength': 0.6
+            },
+            'breakout_scalp': {
+                'enabled': True,
+                'weight': 0.20,
+                'min_strength': 0.65
+            },
+            'order_flow_scalp': {
+                'enabled': True,
+                'weight': 0.25,
+                'min_strength': 0.55
+            },
+            'micro_structure_scalp': {
+                'enabled': True,
+                'weight': 0.15,
+                'min_strength': 0.5
+            }
+        }
+    
+    def analyze_market(self, market_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Perform ultra-fast market analysis for scalping
+        """
+        try:
+            prices = market_data.get('prices', [])
+            high = market_data.get('high', prices)
+            low = market_data.get('low', prices)
+            volumes = market_data.get('volumes', [])
+            
+            if not prices:
+                return {}
+            
+            # Calculate indicators
+            indicators = self.scalp_indicators.calculate_all_scalp_indicators(prices)
+            indicators['current_price'] = prices[-1]
+            indicators['volume_ratio'] = volumes[-1] / np.mean(volumes[-20:]) if len(volumes) >= 20 and np.mean(volumes[-20:]) > 0 else 1
+            
+            # Update micro structure
+            micro_data = {}
+            if self.config.get('use_micro_structure', True):
+                ticks = market_data.get('ticks', [])
+                if ticks:
+                    micro_data = self.micro_structure.analyze_tick_flow(ticks)
+                    micro_data['imbalance_ratio'] = self.micro_structure.imbalance_ratio
+            
+            # Detect order flows
+            order_flows = []
+            if self.config.get('use_order_flow', True):
+                order_flows = self.order_flow_detector.detect_order_flow(market_data)
+            
+            # Generate signal
+            signal_data = self.signal_generator.generate_scalp_signal(
+                market_data,
+                indicators,
+                micro_data,
+                order_flows
+            )
+            
+            # Neural network prediction
+            nn_prediction = None
+            if self.config.get('use_ml', True):
+                nn_features = self.neural_engine.prepare_features(market_data)
+                nn_prediction = self.neural_engine.predict(nn_features)
+            
+            return {
+                'indicators': indicators,
+                'micro_structure': micro_data,
+                'order_flows': order_flows,
+                'signal': signal_data,
+                'neural_prediction': nn_prediction,
+                'timestamp': datetime.now()
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error in analyze_market: {e}")
+            return {}
+    
+    def generate_signal(self, analysis: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate final scalp signal"""
+        if not analysis:
+            return {'action': 'neutral', 'confidence': 0}
+        
+        signal_data = analysis.get('signal', {})
+        combined_signal = signal_data.get('combined_signal', {})
+        
+        direction = combined_signal.get('direction', 'neutral')
+        strength = combined_signal.get('strength', 0)
+        confidence = combined_signal.get('confidence', 0)
+        
+        # Apply filters
+        if not self._check_session_filter():
+            return {'action': 'neutral', 'confidence': 0, 'reason': 'session_filter'}
+        
+        if not self._check_spread_filter(analysis):
+            return {'action': 'neutral', 'confidence': 0, 'reason': 'spread_filter'}
+        
+        # Check signal quality
+        if strength < self.config.get('min_signal_strength', 0.6):
+            return {'action': 'neutral', 'confidence': 0, 'reason': 'weak_signal'}
+        
+        if confidence < self.config.get('min_confidence', 0.55):
+            return {'action': 'neutral', 'confidence': 0, 'reason': 'low_confidence'}
+        
+        # Check cooldown
+        if not self._check_cooldown():
+            return {'action': 'neutral', 'confidence': 0, 'reason': 'cooldown'}
+        
+        return {
+            'action': direction,
+            'confidence': confidence,
+            'strength': strength,
+            'strategy': combined_signal.get('strategy', 'none'),
+            'timestamp': datetime.now()
+        }
+    
+    def _check_session_filter(self) -> bool:
+        """Check if current session is allowed"""
+        hour = datetime.now().hour
+        
+        # Asian session (00:00-08:00 UTC)
+        if 0 <= hour < 8 and not self.config.get('trade_asian_session', True):
+            return False
+        
+        # London session (08:00-16:00 UTC)
+        if 8 <= hour < 16 and not self.config.get('trade_london_session', True):
+            return False
+        
+        # New York session (13:00-21:00 UTC)
+        if 13 <= hour < 21 and not self.config.get('trade_ny_session', True):
+            return False
+        
+        return True
+    
+    def _check_spread_filter(self, analysis: Dict[str, Any]) -> bool:
+        """Check spread filter"""
+        market_data = analysis.get('market_data', {})
+        spread = market_data.get('spread', 0)
+        
+        if spread > self.config.get('max_spread_pips', 1.5) * 0.0001:
+            return False
+        
+        return True
+    
+    def _check_cooldown(self) -> bool:
+        """Check if enough time has passed since last trade"""
+        if not self.closed_positions:
+            return True
+        
+        last_trade = self.closed_positions[-1]
+        time_since_last = (datetime.now() - last_trade.entry_time).total_seconds()
+        
+        if last_trade.realized_pnl > 0:
+            cooldown = self.config.get('cooldown_after_win', 15)
+        else:
+            cooldown = self.config.get('cooldown_after_loss', 60)
+        
+        return time_since_last >= cooldown
+    
+    def execute_strategy(self, market_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute scalping strategy"""
+        try:
+            with self.scalp_lock:
+                # Check daily limits
+                if not self._check_daily_limits():
+                    return {'action': 'hold', 'reason': 'daily_limit_reached'}
+                
+                # Analyze market
+                analysis = self.analyze_market(market_data)
+                
+                # Generate signal
+                signal = self.generate_signal(analysis)
+                
+                if signal['action'] == 'neutral':
+                    return {
+                        'action': 'hold',
+                        'reason': signal.get('reason', 'no_signal'),
+                        'analysis': analysis,
+                        'signal': signal
+                    }
+                
+                # Get current price
+                prices = market_data.get('prices', [])
+                if not prices:
+                    return {'action': 'hold', 'reason': 'no_price'}
+                
+                current_price = prices[-1]
+                
+                # Calculate position size for scalping
+                position_size = self._calculate_scalp_position_size(
+                    current_price,
+                    signal['confidence']
+                )
+                
+                # Check risk limits
+                if not self._check_scalp_risk_limits(position_size, current_price):
+                    return {'action': 'hold', 'reason': 'risk_limit'}
+                
+                # Set scalp-specific stop loss and take profit
+                pip_size = self._get_pip_size()
+                stop_loss_pips = self.config.get('scalp_stop_pips', 3)
+                target_pips = self.config.get('scalp_target_pips', 5)
+                
+                stop_loss = current_price - stop_loss_pips * pip_size if signal['action'] == 'long' else current_price + stop_loss_pips * pip_size
+                take_profit = current_price + target_pips * pip_size if signal['action'] == 'long' else current_price - target_pips * pip_size
+                
+                # Open position with scalp-specific parameters
+                position = self.open_position(
+                    signal['action'],
+                    current_price,
+                    signal['confidence'],
+                    position_size
+                )
+                
+                if position:
+                    # Override stop loss and take profit for scalping
+                    position.stop_loss = stop_loss
+                    position.take_profit = take_profit
+                    
+                    # Record trade
+                    self.scalp_trades.append({
+                        'position_id': position.id,
+                        'entry_time': position.entry_time,
+                        'entry_price': position.entry_price,
+                        'side': position.side.value,
+                        'strategy': signal.get('strategy', 'unknown'),
+                        'confidence': signal['confidence']
+                    })
+                    
+                    self.trades_today += 1
+                    
+                    return {
+                        'action': 'buy' if signal['action'] == 'long' else 'sell',
+                        'reason': f"scalp_{signal.get('strategy', 'unknown')}",
+                        'analysis': analysis,
+                        'signal': signal,
+                        'position': position
+                    }
+                
+                return {
+                    'action': 'hold',
+                    'reason': 'position_not_opened',
+                    'signal': signal
+                }
+                
+        except Exception as e:
+            self.logger.error(f"Error in execute_strategy: {e}")
+            return {'action': 'hold', 'reason': 'error', 'error': str(e)}
+    
+    def _calculate_scalp_position_size(self, price: float, confidence: float) -> float:
+        """Calculate position size for scalping"""
+        risk_per_trade = self.config.get('risk_per_trade', 0.005)
+        max_position_size = self.config.get('max_position_size', 0.05)
+        
+        # Base position size
+        risk_amount = self.current_capital * risk_per_trade
+        
+        # Adjust for confidence
+        confidence_multiplier = 0.5 + confidence
+        
+        # Adjust for win/loss streak
+        if self.win_streak > 3:
+            confidence_multiplier *= 1.2  # Increase size on winning streak
+        elif self.loss_streak > 2:
+            confidence_multiplier *= 0.7  # Reduce size on losing streak
+        
+        position_value = risk_amount * confidence_multiplier * 10  # 10x leverage for scalping
+        position_size = position_value / price
+        
+        # Apply maximum limit
+        max_value = self.current_capital * max_position_size
+        max_size = max_value / price
+        
+        return min(position_size, max_size)
+    
+    def _check_scalp_risk_limits(self, position_size: float, current_price: float) -> bool:
+        """Check risk limits for scalping"""
+        # Check consecutive losses
+        if self.loss_streak >= self.config.get('max_consecutive_losses', 5):
+            self.logger.warning("Maximum consecutive losses reached")
+            return False
+        
+        # Check total exposure
+        total_exposure = sum(p.quantity * p.current_price for p in self.positions.values())
+        new_exposure = position_size * current_price
+        
+        max_exposure = self.current_capital * self.config.get('max_position_size', 0.05) * 2
+        
+        if total_exposure + new_exposure > max_exposure:
+            return False
+        
+        return True
+    
+    def _check_daily_limits(self) -> bool:
+        """Check daily trading limits"""
+        # Check maximum trades
+        if self.trades_today >= self.config.get('max_daily_trades', 100):
+            return False
+        
+        # Check daily PnL target
+        if self.daily_pnl >= self.current_capital * self.config.get('daily_pnl_target', 0.02):
+            self.logger.info("Daily profit target reached")
+            return False
+        
+        # Check daily stop loss
+        if self.daily_pnl <= -self.current_capital * self.config.get('daily_pnl_stop', 0.04):
+            self.logger.info("Daily stop loss reached")
+            return False
+        
+        return True
+    
+    def _get_pip_size(self) -> float:
+        """Get pip size for symbol"""
+        if 'JPY' in self.symbol:
+            return 0.01
+        else:
+            return 0.0001
+    
+    def update_positions(self, current_price: float) -> None:
+        """Update positions with scalp-specific logic"""
+        super().update_positions(current_price)
+        
+        # Update win/loss streaks
+        for position in list(self.positions.values()):
+            position.update_pnl(current_price)
+            
+            # Check for manual exit conditions
+            trade_duration = (datetime.now() - position.entry_time).total_seconds()
+            
+            # Exit if trade duration exceeds maximum
+            if trade_duration > self.config.get('max_trade_duration', 300):
+                self.close_position(position.id, current_price, "time_exit")
+                continue
+            
+            # Trail stop for scalping
+            if position.side == TradeSide.LONG:
+                trail_pips = self.config.get('trailing_stop_pips', 2)
+                trail_distance = trail_pips * self._get_pip_size()
+                new_stop = current_price - trail_distance
+                
+                if new_stop > position.stop_loss:
+                    position.stop_loss = new_stop
+            else:
+                trail_pips = self.config.get('trailing_stop_pips', 2)
+                trail_distance = trail_pips * self._get_pip_size()
+                new_stop = current_price + trail_distance
+                
+                if new_stop < position.stop_loss:
+                    position.stop_loss = new_stop
+    
+    def close_position(self, position_id: str, price: float, reason: str) -> Optional[Position]:
+        """Close position and update scalping metrics"""
+        position = super().close_position(position_id, price, reason)
+        
+        if position:
+            # Update streaks
+            if position.realized_pnl > 0:
+                self.win_streak += 1
+                self.loss_streak = 0
+                self.max_win_streak = max(self.max_win_streak, self.win_streak)
+            else:
+                self.loss_streak += 1
+                self.win_streak = 0
+                self.max_loss_streak = max(self.max_loss_streak, self.loss_streak)
+            
+            # Record trade metrics
+            trade_duration = (datetime.now() - position.entry_time).total_seconds()
+            self.avg_trade_duration.append(trade_duration)
+            self.scalp_pnl.append(position.realized_pnl)
+        
+        return position
+    
+    def get_performance_metrics(self) -> Dict[str, Any]:
+        """Get enhanced scalping performance metrics"""
+        metrics = super().get_performance_metrics()
+        
+        # Scalping specific metrics
+        scalp_metrics = {
+            'trades_today': self.trades_today,
+            'win_streak': self.win_streak,
+            'loss_streak': self.loss_streak,
+            'max_win_streak': self.max_win_streak,
+            'max_loss_streak': self.max_loss_streak,
+            'avg_trade_duration': np.mean(self.avg_trade_duration) if self.avg_trade_duration else 0,
+            'scalp_win_rate': (sum(1 for p in self.scalp_pnl if p > 0) / len(self.scalp_pnl) * 100) if self.scalp_pnl else 0,
+            'avg_scalp_pnl': np.mean(self.scalp_pnl) if self.scalp_pnl else 0,
+            'total_scalp_pnl': sum(self.scalp_pnl) if self.scalp_pnl else 0,
+            'best_scalp': max(self.scalp_pnl) if self.scalp_pnl else 0,
+            'worst_scalp': min(self.scalp_pnl) if self.scalp_pnl else 0,
+            'profit_factor_scalps': self._calculate_scalp_profit_factor(),
+            'expectancy_per_scalp': self._calculate_scalp_expectancy()
+        }
+        
+        metrics.update(scalp_metrics)
+        return metrics
+    
+    def _calculate_scalp_profit_factor(self) -> float:
+        """Calculate profit factor for scalps"""
+        gross_profit = sum(p for p in self.scalp_pnl if p > 0)
+        gross_loss = abs(sum(p for p in self.scalp_pnl if p < 0))
+        
+        return gross_profit / gross_loss if gross_loss > 0 else float('inf')
+    
+    def _calculate_scalp_expectancy(self) -> float:
+        """Calculate expectancy per scalp"""
+        if not self.scalp_pnl:
+            return 0
+        
+        return np.mean(self.scalp_pnl)
+    
+    def adaptive_optimization(self) -> None:
+        """Optimize scalping parameters based on performance"""
+        if len(self.scalp_pnl) < 10:
+            return
+        
+        # Calculate recent performance
+        recent_pnl = list(self.scalp_pnl)[-20:]
+        win_rate = sum(1 for p in recent_pnl if p > 0) / len(recent_pnl) if recent_pnl else 0
+        
+        # Adjust parameters based on performance
+        if win_rate < 0.4:
+            # Reduce risk
+            self.config['risk_per_trade'] *= 0.8
+            self.config['min_signal_strength'] = min(0.8, self.config['min_signal_strength'] * 1.1)
+            self.logger.info("Reduced risk due to poor performance")
+        elif win_rate > 0.6:
+            # Increase risk slightly
+            self.config['risk_per_trade'] = min(0.01, self.config['risk_per_trade'] * 1.1)
+            self.config['min_signal_strength'] = max(0.5, self.config['min_signal_strength'] * 0.95)
+            self.logger.info("Increased risk due to good performance")
+        
+        # Optimize stop loss and take profit
+        avg_win = np.mean([p for p in recent_pnl if p > 0]) if any(p > 0 for p in recent_pnl) else 0
+        avg_loss = np.mean([p for p in recent_pnl if p < 0]) if any(p < 0 for p in recent_pnl) else 0
+        
+        if avg_win > 0 and avg_loss < 0:
+            rr_ratio = avg_win / abs(avg_loss)
+            if rr_ratio > 2:
+                # Increase target
+                self.config['scalp_target_pips'] = min(10, self.config['scalp_target_pips'] + 1)
+            elif rr_ratio < 1:
+                # Reduce target
+                self.config['scalp_target_pips'] = max(3, self.config['scalp_target_pips'] - 1)

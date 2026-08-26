@@ -1,0 +1,499 @@
+# backend/app/core/bot_state_manager.py
+"""
+BOT STATE MANAGER - ULTRA ADVANCED (FULLY DEBUGGED)
+Inasimamia bot lifecycle, stop conditions, na re-entry logic
+Features: State Machine, Stop Conditions, Re-entry Logic, Recovery Management
+"""
+
+import json
+from typing import Dict, List, Optional, Any
+from datetime import datetime, timedelta
+from dataclasses import dataclass, field
+from enum import Enum
+from loguru import logger
+import traceback
+
+class BotState(Enum):
+    STOPPED = "STOPPED"
+    INITIALIZING = "INITIALIZING"
+    RUNNING = "RUNNING"
+    PAUSED = "PAUSED"
+    RECOVERING = "RECOVERING"
+    ERROR = "ERROR"
+    OPTIMIZING = "OPTIMIZING"
+
+class StopTrigger(Enum):
+    DAILY_LOSS_LIMIT = "DAILY_LOSS_LIMIT"
+    WEEKLY_LOSS_LIMIT = "WEEKLY_LOSS_LIMIT"
+    DRAWDOWN_LIMIT = "DRAWDOWN_LIMIT"
+    CONSECUTIVE_LOSSES = "CONSECUTIVE_LOSSES"
+    USER_PAUSE = "USER_PAUSE"
+    EXCHANGE_ERROR = "EXCHANGE_ERROR"
+    STRATEGY_FAILURE = "STRATEGY_FAILURE"
+    MARKET_CRASH = "MARKET_CRASH"
+    HIGH_VOLATILITY = "HIGH_VOLATILITY"
+
+class RecoveryPhase(Enum):
+    ANALYSIS = "ANALYSIS"
+    REDUCED_RISK = "REDUCED_RISK"
+    TESTING = "TESTING"
+    GRADUAL = "GRADUAL"
+    FULL = "FULL"
+
+@dataclass
+class BotStats:
+    total_trades: int = 0
+    winning_trades: int = 0
+    losing_trades: int = 0
+    total_profit: float = 0.0
+    win_rate: float = 0.0
+    profit_factor: float = 0.0
+    avg_profit: float = 0.0
+    avg_loss: float = 0.0
+    max_profit: float = 0.0
+    max_loss: float = 0.0
+    current_drawdown: float = 0.0
+    consecutive_wins: int = 0
+    consecutive_losses: int = 0
+    last_trade_time: Optional[datetime] = None
+    last_trade_result: str = ""
+
+@dataclass
+class StopRecord:
+    trigger: str
+    timestamp: datetime
+    reason: str
+    stats_at_stop: Dict[str, Any]
+    duration: Optional[float] = None
+    resolved: bool = False
+
+class BotStateManager:
+    def __init__(self, bot_id: str, config: Optional[Dict] = None):
+        self.bot_id = bot_id
+        self.config = config or {}
+        self.current_state = BotState.STOPPED
+        self.previous_state = BotState.STOPPED
+        self.state_changed_at = datetime.now()
+        self.stop_records: List[StopRecord] = []
+        self.current_stop: Optional[StopRecord] = None
+        self.is_recovering = False
+        self.recovery_attempts = 0
+        self.max_recovery_attempts = 3
+        self.recovery_phase = "ANALYSIS"
+        self.recovery_start = datetime.now()
+        self.position_multiplier = 0.0
+        self.test_trades_count = 0
+        self.test_trades_profitable = 0
+        self.recovery_progress = 0.0
+        self.stats = BotStats()
+        self.history: List[Dict] = []
+        self.stop_conditions = {
+            'max_daily_loss': self.config.get('max_daily_loss', 0.05),
+            'max_weekly_loss': self.config.get('max_weekly_loss', 0.10),
+            'max_drawdown': self.config.get('max_drawdown', 0.10),
+            'max_consecutive_losses': self.config.get('max_consecutive_losses', 3),
+            'min_win_rate': self.config.get('min_win_rate', 0.35),
+            'max_volatility': self.config.get('max_volatility', 3.0)
+        }
+        self.reentry_conditions = {
+            'market_stable': False,
+            'drawdown_recovered': False,
+            'volatility_normal': False,
+            'strategy_valid': False,
+            'user_confirmed': False,
+            'test_trades_passed': False
+        }
+        self.recovery_phases = {
+            "ANALYSIS": {'duration_hours': 24, 'position_multiplier': 0.0, 'description': 'Analysis - No trading'},
+            "REDUCED_RISK": {'duration_hours': 48, 'position_multiplier': 0.25, 'description': 'Reduced risk - 25% position'},
+            "TESTING": {'duration_hours': 24, 'position_multiplier': 0.50, 'description': 'Testing - 50% position'},
+            "GRADUAL": {'duration_hours': 72, 'position_multiplier': 0.75, 'description': 'Gradual - 75% position'},
+            "FULL": {'duration_hours': 0, 'position_multiplier': 1.0, 'description': 'Full recovery - 100% position'}
+        }
+        self.health_checks = {
+            'last_heartbeat': datetime.now(),
+            'error_count': 0,
+            'max_errors': 10,
+            'is_healthy': True,
+            'issues': []
+        }
+        self._load_state()
+        logger.info(f"🤖 Bot State Manager initialized for {bot_id}")
+
+    def start(self) -> bool:
+        try:
+            if self.current_state in [BotState.RUNNING, BotState.INITIALIZING]:
+                logger.warning(f"Bot {self.bot_id} already running")
+                return False
+            self.previous_state = self.current_state
+            self.current_state = BotState.INITIALIZING
+            self.state_changed_at = datetime.now()
+            if self._should_start():
+                self.current_state = BotState.RUNNING
+                logger.info(f"✅ Bot {self.bot_id} started")
+                self._log_event("STARTED")
+                return True
+            else:
+                self.current_state = BotState.STOPPED
+                logger.warning(f"⚠️ Bot {self.bot_id} start conditions not met")
+                return False
+        except Exception as e:
+            logger.error(f"Start error: {e}\n{traceback.format_exc()}")
+            self.current_state = BotState.ERROR
+            return False
+
+    def pause(self, trigger: str, reason: str) -> bool:
+        try:
+            if self.current_state == BotState.STOPPED:
+                logger.warning(f"Bot {self.bot_id} already stopped")
+                return False
+            self.previous_state = self.current_state
+            self.current_state = BotState.PAUSED
+            self.state_changed_at = datetime.now()
+            self.current_stop = StopRecord(trigger=trigger, timestamp=datetime.now(), reason=reason, stats_at_stop=self._get_stats_dict())
+            self.stop_records.append(self.current_stop)
+            self.is_recovering = True
+            logger.warning(f"⏸️ Bot {self.bot_id} paused: {reason}")
+            self._log_event(f"PAUSED: {reason}")
+            self._start_recovery()
+            return True
+        except Exception as e:
+            logger.error(f"Pause error: {e}")
+            return False
+
+    def stop(self, trigger: str, reason: str) -> bool:
+        try:
+            self.previous_state = self.current_state
+            self.current_state = BotState.STOPPED
+            self.state_changed_at = datetime.now()
+            self.current_stop = StopRecord(trigger=trigger, timestamp=datetime.now(), reason=reason, stats_at_stop=self._get_stats_dict())
+            self.stop_records.append(self.current_stop)
+            logger.warning(f"🛑 Bot {self.bot_id} stopped: {reason}")
+            self._log_event(f"STOPPED: {reason}")
+            return True
+        except Exception as e:
+            logger.error(f"Stop error: {e}")
+            return False
+
+    def resume(self) -> bool:
+        try:
+            if self.current_state not in [BotState.PAUSED, BotState.RECOVERING]:
+                logger.warning(f"Bot {self.bot_id} not paused or recovering")
+                return False
+            if self.is_recovering and not self._is_recovery_complete():
+                logger.warning(f"Bot {self.bot_id} recovery not complete")
+                return False
+            self.previous_state = self.current_state
+            self.current_state = BotState.RUNNING
+            self.state_changed_at = datetime.now()
+            self.is_recovering = False
+            self.current_stop = None
+            logger.info(f"▶️ Bot {self.bot_id} resumed")
+            self._log_event("RESUMED")
+            return True
+        except Exception as e:
+            logger.error(f"Resume error: {e}")
+            return False
+
+    def _should_start(self) -> bool:
+        if self.current_stop and self.current_stop.trigger == "USER_PAUSE":
+            return False
+        return self._check_reentry_conditions()
+
+    def check_stop_conditions(self, stats: Dict) -> Optional[str]:
+        try:
+            daily_loss = abs(stats.get('daily_loss', 0))
+            if daily_loss >= self.stop_conditions['max_daily_loss']:
+                return "DAILY_LOSS_LIMIT"
+            weekly_loss = abs(stats.get('weekly_loss', 0))
+            if weekly_loss >= self.stop_conditions['max_weekly_loss']:
+                return "WEEKLY_LOSS_LIMIT"
+            drawdown = stats.get('drawdown', 0)
+            if drawdown >= self.stop_conditions['max_drawdown']:
+                return "DRAWDOWN_LIMIT"
+            consecutive_losses = stats.get('consecutive_losses', 0)
+            if consecutive_losses >= self.stop_conditions['max_consecutive_losses']:
+                return "CONSECUTIVE_LOSSES"
+            win_rate = stats.get('win_rate', 1.0)
+            if win_rate < self.stop_conditions['min_win_rate'] and stats.get('total_trades', 0) > 20:
+                return "STRATEGY_FAILURE"
+            return None
+        except Exception as e:
+            logger.error(f"Check stop conditions error: {e}")
+            return None
+
+    def handle_stop(self, trigger: str, stats: Dict) -> Dict:
+        reason = self._get_stop_reason(trigger)
+        self.pause(trigger, reason)
+        return {'stopped': True, 'trigger': trigger, 'reason': reason, 'timestamp': datetime.now().isoformat(), 'stats': stats}
+
+    def _get_stop_reason(self, trigger: str) -> str:
+        reasons = {
+            "DAILY_LOSS_LIMIT": f"Daily loss limit reached: {self.stop_conditions['max_daily_loss']:.1%}",
+            "WEEKLY_LOSS_LIMIT": f"Weekly loss limit reached: {self.stop_conditions['max_weekly_loss']:.1%}",
+            "DRAWDOWN_LIMIT": f"Drawdown limit reached: {self.stop_conditions['max_drawdown']:.1%}",
+            "CONSECUTIVE_LOSSES": f"Consecutive losses: {self.stop_conditions['max_consecutive_losses']}",
+            "STRATEGY_FAILURE": f"Win rate below: {self.stop_conditions['min_win_rate']:.1%}",
+            "USER_PAUSE": "User paused",
+            "EXCHANGE_ERROR": "Exchange error"
+        }
+        return reasons.get(trigger, "Unknown reason")
+
+    def _start_recovery(self):
+        self.is_recovering = True
+        self.recovery_start = datetime.now()
+        self.recovery_phase = "ANALYSIS"
+        self.current_state = BotState.RECOVERING
+        self.position_multiplier = 0.0
+        logger.info(f"🔄 Recovery started - Phase: ANALYSIS")
+        self._log_event("RECOVERY_START: ANALYSIS")
+
+    def update_recovery(self, stats: Dict) -> Dict:
+        try:
+            if not self.is_recovering:
+                return {'status': 'not_recovering'}
+            current_phase = self.recovery_phase
+            phase_complete = self._is_phase_complete(current_phase, stats)
+            if phase_complete:
+                self._advance_recovery_phase()
+            else:
+                self._update_phase_progress(current_phase, stats)
+            return {'status': 'recovering', 'phase': current_phase, 'position_multiplier': self.position_multiplier, 'progress': self.recovery_progress}
+        except Exception as e:
+            logger.error(f"Update recovery error: {e}")
+            return {'status': 'error', 'error': str(e)}
+
+    def _is_phase_complete(self, phase: str, stats: Dict) -> bool:
+        try:
+            if phase == "ANALYSIS":
+                elapsed = (datetime.now() - self.recovery_start).total_seconds() / 3600
+                return elapsed >= 24
+            elif phase == "REDUCED_RISK":
+                elapsed = (datetime.now() - self.recovery_start).total_seconds() / 3600
+                return elapsed >= 48
+            elif phase == "TESTING":
+                return self.test_trades_count >= 3 and self.test_trades_profitable >= 2
+            elif phase == "GRADUAL":
+                elapsed = (datetime.now() - self.recovery_start).total_seconds() / 3600
+                return elapsed >= 72
+            elif phase == "FULL":
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Phase complete check error: {e}")
+            return False
+
+    def _advance_recovery_phase(self):
+        phases = ["ANALYSIS", "REDUCED_RISK", "TESTING", "GRADUAL", "FULL"]
+        current_index = phases.index(self.recovery_phase)
+        if current_index < len(phases) - 1:
+            next_phase = phases[current_index + 1]
+            self.recovery_phase = next_phase
+            self.recovery_start = datetime.now()
+            phase_data = self.recovery_phases.get(next_phase, {})
+            self.position_multiplier = phase_data.get('position_multiplier', 0.25)
+            self.test_trades_count = 0
+            self.test_trades_profitable = 0
+            logger.info(f"🔄 Recovery advanced to: {next_phase}")
+            self._log_event(f"RECOVERY_PHASE: {next_phase}")
+
+    def _update_phase_progress(self, phase: str, stats: Dict):
+        try:
+            if phase == "ANALYSIS":
+                elapsed = (datetime.now() - self.recovery_start).total_seconds() / 3600
+                self.recovery_progress = min(100, (elapsed / 24) * 100)
+            elif phase == "TESTING":
+                if self.test_trades_count > 0:
+                    self.recovery_progress = (self.test_trades_count / 3) * 100
+            else:
+                elapsed = (datetime.now() - self.recovery_start).total_seconds() / 3600
+                duration = self.recovery_phases.get(phase, {}).get('duration_hours', 48)
+                self.recovery_progress = min(100, (elapsed / duration) * 100)
+        except Exception as e:
+            logger.error(f"Phase progress update error: {e}")
+
+    def _is_recovery_complete(self) -> bool:
+        return self.recovery_phase == "FULL"
+
+    def _check_reentry_conditions(self) -> bool:
+        if not self._is_recovery_complete():
+            return False
+        conditions_met = sum(1 for v in self.reentry_conditions.values() if v)
+        return conditions_met >= 3
+
+    def update_stats(self, trade_result: Dict):
+        try:
+            profit = trade_result.get('profit', 0)
+            self.stats.total_trades += 1
+            if profit > 0:
+                self.stats.winning_trades += 1
+                self.stats.consecutive_wins += 1
+                self.stats.consecutive_losses = 0
+                if profit > self.stats.max_profit:
+                    self.stats.max_profit = profit
+            else:
+                self.stats.losing_trades += 1
+                self.stats.consecutive_losses += 1
+                self.stats.consecutive_wins = 0
+                if profit < self.stats.max_loss:
+                    self.stats.max_loss = profit
+            self.stats.total_profit += profit
+            self.stats.last_trade_time = datetime.now()
+            self.stats.last_trade_result = 'WIN' if profit > 0 else 'LOSS'
+            if self.stats.total_trades > 0:
+                self.stats.win_rate = self.stats.winning_trades / self.stats.total_trades
+            profits = sum(t.get('profit', 0) for t in self.history if t.get('profit', 0) > 0)
+            losses = abs(sum(t.get('profit', 0) for t in self.history if t.get('profit', 0) < 0))
+            self.stats.profit_factor = profits / losses if losses > 0 else 0
+            p = [t.get('profit', 0) for t in self.history if t.get('profit', 0) > 0]
+            l = [t.get('profit', 0) for t in self.history if t.get('profit', 0) < 0]
+            self.stats.avg_profit = sum(p) / len(p) if p else 0
+            self.stats.avg_loss = sum(l) / len(l) if l else 0
+            self.history.append(trade_result)
+            if len(self.history) > 1000:
+                self.history = self.history[-1000:]
+            if self.is_recovering:
+                self.update_recovery(self._get_stats_dict())
+            self._save_state()
+        except Exception as e:
+            logger.error(f"Update stats error: {e}")
+
+    def heartbeat(self) -> bool:
+        self.health_checks['last_heartbeat'] = datetime.now()
+        return True
+
+    def check_health(self) -> Dict:
+        elapsed = (datetime.now() - self.health_checks['last_heartbeat']).total_seconds()
+        if elapsed > 120:
+            self.health_checks['is_healthy'] = False
+            self.health_checks['issues'].append('No heartbeat for 2 minutes')
+        if self.health_checks['error_count'] >= self.health_checks['max_errors']:
+            self.health_checks['is_healthy'] = False
+            self.health_checks['issues'].append('Too many errors')
+        return {'is_healthy': self.health_checks['is_healthy'], 'issues': self.health_checks['issues'], 'last_heartbeat': self.health_checks['last_heartbeat'].isoformat(), 'error_count': self.health_checks['error_count']}
+
+    def record_error(self, error: str):
+        self.health_checks['error_count'] += 1
+        self.health_checks['issues'].append(error)
+        if self.health_checks['error_count'] >= self.health_checks['max_errors']:
+            self.stop("SYSTEM_ERROR", f"Too many errors: {error}")
+
+    def get_state(self) -> Dict:
+        return {
+            'bot_id': self.bot_id,
+            'current_state': self.current_state.value,
+            'previous_state': self.previous_state.value,
+            'state_changed_at': self.state_changed_at.isoformat(),
+            'is_recovering': self.is_recovering,
+            'recovery_phase': self.recovery_phase,
+            'recovery_progress': self.recovery_progress,
+            'position_multiplier': self.position_multiplier,
+            'is_paused': self.current_state == BotState.PAUSED,
+            'can_trade': self.current_state == BotState.RUNNING
+        }
+
+    def get_stats(self) -> Dict:
+        return {
+            'total_trades': self.stats.total_trades,
+            'winning_trades': self.stats.winning_trades,
+            'losing_trades': self.stats.losing_trades,
+            'win_rate': self.stats.win_rate,
+            'profit_factor': self.stats.profit_factor,
+            'total_profit': self.stats.total_profit,
+            'avg_profit': self.stats.avg_profit,
+            'avg_loss': self.stats.avg_loss,
+            'max_profit': self.stats.max_profit,
+            'max_loss': self.stats.max_loss,
+            'consecutive_wins': self.stats.consecutive_wins,
+            'consecutive_losses': self.stats.consecutive_losses,
+            'last_trade_time': self.stats.last_trade_time.isoformat() if self.stats.last_trade_time else None,
+            'last_trade_result': self.stats.last_trade_result
+        }
+
+    def get_stop_history(self) -> List[Dict]:
+        return [{'trigger': stop.trigger, 'timestamp': stop.timestamp.isoformat(), 'reason': stop.reason, 'duration': stop.duration, 'resolved': stop.resolved} for stop in self.stop_records]
+
+    def _get_stats_dict(self) -> Dict:
+        return {'total_trades': self.stats.total_trades, 'win_rate': self.stats.win_rate, 'profit_factor': self.stats.profit_factor, 'total_profit': self.stats.total_profit, 'consecutive_losses': self.stats.consecutive_losses, 'consecutive_wins': self.stats.consecutive_wins, 'current_drawdown': self.stats.current_drawdown}
+
+    def reset(self):
+        self.current_state = BotState.STOPPED
+        self.previous_state = BotState.STOPPED
+        self.is_recovering = False
+        self.current_stop = None
+        self.recovery_phase = "ANALYSIS"
+        self.position_multiplier = 0.0
+        self.test_trades_count = 0
+        self.test_trades_profitable = 0
+        self.recovery_progress = 0.0
+        self.stop_records = []
+        self.health_checks['error_count'] = 0
+        self.health_checks['issues'] = []
+        self.health_checks['is_healthy'] = True
+        logger.info(f"🔄 Bot {self.bot_id} reset")
+        self._log_event("RESET")
+
+    def update_stop_conditions(self, conditions: Dict):
+        for key, value in conditions.items():
+            if key in self.stop_conditions:
+                self.stop_conditions[key] = value
+                logger.info(f"✅ Stop condition updated: {key} = {value}")
+
+    def update_reentry_conditions(self, conditions: Dict):
+        for key, value in conditions.items():
+            if key in self.reentry_conditions:
+                self.reentry_conditions[key] = value
+                logger.info(f"✅ Re-entry condition updated: {key} = {value}")
+
+    def confirm_user_resume(self):
+        self.reentry_conditions['user_confirmed'] = True
+        if self._check_reentry_conditions():
+            self.resume()
+
+    def _save_state(self):
+        try:
+            import os
+            os.makedirs("data/bots", exist_ok=True)
+            state_data = {
+                'current_state': self.current_state.value,
+                'recovery_phase': self.recovery_phase,
+                'recovery_progress': self.recovery_progress,
+                'position_multiplier': self.position_multiplier,
+                'is_recovering': self.is_recovering,
+                'stop_records': [{'trigger': stop.trigger, 'timestamp': stop.timestamp.isoformat(), 'reason': stop.reason, 'resolved': stop.resolved} for stop in self.stop_records],
+                'stats': self._get_stats_dict(),
+                'health_checks': {'error_count': self.health_checks['error_count'], 'is_healthy': self.health_checks['is_healthy']}
+            }
+            with open(f"data/bots/{self.bot_id}_state.json", "w") as f:
+                json.dump(state_data, f, indent=2)
+        except Exception as e:
+            logger.error(f"Save state error: {e}")
+
+    def _load_state(self):
+        try:
+            import os
+            state_file = f"data/bots/{self.bot_id}_state.json"
+            if os.path.exists(state_file):
+                with open(state_file, "r") as f:
+                    state_data = json.load(f)
+                    try:
+                        self.current_state = BotState(state_data.get('current_state', 'STOPPED'))
+                    except:
+                        self.current_state = BotState.STOPPED
+                    self.recovery_phase = state_data.get('recovery_phase', 'ANALYSIS')
+                    self.recovery_progress = state_data.get('recovery_progress', 0.0)
+                    self.position_multiplier = state_data.get('position_multiplier', 0.0)
+                    self.is_recovering = state_data.get('is_recovering', False)
+                    for stop_data in state_data.get('stop_records', []):
+                        stop = StopRecord(trigger=stop_data['trigger'], timestamp=datetime.fromisoformat(stop_data['timestamp']), reason=stop_data['reason'], stats_at_stop={}, resolved=stop_data.get('resolved', False))
+                        self.stop_records.append(stop)
+                    health = state_data.get('health_checks', {})
+                    self.health_checks['error_count'] = health.get('error_count', 0)
+                    self.health_checks['is_healthy'] = health.get('is_healthy', True)
+                    logger.info(f"📂 Bot {self.bot_id} state loaded")
+        except Exception as e:
+            logger.warning(f"Load state error (starting fresh): {e}")
+
+    def _log_event(self, event: str):
+        logger.info(f"📋 BOT EVENT [{self.bot_id}]: {event}")
+        self._save_state()

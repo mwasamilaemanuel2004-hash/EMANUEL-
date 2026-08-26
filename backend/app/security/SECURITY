@@ -1,0 +1,1022 @@
+"""
+SECURITY - ULTIMATE FINAL EDITION
+Complete Security System with Firewall Fully Integrated
+Admin: admin123 / eSmwas@2004
+TOTP + Biometric + Email OTP + Firewall + Rate Limiting + IDS + JWT + Encryption
+"""
+
+import jwt
+import hashlib
+import hmac
+import base64
+import secrets
+import re
+import ipaddress
+import logging
+import threading
+import time
+import json
+import os
+import struct
+import smtplib
+import ssl
+import traceback
+import gc
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Any, Tuple, Set, Union
+from collections import deque
+from enum import Enum
+from functools import wraps
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
+# Optional imports
+try:
+    from cryptography.fernet import Fernet
+    CRYPTO_AVAILABLE = True
+except ImportError:
+    CRYPTO_AVAILABLE = False
+
+try:
+    import pyotp
+    PYOTP_AVAILABLE = True
+except ImportError:
+    PYOTP_AVAILABLE = False
+
+try:
+    import qrcode
+    QRCODE_AVAILABLE = True
+except ImportError:
+    QRCODE_AVAILABLE = False
+
+# Configure logging
+os.makedirs('data/logs', exist_ok=True)
+os.makedirs('data/biometric', exist_ok=True)
+os.makedirs('data', exist_ok=True)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - [SECURITY] - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('data/logs/security.log'),
+        logging.StreamHandler()
+    ]
+)
+
+logger = logging.getLogger(__name__)
+
+
+class SecurityEventType(Enum):
+    """Security event types"""
+    LOGIN_SUCCESS = "login_success"
+    LOGIN_FAILED = "login_failed"
+    ADMIN_LOGIN_SUCCESS = "admin_login_success"
+    ADMIN_LOGIN_FAILED = "admin_login_failed"
+    TOTP_SETUP = "totp_setup"
+    TOTP_VERIFIED = "totp_verified"
+    TOTP_FAILED = "totp_failed"
+    BIOMETRIC_SETUP = "biometric_setup"
+    BIOMETRIC_VERIFIED = "biometric_verified"
+    BIOMETRIC_FAILED = "biometric_failed"
+    EMAIL_SENT = "email_sent"
+    EMAIL_FAILED = "email_failed"
+    TOKEN_CREATED = "token_created"
+    TOKEN_REVOKED = "token_revoked"
+    RATE_LIMIT_EXCEEDED = "rate_limit_exceeded"
+    FIREWALL_BLOCKED = "firewall_blocked"
+    INTRUSION_DETECTED = "intrusion_detected"
+    IP_BLOCKED = "ip_blocked"
+    IP_UNBLOCKED = "ip_unblocked"
+    AUDIT_LOG = "audit_log"
+    SYSTEM_ERROR = "system_error"
+    ACCOUNT_LOCKED = "account_locked"
+    SQL_INJECTION_BLOCKED = "sql_injection_blocked"
+    XSS_BLOCKED = "xss_blocked"
+    PATH_TRAVERSAL_BLOCKED = "path_traversal_blocked"
+    COMMAND_INJECTION_BLOCKED = "command_injection_blocked"
+
+
+class UserRole(Enum):
+    """User roles"""
+    ADMIN = "admin"
+    MODERATOR = "moderator"
+    USER = "user"
+    GUEST = "guest"
+
+
+class BiometricType(Enum):
+    """Biometric types"""
+    FINGERPRINT = "fingerprint"
+    FACE_ID = "face_id"
+    TOUCH_ID = "touch_id"
+    VOICE = "voice"
+    IRIS = "iris"
+
+
+class AuthMethod(Enum):
+    """Authentication methods"""
+    PASSWORD = "password"
+    TOTP = "totp"
+    EMAIL_OTP = "email_otp"
+    BIOMETRIC = "biometric"
+    PASSWORD_TOTP = "password_totp"
+    PASSWORD_BIOMETRIC = "password_biometric"
+    TOTP_BIOMETRIC = "totp_biometric"
+    FULL = "full"
+
+
+class AdvancedFirewall:
+    """
+    ADVANCED FIREWALL - Full Integrated
+    Multi-layer protection
+    """
+    
+    def __init__(self):
+        self.blocked_ips: Set[str] = set()
+        self.blocked_ranges: List[ipaddress.IPv4Network] = []
+        self.allowed_ips: Set[str] = set()
+        self.blocked_user_agents: Set[str] = set()
+        self.blocked_countries: Set[str] = set()
+        
+        # Attack patterns - ZOTE ZIMEIMARISHWA
+        self.attack_patterns = {
+            'sql_injection': [
+                r"(\bSELECT\b.*\bFROM\b)",
+                r"(\bINSERT\b.*\bINTO\b)",
+                r"(\bUPDATE\b.*\bSET\b)",
+                r"(\bDELETE\b.*\bFROM\b)",
+                r"(\bDROP\b.*\bTABLE\b)",
+                r"(\bUNION\b.*\bSELECT\b)",
+                r"(\bOR\b.*\b1\s*=\s*1\b)",
+                r"(\bAND\b.*\b1\s*=\s*1\b)",
+                r"(--[^\n]*)",
+                r"(;.*\bDROP\b)",
+                r"('.*\bOR\b.*')"
+            ],
+            'xss': [
+                r"<script[^>]*>.*</script>",
+                r"javascript:[^\s]*",
+                r"on\w+\s*=\s*['\"]?[^'\"]*['\"]?",
+                r"<img[^>]+onerror[^>]*>",
+                r"<svg[^>]+onload[^>]*>",
+                r"<iframe[^>]*>",
+                r"<object[^>]*>",
+                r"<embed[^>]*>",
+                r"document\.cookie",
+                r"document\.location"
+            ],
+            'path_traversal': [
+                r"\.\./\.\./",
+                r"\.\.\\\.\.\\",
+                r"/etc/passwd",
+                r"/etc/shadow",
+                r"C:\\Windows\\System32",
+                r"\.\.%2f",
+                r"\.\.%5c",
+                r"%2e%2e%2f"
+            ],
+            'command_injection': [
+                r";\s*(ls|cat|rm|wget|curl|bash|sh|python|perl)\s",
+                r"\|\s*(ls|cat|rm|wget|curl)\s",
+                r"\$\{[^}]*\}",
+                r"`[^`]*`",
+                r"\$\([^)]*\)",
+                r";\s*reboot",
+                r";\s*shutdown"
+            ],
+            'file_inclusion': [
+                r"(include|require)\s*\(?\s*['\"]?[^'\"]*\.(php|jsp|asp)",
+                r"php://(input|filter)",
+                r"data://text/plain",
+                r"expect://",
+                r"input://"
+            ],
+            'ssti': [
+                r"\{\{.*\}\}",
+                r"\{%\s*(for|if|block)\s*%\}",
+                r"\$\{.*\}",
+                r"#\{.*\}"
+            ],
+            'ssrf': [
+                r"http://169\.254\.169\.254",
+                r"http://localhost",
+                r"http://127\.0\.0\.1",
+                r"file://",
+                r"gopher://"
+            ],
+            'xxe': [
+                r"<!ENTITY\s+\w+\s+SYSTEM",
+                r"<!DOCTYPE\s+\w+\s+\[",
+                r"xmlns:xi="
+            ],
+            'malicious_headers': [
+                r"User-Agent:\s*(curl|wget|python|sqlmap|nikto|nmap)",
+                r"X-Forwarded-For:\s*127\.0\.0\.1",
+                r"Referer:\s*(localhost|127\.0\.0\.1)"
+            ],
+            'dos_patterns': [
+                r"(\w+\s*=\s*){100,}",  # Long parameter strings
+                r"[^\s]{5000,}"          # Very long strings
+            ]
+        }
+        
+        self.firewall_stats = {
+            'total_blocked': 0,
+            'sql_injection_blocked': 0,
+            'xss_blocked': 0,
+            'path_traversal_blocked': 0,
+            'command_injection_blocked': 0,
+            'file_inclusion_blocked': 0,
+            'ssti_blocked': 0,
+            'ssrf_blocked': 0,
+            'xxe_blocked': 0,
+            'dos_blocked': 0,
+            'ip_blocked': 0,
+            'method_blocked': 0
+        }
+        
+        self._lock = threading.Lock()
+    
+    def check_request(self, ip: str, method: str, path: str, 
+                     headers: Dict = None, body: str = "",
+                     user_agent: str = "") -> Tuple[bool, Optional[str]]:
+        """
+        Check request through all firewall layers
+        Returns (is_allowed, block_reason)
+        """
+        headers = headers or {}
+        
+        # 1. IP Check
+        if not self._check_ip(ip):
+            with self._lock:
+                self.firewall_stats['ip_blocked'] += 1
+                self.firewall_stats['total_blocked'] += 1
+            return False, "ip_blocked"
+        
+        # 2. Method Check
+        if not self._check_method(method):
+            with self._lock:
+                self.firewall_stats['method_blocked'] += 1
+                self.firewall_stats['total_blocked'] += 1
+            return False, "invalid_method"
+        
+        # 3. User-Agent Check
+        if user_agent and self._is_blocked_user_agent(user_agent):
+            return False, "blocked_user_agent"
+        
+        # 4. Check all attack patterns
+        data_to_check = f"{path}\n{json.dumps(headers)}\n{body}\n{user_agent}"
+        
+        for attack_type, patterns in self.attack_patterns.items():
+            for pattern in patterns:
+                if re.search(pattern, data_to_check, re.IGNORECASE):
+                    with self._lock:
+                        stat_key = f"{attack_type}_blocked"
+                        if stat_key in self.firewall_stats:
+                            self.firewall_stats[stat_key] += 1
+                        self.firewall_stats['total_blocked'] += 1
+                    
+                    return False, attack_type
+        
+        return True, None
+    
+    def _check_ip(self, ip: str) -> bool:
+        """Check IP address"""
+        if ip in self.allowed_ips:
+            return True
+        
+        if ip in self.blocked_ips:
+            return False
+        
+        try:
+            ip_obj = ipaddress.ip_address(ip)
+            
+            # Check private IPs (should not be blocked by default)
+            if ip_obj.is_private or ip_obj.is_loopback:
+                return True
+            
+            for network in self.blocked_ranges:
+                if ip_obj in network:
+                    return False
+            
+            return True
+        except ValueError:
+            return False
+    
+    def _check_method(self, method: str) -> bool:
+        """Check HTTP method"""
+        allowed_methods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD']
+        return method.upper() in allowed_methods
+    
+    def _is_blocked_user_agent(self, user_agent: str) -> bool:
+        """Check if user agent is blocked"""
+        blocked_patterns = [
+            r'curl', r'wget', r'python', r'sqlmap', r'nikto', 
+            r'nmap', r'nessus', r'burp', r'fuzz'
+        ]
+        
+        for pattern in blocked_patterns:
+            if re.search(pattern, user_agent, re.IGNORECASE):
+                return True
+        
+        return False
+    
+    def block_ip(self, ip: str) -> None:
+        """Block IP"""
+        self.blocked_ips.add(ip)
+    
+    def unblock_ip(self, ip: str) -> None:
+        """Unblock IP"""
+        self.blocked_ips.discard(ip)
+    
+    def allow_ip(self, ip: str) -> None:
+        """Allow IP (whitelist)"""
+        self.allowed_ips.add(ip)
+    
+    def block_range(self, network: str) -> None:
+        """Block IP range"""
+        try:
+            self.blocked_ranges.append(ipaddress.ip_network(network))
+        except ValueError:
+            pass
+    
+    def block_country(self, country_code: str) -> None:
+        """Block country (requires geo IP database)"""
+        self.blocked_countries.add(country_code.upper())
+    
+    def get_stats(self) -> Dict[str, int]:
+        """Get firewall statistics"""
+        return dict(self.firewall_stats)
+
+
+class FreeEmailSender:
+    """BURE Email Sender"""
+    
+    def __init__(self):
+        self.sender_email = os.getenv('GMAIL_USER', '')
+        self.app_password = os.getenv('GMAIL_APP_PASSWORD', '')
+        self._lock = threading.Lock()
+    
+    def is_configured(self) -> bool:
+        return bool(self.sender_email and self.app_password)
+    
+    def send_otp_email(self, user_email: str, otp_code: str, purpose: str = "login") -> bool:
+        if not self.is_configured():
+            return False
+        try:
+            with self._lock:
+                msg = MIMEMultipart('alternative')
+                msg['From'] = f"ESH.TRADE <{self.sender_email}>"
+                msg['To'] = user_email
+                msg['Subject'] = f"ESH.TRADE - {purpose.upper()} OTP"
+                
+                html = f"""
+                <html><body style="font-family: Arial; padding: 20px;">
+                <div style="max-width: 500px; margin: auto; background: white; border-radius: 10px; padding: 30px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+                    <h1 style="color: #4CAF50;">ESH.TRADE</h1>
+                    <h2>Your OTP Code</h2>
+                    <div style="background: #4CAF50; color: white; font-size: 32px; font-weight: bold; letter-spacing: 10px; padding: 20px; border-radius: 8px; text-align: center;">
+                        {otp_code}
+                    </div>
+                    <p style="color: #999;">Expires in 5 minutes</p>
+                </div>
+                </body></html>
+                """
+                
+                msg.attach(MIMEText(html, 'html'))
+                
+                with smtplib.SMTP('smtp.gmail.com', 587, timeout=10) as server:
+                    server.starttls(context=ssl.create_default_context())
+                    server.login(self.sender_email, self.app_password)
+                    server.send_message(msg)
+                
+                return True
+        except Exception as e:
+            logger.error(f"Email failed: {e}")
+            return False
+
+
+class FreeTOTP:
+    """BURE TOTP"""
+    
+    def __init__(self):
+        self.issuer = "ESH.TRADE"
+        self.digits = 6
+        self.interval = 30
+    
+    def generate_secret(self) -> str:
+        return base64.b32encode(secrets.token_bytes(20)).decode().rstrip('=')
+    
+    def generate_uri(self, secret: str, email: str) -> str:
+        return f"otpauth://totp/{self.issuer}:{email}?secret={secret}&issuer={self.issuer}"
+    
+    def generate_qr(self, uri: str) -> Optional[str]:
+        if not QRCODE_AVAILABLE:
+            return None
+        try:
+            qr = qrcode.QRCode(version=1, box_size=10, border=5)
+            qr.add_data(uri)
+            qr.make(fit=True)
+            img = qr.make_image(fill_color="black", back_color="white")
+            path = f"data/totp_{hashlib.md5(uri.encode()).hexdigest()[:10]}.png"
+            img.save(path)
+            return path
+        except:
+            return None
+    
+    def generate_code(self, secret: str) -> str:
+        try:
+            if PYOTP_AVAILABLE:
+                return pyotp.TOTP(secret).now()
+            return self._manual_code(secret)
+        except:
+            return self._manual_code(secret)
+    
+    def _manual_code(self, secret: str) -> str:
+        try:
+            padding = '=' * ((8 - len(secret) % 8) % 8)
+            key = base64.b32decode(secret + padding)
+            counter = int(time.time() // self.interval)
+            msg = struct.pack('>Q', counter)
+            digest = hmac.new(key, msg, hashlib.sha1).digest()
+            offset = digest[-1] & 0x0F
+            code = struct.unpack('>I', digest[offset:offset+4])[0] & 0x7FFFFFFF
+            return str(code % 1000000).zfill(6)
+        except:
+            return ''.join([str(secrets.randbelow(10)) for _ in range(6)])
+    
+    def verify_code(self, secret: str, code: str) -> bool:
+        try:
+            if PYOTP_AVAILABLE:
+                return pyotp.TOTP(secret).verify(code, valid_window=1)
+            return self._manual_verify(secret, code)
+        except:
+            return self._manual_verify(secret, code)
+    
+    def _manual_verify(self, secret: str, code: str) -> bool:
+        try:
+            padding = '=' * ((8 - len(secret) % 8) % 8)
+            key = base64.b32decode(secret + padding)
+            current = int(time.time() // self.interval)
+            
+            for offset in [-1, 0, 1]:
+                counter = current + offset
+                msg = struct.pack('>Q', counter)
+                digest = hmac.new(key, msg, hashlib.sha1).digest()
+                off = digest[-1] & 0x0F
+                val = struct.unpack('>I', digest[off:off+4])[0] & 0x7FFFFFFF
+                expected = str(val % 1000000).zfill(6)
+                if hmac.compare_digest(expected, code):
+                    return True
+            return False
+        except:
+            return False
+    
+    def generate_backup_codes(self, count: int = 10) -> List[str]:
+        return ['-'.join([secrets.token_hex(2).upper() for _ in range(3)]) for _ in range(count)]
+
+
+class BiometricAuth:
+    """BIOMETRIC AUTHENTICATION"""
+    
+    def __init__(self):
+        self.biometric_keys: Dict[str, Dict] = {}
+        self.challenge_store: Dict[str, Dict] = {}
+        self.device_registry: Dict[str, List[str]] = {}
+        self._lock = threading.Lock()
+    
+    def generate_challenge(self, user_id: str) -> str:
+        challenge = secrets.token_urlsafe(32)
+        with self._lock:
+            self.challenge_store[user_id] = {
+                'challenge': challenge,
+                'created_at': datetime.utcnow(),
+                'expires_at': datetime.utcnow() + timedelta(minutes=5)
+            }
+        return challenge
+    
+    def register_biometric(self, user_id: str, device_info: Dict) -> Dict[str, Any]:
+        try:
+            with self._lock:
+                credential_id = secrets.token_hex(16)
+                device_name = device_info.get('device_name', 'Unknown')
+                biometric_type = device_info.get('biometric_type', 'fingerprint')
+                
+                self.biometric_keys[user_id] = {
+                    'credential_id': credential_id,
+                    'private_key': secrets.token_hex(32),
+                    'device_name': device_name,
+                    'biometric_type': biometric_type,
+                    'created_at': datetime.utcnow(),
+                    'sign_count': 0
+                }
+                
+                if user_id not in self.device_registry:
+                    self.device_registry[user_id] = []
+                self.device_registry[user_id].append(device_name)
+                
+                return {'success': True, 'credential_id': credential_id}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def verify_biometric(self, user_id: str, challenge: str, signature: str) -> bool:
+        try:
+            if user_id not in self.biometric_keys:
+                return False
+            
+            if user_id not in self.challenge_store:
+                return False
+            
+            challenge_data = self.challenge_store[user_id]
+            
+            if datetime.utcnow() > challenge_data['expires_at']:
+                self.challenge_store.pop(user_id, None)
+                return False
+            
+            if challenge != challenge_data['challenge']:
+                return False
+            
+            expected = hashlib.sha256(
+                f"{challenge}:{self.biometric_keys[user_id]['private_key']}".encode()
+            ).hexdigest()
+            
+            if not hmac.compare_digest(expected, signature):
+                return False
+            
+            self.biometric_keys[user_id]['sign_count'] += 1
+            self.challenge_store.pop(user_id, None)
+            
+            return True
+        except:
+            return False
+
+
+class SecurityManager:
+    """
+    ULTIMATE SECURITY MANAGER - FINAL
+    Firewall Fully Integrated
+    """
+    
+    def __init__(self):
+        self.master_key = os.getenv('SECURITY_MASTER_KEY', secrets.token_hex(64))
+        self.jwt_secret = os.getenv('JWT_SECRET', secrets.token_hex(64))
+        
+        self._init_encryption()
+        self._init_jwt()
+        self._init_rate_limiter()
+        self._init_audit()
+        
+        # Services
+        self.firewall = AdvancedFirewall()
+        self.email_sender = FreeEmailSender()
+        self.totp = FreeTOTP()
+        self.biometric = BiometricAuth()
+        
+        # Stores
+        self.otp_store: Dict[str, Dict] = {}
+        self.totp_secrets: Dict[str, str] = {}
+        self.backup_codes: Dict[str, List[str]] = {}
+        
+        # Admin credentials
+        self._init_admin_credentials()
+        
+        self._lock = threading.RLock()
+        
+        logger.info("🔒 ULTIMATE Security Manager initialized")
+        logger.info("🛡️ Firewall: ACTIVE")
+        logger.info("👑 Admin: ACTIVE")
+    
+    def _init_admin_credentials(self):
+        """Initialize admin"""
+        admin_username = "admin123"
+        admin_password = "eSmwas@2004"
+        
+        salt = secrets.token_hex(16)
+        hashed = hashlib.pbkdf2_hmac('sha256', admin_password.encode(), salt.encode(), 100000).hex()
+        
+        self.users: Dict[str, Dict] = {
+            admin_username: {
+                'username': admin_username,
+                'password_hash': hashed,
+                'salt': salt,
+                'role': UserRole.ADMIN,
+                'failed_attempts': 0,
+                'locked_until': None,
+                'totp_enabled': False,
+                'biometric_enabled': False
+            }
+        }
+    
+    def _init_encryption(self):
+        try:
+            if CRYPTO_AVAILABLE:
+                key = hashlib.sha256(self.master_key.encode()).digest()
+                self.fernet = Fernet(base64.urlsafe_b64encode(key))
+            else:
+                self.fernet = None
+        except:
+            self.fernet = None
+    
+    def _init_jwt(self):
+        self.algorithm = "HS256"
+        self.access_expiry = timedelta(minutes=30)
+        self.refresh_expiry = timedelta(days=7)
+        self.blacklisted_tokens: Set[str] = set()
+        self.token_versions: Dict[str, int] = {}
+        self.active_sessions: Dict[str, Dict] = {}
+    
+    def _init_rate_limiter(self):
+        self.requests: Dict[str, deque] = {}
+        self.banned_ips: Dict[str, float] = {}
+        self.whitelist: Set[str] = set()
+        self.rate_limits = {
+            'default': (100, 60),
+            'login': (5, 60),
+            'admin_login': (3, 60),
+            'totp': (5, 300),
+            'biometric': (10, 300),
+            'otp': (3, 300),
+            'api': (200, 60),
+            'admin': (50, 60)
+        }
+    
+    def _init_audit(self):
+        self.security_events: deque = deque(maxlen=10000)
+        self.alerts: deque = deque(maxlen=1000)
+        self.audit_logs: deque = deque(maxlen=10000)
+        self.audit_file = 'data/logs/audit.log'
+    
+    # ============ COMPREHENSIVE REQUEST CHECK ============
+    
+    def check_request(self, ip: str, method: str, path: str, 
+                     headers: Dict = None, body: str = "",
+                     user_agent: str = "") -> Tuple[bool, Optional[str]]:
+        """
+        Complete request check - Firewall + Rate Limiting
+        """
+        # 1. Firewall check
+        is_allowed, reason = self.firewall.check_request(ip, method, path, headers, body, user_agent)
+        
+        if not is_allowed:
+            self._log_event(SecurityEventType.FIREWALL_BLOCKED, ip, {'reason': reason})
+            return False, reason
+        
+        # 2. Rate limiting
+        if not self.check_rate_limit(ip, 'default'):
+            return False, "rate_limited"
+        
+        return True, None
+    
+    # ============ ADMIN LOGIN ============
+    
+    def admin_login(self, ip: str, username: str, password: str, 
+                   headers: Dict = None, user_agent: str = "") -> Dict[str, Any]:
+        """Admin login with firewall protection"""
+        try:
+            # Firewall check
+            is_allowed, reason = self.check_request(ip, 'POST', '/admin/login', headers, 
+                                                   f"username={username}", user_agent)
+            
+            if not is_allowed:
+                return {'success': False, 'error': f'Blocked by firewall: {reason}'}
+            
+            # Rate limit
+            if not self.check_rate_limit(ip, 'admin_login', 3, 60):
+                self._log_event(SecurityEventType.ADMIN_LOGIN_FAILED, username, {'reason': 'rate_limited'})
+                return {'success': False, 'error': 'Too many attempts'}
+            
+            # Check lock
+            if username in self.users:
+                user = self.users[username]
+                if user.get('locked_until') and datetime.utcnow() < user['locked_until']:
+                    return {'success': False, 'error': 'Account locked'}
+            
+            # Verify credentials
+            if username not in self.users:
+                return {'success': False, 'error': 'Invalid credentials'}
+            
+            user = self.users[username]
+            
+            hashed = hashlib.pbkdf2_hmac('sha256', password.encode(), user['salt'].encode(), 100000).hex()
+            
+            if not secrets.compare_digest(hashed, user['password_hash']):
+                user['failed_attempts'] += 1
+                
+                if user['failed_attempts'] >= 3:
+                    user['locked_until'] = datetime.utcnow() + timedelta(minutes=15)
+                    self._log_event(SecurityEventType.ACCOUNT_LOCKED, username, {})
+                    return {'success': False, 'error': 'Account locked for 15 minutes'}
+                
+                self._log_event(SecurityEventType.ADMIN_LOGIN_FAILED, username, {'reason': 'wrong_password'})
+                return {'success': False, 'error': 'Invalid credentials'}
+            
+            user['failed_attempts'] = 0
+            
+            access_token = self.create_access_token(username, role='admin')
+            refresh_token = self.create_refresh_token(username)
+            
+            self._log_event(SecurityEventType.ADMIN_LOGIN_SUCCESS, username, {'ip': ip})
+            
+            return {
+                'success': True,
+                'access_token': access_token,
+                'refresh_token': refresh_token,
+                'username': username,
+                'role': 'admin'
+            }
+            
+        except Exception as e:
+            logger.error(f"Admin login error: {e}")
+            return {'success': False, 'error': str(e)}
+    
+    # ============ USER LOGIN ============
+    
+    def user_login(self, ip: str, username: str, password: str,
+                  headers: Dict = None, user_agent: str = "") -> Dict[str, Any]:
+        """User login with firewall"""
+        try:
+            is_allowed, reason = self.check_request(ip, 'POST', '/login', headers, 
+                                                   f"username={username}", user_agent)
+            
+            if not is_allowed:
+                return {'success': False, 'error': f'Blocked: {reason}'}
+            
+            if not self.check_rate_limit(ip, 'login', 5, 60):
+                return {'success': False, 'error': 'Too many attempts'}
+            
+            if username not in self.users:
+                return {'success': False, 'error': 'Invalid credentials'}
+            
+            user = self.users[username]
+            
+            if user.get('locked_until') and datetime.utcnow() < user['locked_until']:
+                return {'success': False, 'error': 'Account locked'}
+            
+            hashed = hashlib.pbkdf2_hmac('sha256', password.encode(), user['salt'].encode(), 100000).hex()
+            
+            if not secrets.compare_digest(hashed, user['password_hash']):
+                user['failed_attempts'] += 1
+                return {'success': False, 'error': 'Invalid credentials'}
+            
+            user['failed_attempts'] = 0
+            
+            access_token = self.create_access_token(username, role='user')
+            refresh_token = self.create_refresh_token(username)
+            
+            return {
+                'success': True,
+                'access_token': access_token,
+                'refresh_token': refresh_token,
+                'username': username,
+                'role': 'user'
+            }
+            
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    # ============ OTHER METHODS (same as before) ============
+    
+    def register_user(self, username: str, email: str, password: str) -> Dict[str, Any]:
+        try:
+            if username in self.users:
+                return {'success': False, 'error': 'Username exists'}
+            
+            salt = secrets.token_hex(16)
+            hashed = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 100000).hex()
+            
+            self.users[username] = {
+                'username': username,
+                'email': email,
+                'password_hash': hashed,
+                'salt': salt,
+                'role': UserRole.USER,
+                'failed_attempts': 0,
+                'locked_until': None,
+                'totp_enabled': False,
+                'biometric_enabled': False
+            }
+            
+            return {'success': True}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def setup_totp(self, user_id: str, email: str) -> Dict[str, Any]:
+        try:
+            secret = self.totp.generate_secret()
+            self.totp_secrets[user_id] = secret
+            uri = self.totp.generate_uri(secret, email)
+            qr_path = self.totp.generate_qr(uri)
+            backup_codes = self.totp.generate_backup_codes()
+            self.backup_codes[user_id] = backup_codes
+            
+            if user_id in self.users:
+                self.users[user_id]['totp_enabled'] = True
+            
+            return {'success': True, 'secret': secret, 'uri': uri, 'backup_codes': backup_codes}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def verify_totp(self, user_id: str, code: str) -> bool:
+        try:
+            if user_id not in self.totp_secrets:
+                return False
+            return self.totp.verify_code(self.totp_secrets[user_id], code)
+        except:
+            return False
+    
+    def setup_biometric(self, user_id: str, device_info: Dict) -> Dict[str, Any]:
+        try:
+            result = self.biometric.register_biometric(user_id, device_info)
+            if result.get('success') and user_id in self.users:
+                self.users[user_id]['biometric_enabled'] = True
+            return result
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def verify_biometric(self, user_id: str, challenge: str, signature: str) -> bool:
+        return self.biometric.verify_biometric(user_id, challenge, signature)
+    
+    def generate_biometric_challenge(self, user_id: str) -> str:
+        return self.biometric.generate_challenge(user_id)
+    
+    def send_email_otp(self, user_id: str, email: str, purpose: str = "login") -> Dict[str, Any]:
+        try:
+            otp = ''.join([str(secrets.randbelow(10)) for _ in range(6)])
+            
+            with self._lock:
+                self.otp_store[user_id] = {
+                    'otp': otp,
+                    'purpose': purpose,
+                    'created_at': datetime.utcnow(),
+                    'expires_at': datetime.utcnow() + timedelta(minutes=5),
+                    'attempts': 0
+                }
+            
+            success = self.email_sender.send_otp_email(email, otp, purpose)
+            return {'success': success}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def verify_email_otp(self, user_id: str, code: str) -> bool:
+        try:
+            if user_id not in self.otp_store:
+                return False
+            
+            otp_data = self.otp_store[user_id]
+            
+            if datetime.utcnow() > otp_data['expires_at']:
+                self.otp_store.pop(user_id, None)
+                return False
+            
+            if otp_data['attempts'] >= 3:
+                self.otp_store.pop(user_id, None)
+                return False
+            
+            if secrets.compare_digest(otp_data['otp'], code):
+                self.otp_store.pop(user_id, None)
+                return True
+            
+            otp_data['attempts'] += 1
+            return False
+        except:
+            return False
+    
+    def create_access_token(self, user_id: str, role: str = "user") -> str:
+        try:
+            payload = {
+                'user_id': user_id,
+                'role': role,
+                'type': 'access',
+                'exp': datetime.utcnow() + self.access_expiry,
+                'iat': datetime.utcnow(),
+                'jti': secrets.token_hex(16),
+                'version': self.token_versions.get(user_id, 1)
+            }
+            return jwt.encode(payload, self.jwt_secret, algorithm=self.algorithm)
+        except:
+            return ""
+    
+    def create_refresh_token(self, user_id: str) -> str:
+        payload = {
+            'user_id': user_id,
+            'type': 'refresh',
+            'exp': datetime.utcnow() + self.refresh_expiry,
+            'iat': datetime.utcnow(),
+            'jti': secrets.token_hex(16)
+        }
+        return jwt.encode(payload, self.jwt_secret, algorithm=self.algorithm)
+    
+    def verify_token(self, token: str) -> Optional[Dict]:
+        try:
+            if not token or token in self.blacklisted_tokens:
+                return None
+            return jwt.decode(token, self.jwt_secret, algorithms=[self.algorithm])
+        except:
+            return None
+    
+    def check_rate_limit(self, ip: str, endpoint: str = 'default',
+                        max_requests: int = None, window_seconds: int = None) -> bool:
+        try:
+            if ip in self.whitelist:
+                return True
+            
+            if ip in self.banned_ips:
+                if time.time() < self.banned_ips[ip]:
+                    return False
+                del self.banned_ips[ip]
+            
+            if max_requests is None:
+                limits = self.rate_limits.get(endpoint, self.rate_limits['default'])
+                max_requests, window_seconds = limits
+            
+            with self._lock:
+                key = f"{ip}:{endpoint}"
+                now = time.time()
+                
+                if key not in self.requests:
+                    self.requests[key] = deque()
+                
+                queue = self.requests[key]
+                while queue and now - queue[0] > window_seconds:
+                    queue.popleft()
+                
+                if len(queue) >= max_requests:
+                    self.banned_ips[ip] = now + 300
+                    return False
+                
+                queue.append(now)
+                return True
+        except:
+            return False
+    
+    def encrypt_data(self, data: str) -> str:
+        try:
+            if self.fernet:
+                return self.fernet.encrypt(data.encode()).decode()
+            return base64.b64encode(data.encode()).decode()
+        except:
+            return base64.b64encode(data.encode()).decode()
+    
+    def decrypt_data(self, encrypted: str) -> str:
+        try:
+            if self.fernet:
+                return self.fernet.decrypt(encrypted.encode()).decode()
+            return base64.b64decode(encrypted.encode()).decode()
+        except:
+            return ""
+    
+    def hash_password(self, password: str, salt: str = None) -> Dict[str, str]:
+        salt = salt or secrets.token_hex(16)
+        hashed = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 100000).hex()
+        return {'hash': hashed, 'salt': salt}
+    
+    def _log_event(self, event_type: SecurityEventType, user_id: str, details: Dict = None) -> None:
+        try:
+            event = {
+                'timestamp': datetime.now().isoformat(),
+                'type': event_type.value,
+                'user_id': user_id,
+                'details': details or {}
+            }
+            
+            self.security_events.append(event)
+            self.audit_logs.append(event)
+            
+            with open(self.audit_file, 'a') as f:
+                f.write(json.dumps(event, default=str) + '\n')
+        except:
+            pass
+    
+    def get_firewall_stats(self) -> Dict[str, int]:
+        """Get firewall statistics"""
+        return self.firewall.get_stats()
+    
+    def cleanup(self) -> None:
+        try:
+            with self._lock:
+                now = datetime.utcnow()
+                
+                expired_otps = [uid for uid, d in self.otp_store.items() if now > d['expires_at']]
+                for uid in expired_otps:
+                    self.otp_store.pop(uid, None)
+                
+                gc.collect()
+        except:
+            pass
+
+
+# ============ GLOBAL INSTANCE ============
+security_manager = SecurityManager()
+
+__all__ = [
+    'SecurityManager',
+    'SecurityEventType',
+    'UserRole',
+    'BiometricType',
+    'AuthMethod',
+    'AdvancedFirewall',
+    'FreeEmailSender',
+    'FreeTOTP',
+    'BiometricAuth',
+    'security_manager'
+]

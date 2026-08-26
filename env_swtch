@@ -1,0 +1,57 @@
+# fly.dev.toml (Development)
+app = "eshtrade-dev"
+primary_region = "iad"
+
+[env]
+  ENVIRONMENT = "development"
+  DEBUG = "true"
+  LOG_LEVEL = "debug"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+
+[http_service]
+  internal_port = 8080
+  min_machines_running = 1
+  max_machines_running = 2
+
+---
+
+# fly.staging.toml (Staging)
+app = "eshtrade-staging"
+primary_region = "iad"
+
+[env]
+  ENVIRONMENT = "staging"
+  DEBUG = "false"
+  LOG_LEVEL = "info"
+
+[[vm]]
+  size = "shared-cpu-2x"
+  memory = "1gb"
+
+[http_service]
+  internal_port = 8080
+  min_machines_running = 1
+  max_machines_running = 3
+
+---
+
+# fly.toml (Production)
+app = "eshtrade"
+primary_region = "iad"
+
+[env]
+  ENVIRONMENT = "production"
+  DEBUG = "false"
+  LOG_LEVEL = "info"
+
+[[vm]]
+  size = "performance-2x"
+  memory = "4gb"
+
+[http_service]
+  internal_port = 8080
+  min_machines_running = 3
+  max_machines_running = 20

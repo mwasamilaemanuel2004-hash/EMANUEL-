@@ -1,0 +1,844 @@
+"""
+DATA PROVIDERS - POWERFUL COMPLETE EDITION
+Yahoo Finance (BURE) + Polygon + Finnhub + Alpha Vantage
+With Caching, Rate Limiting, Fallback, WebSocket Support
+"""
+
+import os
+import time
+import json
+import logging
+import threading
+import requests
+from typing import Dict, List, Optional, Any, Tuple, Union
+from datetime import datetime, timedelta
+from collections import deque
+from functools import lru_cache
+import warnings
+warnings.filterwarnings('ignore')
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - [DATA] - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('data/logs/data_providers.log'),
+        logging.StreamHandler()
+    ]
+)
+
+logger = logging.getLogger(__name__)
+
+
+class DataProviderBase:
+    """Base class for all data providers"""
+    
+    def __init__(self):
+        self.cache = {}
+        self.cache_ttl = 30  # seconds
+        self._lock = threading.Lock()
+        self.rate_limiter = RateLimiter()
+        self.failure_count = 0
+        self.max_failures = 5
+        self.is_healthy = True
+        self.last_success = datetime.now()
+    
+    def _cache_get(self, key: str) -> Optional[Any]:
+        """Get from cache"""
+        with self._lock:
+            if key in self.cache:
+                data, timestamp = self.cache[key]
+                if time.time() - timestamp < self.cache_ttl:
+                    return data
+                else:
+                    del self.cache[key]
+        return None
+    
+    def _cache_set(self, key: str, data: Any, ttl: int = None) -> None:
+        """Set cache"""
+        with self._lock:
+            self.cache[key] = (data, time.time())
+            # Clean old cache
+            current_time = time.time()
+            expired = [k for k, (_, t) in self.cache.items() if current_time - t > (ttl or self.cache_ttl * 2)]
+            for k in expired:
+                del self.cache[k]
+    
+    def _handle_success(self):
+        """Handle successful request"""
+        self.failure_count = 0
+        self.is_healthy = True
+        self.last_success = datetime.now()
+    
+    def _handle_failure(self, error: Exception):
+        """Handle failed request"""
+        self.failure_count += 1
+        if self.failure_count >= self.max_failures:
+            self.is_healthy = False
+        logger.error(f"Provider error: {error}")
+    
+    def is_available(self) -> bool:
+        """Check if provider is available"""
+        return self.is_healthy
+
+
+class RateLimiter:
+    """Advanced rate limiter"""
+    
+    def __init__(self):
+        self.requests = {}
+        self._lock = threading.Lock()
+    
+    def check(self, key: str, max_requests: int, window_seconds: int) -> bool:
+        """Check if request is allowed"""
+        with self._lock:
+            current_time = time.time()
+            
+            if key not in self.requests:
+                self.requests[key] = deque()
+            
+            queue = self.requests[key]
+            
+            while queue and current_time - queue[0] > window_seconds:
+                queue.popleft()
+            
+            if len(queue) >= max_requests:
+                return False
+            
+            queue.append(current_time)
+            return True
+    
+    def wait_if_needed(self, key: str, max_requests: int, window_seconds: int) -> None:
+        """Wait if rate limit reached"""
+        while not self.check(key, max_requests, window_seconds):
+            time.sleep(0.1)
+
+
+class YahooFinanceProvider(DataProviderBase):
+    """
+    YAHOO FINANCE - POWERFUL EDITION
+    BURE - No API Key Required
+    Stocks, Crypto, Forex, Metals, Commodities
+    """
+    
+    def __init__(self):
+        super().__init__()
+        self.base_url = "https://query1.finance.yahoo.com"
+        self.headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'application/json'
+        }
+        self.rate_limiter = RateLimiter()
+        self.max_requests_per_second = 5
+        
+        # Symbol mappings
+        self.symbol_map = {
+            'stocks': ['AAPL', 'TSLA', 'MSFT', 'GOOGL', 'AMZN', 'META', 'NVDA', 'JPM', 'V', 'WMT'],
+            'crypto': ['BTC-USD', 'ETH-USD', 'BNB-USD', 'XRP-USD', 'ADA-USD', 'SOL-USD', 'DOGE-USD'],
+            'forex': ['EURUSD=X', 'GBPUSD=X', 'USDJPY=X', 'AUDUSD=X', 'USDCAD=X'],
+            'metals': ['GC=F', 'SI=F', 'PL=F', 'PA=F', 'HG=F'],
+            'commodities': ['CL=F', 'NG=F', 'BZ=F', 'ZC=F', 'ZW=F'],
+            'indices': ['^GSPC', '^DJI', '^IXIC', '^VIX', '^FTSE', '^N225']
+        }
+    
+    def get_quote(self, symbol: str) -> Dict[str, Any]:
+        """Get real-time quote - POWERFUL"""
+        try:
+            cache_key = f"quote_{symbol}"
+            cached = self._cache_get(cache_key)
+            if cached:
+                return cached
+            
+            self.rate_limiter.wait_if_needed('yahoo_quote', self.max_requests_per_second, 1)
+            
+            url = f"{self.base_url}/v7/finance/quote"
+            params = {'symbols': symbol}
+            
+            response = requests.get(url, headers=self.headers, params=params, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                result = data.get('quoteResponse', {}).get('result', [])
+                
+                if result:
+                    quote = result[0]
+                    
+                    formatted = {
+                        'symbol': quote.get('symbol', symbol),
+                        'name': quote.get('shortName', quote.get('longName', symbol)),
+                        'price': quote.get('regularMarketPrice', 0),
+                        'change': quote.get('regularMarketChange', 0),
+                        'change_percent': quote.get('regularMarketChangePercent', 0),
+                        'volume': quote.get('regularMarketVolume', 0),
+                        'avg_volume': quote.get('averageDailyVolume3Month', 0),
+                        'market_cap': quote.get('marketCap', 0),
+                        'high': quote.get('regularMarketDayHigh', 0),
+                        'low': quote.get('regularMarketDayLow', 0),
+                        'open': quote.get('regularMarketOpen', 0),
+                        'previous_close': quote.get('regularMarketPreviousClose', 0),
+                        'bid': quote.get('bid', 0),
+                        'ask': quote.get('ask', 0),
+                        'spread': (quote.get('ask', 0) - quote.get('bid', 0)) if quote.get('bid', 0) else 0,
+                        'currency': quote.get('currency', 'USD'),
+                        'exchange': quote.get('exchange', ''),
+                        'market_state': quote.get('marketState', ''),
+                        '52_week_high': quote.get('fiftyTwoWeekHigh', 0),
+                        '52_week_low': quote.get('fiftyTwoWeekLow', 0),
+                        'timestamp': datetime.now().isoformat()
+                    }
+                    
+                    self._cache_set(cache_key, formatted, ttl=15)
+                    self._handle_success()
+                    return formatted
+            
+            self._handle_failure(Exception(f"Status {response.status_code}"))
+            return {}
+            
+        except Exception as e:
+            self._handle_failure(e)
+            return {}
+    
+    def get_historical_data(self, symbol: str, period: str = "1mo", interval: str = "1d") -> Dict[str, Any]:
+        """Get historical data - POWERFUL"""
+        try:
+            cache_key = f"history_{symbol}_{period}_{interval}"
+            cached = self._cache_get(cache_key)
+            if cached:
+                return cached
+            
+            self.rate_limiter.wait_if_needed('yahoo_history', self.max_requests_per_second, 1)
+            
+            period_days = {
+                '1d': 1, '5d': 5, '1mo': 30, '3mo': 90, '6mo': 180,
+                '1y': 365, '2y': 730, '5y': 1825, '10y': 3650, 'max': 3650
+            }
+            
+            days = period_days.get(period, 30)
+            
+            url = f"{self.base_url}/v8/finance/chart/{symbol}"
+            params = {
+                'period1': int((datetime.now() - timedelta(days=days)).timestamp()),
+                'period2': int(datetime.now().timestamp()),
+                'interval': interval,
+                'includePrePost': 'false',
+                'events': 'div,splits'
+            }
+            
+            response = requests.get(url, headers=self.headers, params=params, timeout=15)
+            
+            if response.status_code == 200:
+                data = response.json()
+                chart = data.get('chart', {}).get('result', [])
+                
+                if chart:
+                    result = chart[0]
+                    timestamps = result.get('timestamp', [])
+                    quote_data = result.get('indicators', {}).get('quote', [{}])[0]
+                    
+                    prices = quote_data.get('close', [])
+                    opens = quote_data.get('open', [])
+                    highs = quote_data.get('high', [])
+                    lows = quote_data.get('low', [])
+                    volumes = quote_data.get('volume', [])
+                    
+                    # Calculate additional metrics
+                    historical = {
+                        'symbol': symbol,
+                        'timestamps': timestamps,
+                        'prices': prices,
+                        'opens': opens,
+                        'highs': highs,
+                        'lows': lows,
+                        'volumes': volumes,
+                        'period': period,
+                        'interval': interval,
+                        'sma_20': self._calculate_sma(prices, 20),
+                        'sma_50': self._calculate_sma(prices, 50),
+                        'rsi': self._calculate_rsi(prices),
+                        'volatility': self._calculate_volatility(prices),
+                        'total_volume': sum(volumes) if volumes else 0,
+                        'avg_volume': sum(volumes) / len(volumes) if volumes else 0,
+                        'price_change': ((prices[-1] - prices[0]) / prices[0] * 100) if prices and prices[0] else 0,
+                        'high_52w': max(highs) if highs else 0,
+                        'low_52w': min(lows) if lows else 0
+                    }
+                    
+                    self._cache_set(cache_key, historical, ttl=300)
+                    self._handle_success()
+                    return historical
+            
+            self._handle_failure(Exception(f"Status {response.status_code}"))
+            return {}
+            
+        except Exception as e:
+            self._handle_failure(e)
+            return {}
+    
+    def get_multi_quotes(self, symbols: List[str]) -> Dict[str, Dict]:
+        """Get multiple quotes at once"""
+        try:
+            cache_key = f"multi_{'_'.join(symbols)}"
+            cached = self._cache_get(cache_key)
+            if cached:
+                return cached
+            
+            self.rate_limiter.wait_if_needed('yahoo_multi', 1, 1)
+            
+            url = f"{self.base_url}/v7/finance/quote"
+            params = {'symbols': ','.join(symbols)}
+            
+            response = requests.get(url, headers=self.headers, params=params, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                results = data.get('quoteResponse', {}).get('result', [])
+                
+                quotes = {}
+                for quote in results:
+                    symbol = quote.get('symbol', '')
+                    quotes[symbol] = {
+                        'price': quote.get('regularMarketPrice', 0),
+                        'change_percent': quote.get('regularMarketChangePercent', 0),
+                        'volume': quote.get('regularMarketVolume', 0),
+                        'high': quote.get('regularMarketDayHigh', 0),
+                        'low': quote.get('regularMarketDayLow', 0)
+                    }
+                
+                self._cache_set(cache_key, quotes, ttl=15)
+                return quotes
+            
+            return {}
+            
+        except Exception as e:
+            self._handle_failure(e)
+            return {}
+    
+    def get_market_overview(self) -> Dict[str, Any]:
+        """Get complete market overview"""
+        overview = {
+            'indices': {},
+            'crypto': {},
+            'forex': {},
+            'metals': {},
+            'commodities': {}
+        }
+        
+        # Get all indices
+        for symbol in self.symbol_map['indices']:
+            quote = self.get_quote(symbol)
+            if quote:
+                overview['indices'][symbol] = quote
+        
+        # Get top crypto
+        for symbol in self.symbol_map['crypto'][:5]:
+            quote = self.get_quote(symbol)
+            if quote:
+                overview['crypto'][symbol] = quote
+        
+        # Get forex
+        for symbol in self.symbol_map['forex']:
+            quote = self.get_quote(symbol)
+            if quote:
+                overview['forex'][symbol] = quote
+        
+        # Get metals
+        for symbol in self.symbol_map['metals'][:3]:
+            quote = self.get_quote(symbol)
+            if quote:
+                overview['metals'][symbol] = quote
+        
+        # Get commodities
+        for symbol in self.symbol_map['commodities'][:3]:
+            quote = self.get_quote(symbol)
+            if quote:
+                overview['commodities'][symbol] = quote
+        
+        return overview
+    
+    def search(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """Search for symbols"""
+        try:
+            self.rate_limiter.wait_if_needed('yahoo_search', 1, 1)
+            
+            url = f"{self.base_url}/v1/finance/search"
+            params = {'q': query, 'quotesCount': limit, 'newsCount': 0}
+            
+            response = requests.get(url, headers=self.headers, params=params, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                quotes = data.get('quotes', [])
+                
+                return [
+                    {
+                        'symbol': q.get('symbol', ''),
+                        'name': q.get('shortname', q.get('longname', '')),
+                        'exchange': q.get('exchange', ''),
+                        'type': q.get('quoteType', ''),
+                        'score': q.get('score', 0)
+                    }
+                    for q in quotes
+                ]
+            
+            return []
+            
+        except Exception as e:
+            self._handle_failure(e)
+            return []
+    
+    def _calculate_sma(self, prices: List[float], period: int) -> List[float]:
+        """Calculate SMA"""
+        if not prices:
+            return []
+        sma = []
+        for i in range(len(prices)):
+            if i < period - 1:
+                sma.append(None)
+            else:
+                sma.append(sum(prices[i-period+1:i+1]) / period)
+        return sma
+    
+    def _calculate_rsi(self, prices: List[float], period: int = 14) -> float:
+        """Calculate RSI"""
+        if len(prices) < period + 1:
+            return 50.0
+        
+        deltas = [prices[i] - prices[i-1] for i in range(1, len(prices))]
+        gains = [d if d > 0 else 0 for d in deltas[-period:]]
+        losses = [-d if d < 0 else 0 for d in deltas[-period:]]
+        
+        avg_gain = sum(gains) / period
+        avg_loss = sum(losses) / period
+        
+        if avg_loss == 0:
+            return 100.0
+        
+        rs = avg_gain / avg_loss
+        return 100 - (100 / (1 + rs))
+    
+    def _calculate_volatility(self, prices: List[float]) -> float:
+        """Calculate volatility"""
+        if len(prices) < 2:
+            return 0.0
+        
+        returns = [(prices[i] - prices[i-1]) / prices[i-1] for i in range(1, len(prices))]
+        return sum(r * r for r in returns) / len(returns) ** 0.5 if returns else 0.0
+
+
+class PolygonProvider(DataProviderBase):
+    """POLYGON.IO - POWERFUL EDITION"""
+    
+    def __init__(self, api_key: str = None):
+        super().__init__()
+        self.api_key = api_key or os.getenv('POLYGON_API_KEY', '')
+        self.base_url = "https://api.polygon.io"
+        self.max_requests_per_minute = 5
+    
+    def get_quote(self, symbol: str) -> Dict[str, Any]:
+        """Get quote"""
+        if not self.api_key:
+            return {}
+        
+        try:
+            cache_key = f"polygon_quote_{symbol}"
+            cached = self._cache_get(cache_key)
+            if cached:
+                return cached
+            
+            self.rate_limiter.wait_if_needed('polygon', 5, 60)
+            
+            url = f"{self.base_url}/v2/snapshot/locale/us/markets/stocks/tickers/{symbol}"
+            params = {'apiKey': self.api_key}
+            
+            response = requests.get(url, params=params, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                ticker = data.get('ticker', {})
+                day = ticker.get('day', {})
+                
+                formatted = {
+                    'symbol': symbol,
+                    'price': day.get('c', 0),
+                    'open': day.get('o', 0),
+                    'high': day.get('h', 0),
+                    'low': day.get('l', 0),
+                    'volume': day.get('v', 0),
+                    'vwap': day.get('vw', 0),
+                    'change': ticker.get('todaysChange', 0),
+                    'change_percent': ticker.get('todaysChangePerc', 0),
+                    'timestamp': datetime.now().isoformat()
+                }
+                
+                self._cache_set(cache_key, formatted, ttl=30)
+                return formatted
+            
+            return {}
+            
+        except Exception as e:
+            self._handle_failure(e)
+            return {}
+    
+    def get_historical_data(self, symbol: str, days: int = 30) -> Dict[str, Any]:
+        """Get historical data"""
+        if not self.api_key:
+            return {}
+        
+        try:
+            self.rate_limiter.wait_if_needed('polygon', 5, 60)
+            
+            from_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
+            to_date = datetime.now().strftime('%Y-%m-%d')
+            
+            url = f"{self.base_url}/v2/aggs/ticker/{symbol}/range/1/day/{from_date}/{to_date}"
+            params = {'apiKey': self.api_key, 'limit': 5000}
+            
+            response = requests.get(url, params=params, timeout=15)
+            
+            if response.status_code == 200:
+                data = response.json()
+                results = data.get('results', [])
+                
+                return {
+                    'symbol': symbol,
+                    'timestamps': [r.get('t', 0) for r in results],
+                    'prices': [r.get('c', 0) for r in results],
+                    'opens': [r.get('o', 0) for r in results],
+                    'highs': [r.get('h', 0) for r in results],
+                    'lows': [r.get('l', 0) for r in results],
+                    'volumes': [r.get('v', 0) for r in results],
+                    'vwap': [r.get('vw', 0) for r in results]
+                }
+            
+            return {}
+            
+        except Exception as e:
+            self._handle_failure(e)
+            return {}
+    
+    def get_market_status(self) -> Dict[str, Any]:
+        """Get market status"""
+        if not self.api_key:
+            return {}
+        
+        try:
+            url = f"{self.base_url}/v1/marketstatus/now"
+            params = {'apiKey': self.api_key}
+            
+            response = requests.get(url, params=params, timeout=5)
+            
+            if response.status_code == 200:
+                return response.json()
+            
+            return {}
+            
+        except Exception as e:
+            self._handle_failure(e)
+            return {}
+    
+    def get_news(self, symbol: str = None, limit: int = 10) -> List[Dict]:
+        """Get news"""
+        if not self.api_key:
+            return []
+        
+        try:
+            self.rate_limiter.wait_if_needed('polygon_news', 5, 60)
+            
+            url = f"{self.base_url}/v2/reference/news"
+            params = {'apiKey': self.api_key, 'limit': limit}
+            if symbol:
+                params['ticker'] = symbol
+            
+            response = requests.get(url, params=params, timeout=10)
+            
+            if response.status_code == 200:
+                return response.json().get('results', [])
+            
+            return []
+            
+        except Exception as e:
+            self._handle_failure(e)
+            return []
+
+
+class FinnhubProvider(DataProviderBase):
+    """FINNHUB - POWERFUL EDITION"""
+    
+    def __init__(self, api_key: str = None):
+        super().__init__()
+        self.api_key = api_key or os.getenv('FINNHUB_API_KEY', '')
+        self.base_url = "https://finnhub.io/api/v1"
+        self.max_requests_per_minute = 60
+    
+    def get_quote(self, symbol: str) -> Dict[str, Any]:
+        """Get quote"""
+        if not self.api_key:
+            return {}
+        
+        try:
+            self.rate_limiter.wait_if_needed('finnhub', 60, 60)
+            
+            url = f"{self.base_url}/quote"
+            params = {'symbol': symbol, 'token': self.api_key}
+            
+            response = requests.get(url, params=params, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                return {
+                    'symbol': symbol,
+                    'price': data.get('c', 0),
+                    'change': data.get('d', 0),
+                    'change_percent': data.get('dp', 0),
+                    'high': data.get('h', 0),
+                    'low': data.get('l', 0),
+                    'open': data.get('o', 0),
+                    'previous_close': data.get('pc', 0),
+                    'timestamp': datetime.now().isoformat()
+                }
+            
+            return {}
+            
+        except Exception as e:
+            self._handle_failure(e)
+            return {}
+    
+    def get_sentiment(self, symbol: str) -> Dict[str, Any]:
+        """Get sentiment analysis"""
+        if not self.api_key:
+            return {}
+        
+        try:
+            self.rate_limiter.wait_if_needed('finnhub', 60, 60)
+            
+            url = f"{self.base_url}/news-sentiment"
+            params = {'symbol': symbol, 'token': self.api_key}
+            
+            response = requests.get(url, params=params, timeout=10)
+            
+            if response.status_code == 200:
+                return response.json()
+            
+            return {}
+            
+        except Exception as e:
+            self._handle_failure(e)
+            return {}
+    
+    def get_recommendations(self, symbol: str) -> List[Dict]:
+        """Get analyst recommendations"""
+        if not self.api_key:
+            return []
+        
+        try:
+            self.rate_limiter.wait_if_needed('finnhub', 60, 60)
+            
+            url = f"{self.base_url}/stock/recommendation"
+            params = {'symbol': symbol, 'token': self.api_key}
+            
+            response = requests.get(url, params=params, timeout=10)
+            
+            if response.status_code == 200:
+                return response.json()
+            
+            return []
+            
+        except Exception as e:
+            self._handle_failure(e)
+            return []
+
+
+class AlphaVantageProvider(DataProviderBase):
+    """ALPHA VANTAGE - POWERFUL EDITION"""
+    
+    def __init__(self, api_key: str = None):
+        super().__init__()
+        self.api_key = api_key or os.getenv('ALPHA_VANTAGE_API_KEY', '')
+        self.base_url = "https://www.alphavantage.co/query"
+        self.max_requests_per_minute = 5
+        self.max_requests_per_day = 500
+        self.daily_request_count = 0
+        self.last_reset_date = datetime.now().date()
+    
+    def _check_daily_limit(self) -> bool:
+        """Check daily limit"""
+        today = datetime.now().date()
+        if today != self.last_reset_date:
+            self.daily_request_count = 0
+            self.last_reset_date = today
+        
+        return self.daily_request_count < self.max_requests_per_day
+    
+    def get_quote(self, symbol: str) -> Dict[str, Any]:
+        """Get quote"""
+        if not self.api_key or not self._check_daily_limit():
+            return {}
+        
+        try:
+            self.rate_limiter.wait_if_needed('alpha', 5, 60)
+            self.daily_request_count += 1
+            
+            params = {
+                'function': 'GLOBAL_QUOTE',
+                'symbol': symbol,
+                'apikey': self.api_key
+            }
+            
+            response = requests.get(self.base_url, params=params, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                quote = data.get('Global Quote', {})
+                
+                if quote:
+                    return {
+                        'symbol': quote.get('01. symbol', symbol),
+                        'price': float(quote.get('05. price', 0)),
+                        'change': float(quote.get('09. change', 0)),
+                        'change_percent': float(quote.get('10. change percent', '0%').rstrip('%')),
+                        'volume': int(quote.get('06. volume', 0)),
+                        'high': float(quote.get('03. high', 0)),
+                        'low': float(quote.get('04. low', 0)),
+                        'open': float(quote.get('02. open', 0)),
+                        'previous_close': float(quote.get('08. previous close', 0)),
+                        'timestamp': datetime.now().isoformat()
+                    }
+            
+            return {}
+            
+        except Exception as e:
+            self._handle_failure(e)
+            return {}
+    
+    def get_technical_indicator(self, symbol: str, indicator: str = "RSI") -> Dict[str, Any]:
+        """Get technical indicators"""
+        if not self.api_key or not self._check_daily_limit():
+            return {}
+        
+        try:
+            self.rate_limiter.wait_if_needed('alpha', 5, 60)
+            self.daily_request_count += 1
+            
+            params = {
+                'function': indicator,
+                'symbol': symbol,
+                'interval': 'daily',
+                'time_period': 14,
+                'series_type': 'close',
+                'apikey': self.api_key
+            }
+            
+            response = requests.get(self.base_url, params=params, timeout=10)
+            
+            if response.status_code == 200:
+                return response.json()
+            
+            return {}
+            
+        except Exception as e:
+            self._handle_failure(e)
+            return {}
+
+
+class DataProviderManager:
+    """
+    DATA PROVIDER MANAGER - POWERFUL
+    Manages all providers with fallback
+    """
+    
+    def __init__(self):
+        self.providers = {
+            'yahoo': YahooFinanceProvider(),
+            'polygon': PolygonProvider(),
+            'finnhub': FinnhubProvider(),
+            'alpha_vantage': AlphaVantageProvider()
+        }
+        
+        self.provider_order = ['yahoo', 'polygon', 'finnhub', 'alpha_vantage']
+        self._lock = threading.Lock()
+        
+        logger.info("📊 Data Provider Manager initialized")
+        logger.info(f"   Active providers: {[p for p in self.provider_order if self.providers[p].is_available()]}")
+    
+    def get_quote(self, symbol: str) -> Dict[str, Any]:
+        """Get quote with fallback"""
+        for provider_name in self.provider_order:
+            provider = self.providers[provider_name]
+            
+            if not provider.is_available():
+                continue
+            
+            quote = provider.get_quote(symbol)
+            
+            if quote:
+                quote['provider'] = provider_name
+                return quote
+        
+        logger.error(f"All providers failed for {symbol}")
+        return {}
+    
+    def get_historical_data(self, symbol: str, period: str = "1mo", interval: str = "1d") -> Dict[str, Any]:
+        """Get historical data with fallback"""
+        for provider_name in self.provider_order:
+            provider = self.providers[provider_name]
+            
+            if not provider.is_available():
+                continue
+            
+            data = provider.get_historical_data(symbol, period, interval)
+            
+            if data:
+                data['provider'] = provider_name
+                return data
+        
+        return {}
+    
+    def get_market_overview(self) -> Dict[str, Any]:
+        """Get market overview"""
+        yahoo = self.providers['yahoo']
+        return yahoo.get_market_overview()
+    
+    def search(self, query: str) -> List[Dict]:
+        """Search symbols"""
+        yahoo = self.providers['yahoo']
+        return yahoo.search(query)
+    
+    def get_news(self, symbol: str = None, limit: int = 10) -> List[Dict]:
+        """Get news with fallback"""
+        for provider_name in ['polygon', 'finnhub']:
+            provider = self.providers[provider_name]
+            
+            if provider.is_available() and hasattr(provider, 'get_news'):
+                news = provider.get_news(symbol, limit)
+                if news:
+                    return news
+        
+        return []
+    
+    def get_sentiment(self, symbol: str) -> Dict[str, Any]:
+        """Get sentiment"""
+        finnhub = self.providers['finnhub']
+        if finnhub.is_available():
+            return finnhub.get_sentiment(symbol)
+        return {}
+    
+    def get_provider_status(self) -> Dict[str, bool]:
+        """Get all provider status"""
+        return {
+            name: provider.is_available()
+            for name, provider in self.providers.items()
+        }
+
+
+# ============ GLOBAL INSTANCE ============
+data_provider_manager = DataProviderManager()
+
+__all__ = [
+    'YahooFinanceProvider',
+    'PolygonProvider',
+    'FinnhubProvider',
+    'AlphaVantageProvider',
+    'DataProviderManager',
+    'data_provider_manager'
+]

@@ -1,0 +1,1222 @@
+"""
+SMART MONEY FOREX BOT - ULTRA ADVANCED EDITION
+Institutional Order Flow, Liquidity Engineering, Market Manipulation Detection
+Debugged & Performance Optimized
+"""
+
+import numpy as np
+import pandas as pd
+from typing import Dict, List, Optional, Tuple, Any, Union
+from datetime import datetime, timedelta
+from enum import Enum
+import logging
+from collections import deque
+import json
+import time
+import threading
+from functools import lru_cache
+import hashlib
+import warnings
+warnings.filterwarnings('ignore')
+
+# Optimized imports
+try:
+    from numba import jit, njit, prange, vectorize
+    NUMBA_AVAILABLE = True
+except ImportError:
+    NUMBA_AVAILABLE = False
+    print("Numba not available - using standard Python")
+
+try:
+    from scipy import signal, stats, optimize
+    from scipy.signal import find_peaks, argrelextrema
+    from scipy.ndimage import gaussian_filter1d
+    SCIPY_AVAILABLE = True
+except ImportError:
+    SCIPY_AVAILABLE = False
+    print("SciPy not available - using numpy only")
+
+from ..base_bot import (
+    UltraAdvancedBaseBot,
+    MarketRegime,
+    MarketPhase,
+    OrderFlowType,
+    TradeSide,
+    Position
+)
+
+logger = logging.getLogger(__name__)
+
+class SmartMoneyConcept(Enum):
+    """Smart Money Concepts (SMC)"""
+    ORDER_BLOCK = "order_block"
+    FAIR_VALUE_GAP = "fair_value_gap"
+    LIQUIDITY_POOL = "liquidity_pool"
+    IMBALANCE = "imbalance"
+    BREAKER_BLOCK = "breaker_block"
+    MITIGATION_BLOCK = "mitigation_block"
+    REJECTION_BLOCK = "rejection_block"
+    VACUUM_BLOCK = "vacuum_block"
+    SUPPLY_ZONE = "supply_zone"
+    DEMAND_ZONE = "demand_zone"
+    PREMIUM_ZONE = "premium_zone"
+    DISCOUNT_ZONE = "discount_zone"
+    EQUILIBRIUM = "equilibrium"
+    INDUCEMENT = "inducement"
+    TRAP = "trap"
+
+class LiquidityType(Enum):
+    """Types of liquidity in the market"""
+    BUY_SIDE = "buy_side_liquidity"
+    SELL_SIDE = "sell_side_liquidity"
+    DOUBLE_TOP = "double_top_liquidity"
+    DOUBLE_BOTTOM = "double_bottom_liquidity"
+    TRENDLINE_LIQUIDITY = "trendline_liquidity"
+    RANGE_HIGH = "range_high_liquidity"
+    RANGE_LOW = "range_low_liquidity"
+    SESSION_HIGH = "session_high_liquidity"
+    SESSION_LOW = "session_low_liquidity"
+    PSYCHOLOGICAL_LEVEL = "psychological_level_liquidity"
+
+class MarketStructureType(Enum):
+    """Market structure types"""
+    BULLISH = "bullish_structure"
+    BEARISH = "bearish_structure"
+    RANGING = "ranging_structure"
+    BREAKOUT = "breakout_structure"
+    BREAKDOWN = "breakdown_structure"
+    REVERSAL = "reversal_structure"
+    CONSOLIDATION = "consolidation_structure"
+    EXPANSION = "expansion_structure"
+    CONTRACTION = "contraction_structure"
+
+@njit(cache=True, parallel=True)
+def calculate_order_flow_numba(volumes: np.ndarray, prices: np.ndarray, period: int = 20) -> Tuple[float, float]:
+    """Numba optimized order flow calculation"""
+    if len(volumes) < period or len(prices) < period:
+        return 0.0, 0.0
+    
+    # Calculate buy/sell pressure
+    buy_pressure = 0.0
+    sell_pressure = 0.0
+    
+    for i in range(len(volumes) - period, len(volumes)):
+        if prices[i] > prices[i-1]:
+            buy_pressure += volumes[i]
+        else:
+            sell_pressure += volumes[i]
+    
+    total_pressure = buy_pressure + sell_pressure
+    if total_pressure == 0:
+        return 0.0, 0.0
+    
+    buy_ratio = buy_pressure / total_pressure
+    sell_ratio = sell_pressure / total_pressure
+    
+    return buy_ratio, sell_ratio
+
+@njit(cache=True, parallel=True)
+def detect_manipulation_numba(prices: np.ndarray, volumes: np.ndarray, period: int = 50) -> float:
+    """Numba optimized manipulation detection"""
+    if len(prices) < period:
+        return 0.0
+    
+    manipulation_score = 0.0
+    
+    # Detect sharp price movements with low volume (manipulation)
+    for i in range(len(prices) - 10, len(prices)):
+        price_change = abs(prices[i] - prices[i-5]) / prices[i-5]
+        avg_volume = np.mean(volumes[max(0, i-5):i])
+        
+        if price_change > 0.003 and avg_volume < np.mean(volumes[max(0, i-20):i]) * 0.7:
+            manipulation_score += 1.0
+    
+    return manipulation_score / 10.0
+
+@njit(cache=True, parallel=True)
+def calculate_cvd_numba(prices: np.ndarray, volumes: np.ndarray) -> np.ndarray:
+    """Numba optimized Cumulative Volume Delta"""
+    if len(prices) < 2 or len(volumes) < 2:
+        return np.array([0.0])
+    
+    cvd = np.zeros(len(prices))
+    
+    for i in range(1, len(prices)):
+        if prices[i] > prices[i-1]:
+            cvd[i] = cvd[i-1] + volumes[i]
+        elif prices[i] < prices[i-1]:
+            cvd[i] = cvd[i-1] - volumes[i]
+        else:
+            cvd[i] = cvd[i-1]
+    
+    return cvd
+
+class SmartMoneyAnalyzer:
+    """Advanced Smart Money Concepts analyzer"""
+    
+    def __init__(self):
+        self.order_blocks = []
+        self.fair_value_gaps = []
+        self.liquidity_pools = {'buy': [], 'sell': []}
+        self.supply_zones = []
+        self.demand_zones = []
+        self.breaker_blocks = []
+        self.mitigation_blocks = []
+        self.rejection_blocks = []
+        self.premium_discount_zones = {}
+        self.market_structure = {}
+        self.manipulation_score = 0.0
+        self.cvd = np.array([])
+        
+    def analyze_smart_money(self, market_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Comprehensive Smart Money analysis"""
+        prices = market_data.get('prices', [])
+        high = market_data.get('high', prices)
+        low = market_data.get('low', prices)
+        volumes = market_data.get('volumes', [])
+        
+        if len(prices) < 50:
+            return {}
+        
+        # Convert to numpy arrays
+        prices_np = np.array(prices)
+        high_np = np.array(high)
+        low_np = np.array(low)
+        volumes_np = np.array(volumes) if volumes else np.ones_like(prices_np)
+        
+        # Calculate CVD
+        self.cvd = calculate_cvd_numba(prices_np, volumes_np) if NUMBA_AVAILABLE else self._calculate_cvd_python(prices_np, volumes_np)
+        
+        # Detect order blocks
+        self.order_blocks = self.detect_order_blocks(prices_np, high_np, low_np, volumes_np)
+        
+        # Detect fair value gaps
+        self.fair_value_gaps = self.detect_fair_value_gaps(prices_np, high_np, low_np)
+        
+        # Detect liquidity pools
+        self.liquidity_pools = self.detect_liquidity_pools(prices_np, high_np, low_np)
+        
+        # Detect supply and demand zones
+        self.supply_zones, self.demand_zones = self.detect_supply_demand(prices_np, high_np, low_np, volumes_np)
+        
+        # Detect breaker blocks
+        self.breaker_blocks = self.detect_breaker_blocks(prices_np, high_np, low_np)
+        
+        # Detect premium/discount zones
+        self.premium_discount_zones = self.calculate_premium_discount(prices_np)
+        
+        # Detect market structure
+        self.market_structure = self.analyze_market_structure(prices_np, high_np, low_np)
+        
+        # Calculate manipulation score
+        self.manipulation_score = detect_manipulation_numba(prices_np, volumes_np) if NUMBA_AVAILABLE else self._calculate_manipulation_python(prices_np, volumes_np)
+        
+        return {
+            'order_blocks': self.order_blocks,
+            'fair_value_gaps': self.fair_value_gaps,
+            'liquidity_pools': self.liquidity_pools,
+            'supply_zones': self.supply_zones,
+            'demand_zones': self.demand_zones,
+            'breaker_blocks': self.breaker_blocks,
+            'premium_discount': self.premium_discount_zones,
+            'market_structure': self.market_structure,
+            'manipulation_score': self.manipulation_score,
+            'cvd': self.cvd[-1] if len(self.cvd) > 0 else 0
+        }
+    
+    def detect_order_blocks(self, prices: np.ndarray, high: np.ndarray, low: np.ndarray, volumes: np.ndarray) -> List[Dict[str, Any]]:
+        """Detect institutional order blocks"""
+        order_blocks = []
+        
+        if len(prices) < 20:
+            return order_blocks
+        
+        # Look for strong moves followed by consolidation
+        for i in range(10, len(prices) - 5):
+            # Bullish order block
+            if prices[i] < prices[i-1] and prices[i+1] > prices[i] * 1.002:
+                # Check for consolidation after move
+                if np.std(prices[i+1:i+6]) / np.mean(prices[i+1:i+6]) < 0.001:
+                    order_blocks.append({
+                        'type': 'bullish',
+                        'price': prices[i],
+                        'high': high[i],
+                        'low': low[i],
+                        'volume': volumes[i] if i < len(volumes) else 0,
+                        'index': i,
+                        'strength': self.calculate_block_strength(prices, volumes, i, 'bullish')
+                    })
+            
+            # Bearish order block
+            if prices[i] > prices[i-1] and prices[i+1] < prices[i] * 0.998:
+                if np.std(prices[i+1:i+6]) / np.mean(prices[i+1:i+6]) < 0.001:
+                    order_blocks.append({
+                        'type': 'bearish',
+                        'price': prices[i],
+                        'high': high[i],
+                        'low': low[i],
+                        'volume': volumes[i] if i < len(volumes) else 0,
+                        'index': i,
+                        'strength': self.calculate_block_strength(prices, volumes, i, 'bearish')
+                    })
+        
+        # Sort by strength
+        order_blocks.sort(key=lambda x: x['strength'], reverse=True)
+        
+        return order_blocks[:10]  # Top 10 order blocks
+    
+    def calculate_block_strength(self, prices: np.ndarray, volumes: np.ndarray, index: int, block_type: str) -> float:
+        """Calculate order block strength"""
+        if index >= len(volumes) or index < 5:
+            return 0.0
+        
+        # Volume analysis
+        volume_ratio = volumes[index] / np.mean(volumes[max(0, index-20):index]) if np.mean(volumes[max(0, index-20):index]) > 0 else 1
+        
+        # Price movement analysis
+        if block_type == 'bullish':
+            move_strength = (prices[index+1] - prices[index]) / prices[index] if index + 1 < len(prices) else 0
+        else:
+            move_strength = (prices[index] - prices[index+1]) / prices[index] if index + 1 < len(prices) else 0
+        
+        # Combine factors
+        strength = volume_ratio * 0.5 + abs(move_strength) * 100 * 0.5
+        
+        return min(1.0, strength)
+    
+    def detect_fair_value_gaps(self, prices: np.ndarray, high: np.ndarray, low: np.ndarray) -> List[Dict[str, Any]]:
+        """Detect Fair Value Gaps (FVG)"""
+        fvgs = []
+        
+        if len(prices) < 3:
+            return fvgs
+        
+        for i in range(2, len(prices) - 1):
+            # Bullish FVG
+            if low[i] > high[i-2]:
+                fvgs.append({
+                    'type': 'bullish',
+                    'top': low[i],
+                    'bottom': high[i-2],
+                    'index': i,
+                    'size': (low[i] - high[i-2]) / high[i-2]
+                })
+            
+            # Bearish FVG
+            if high[i] < low[i-2]:
+                fvgs.append({
+                    'type': 'bearish',
+                    'top': high[i],
+                    'bottom': low[i-2],
+                    'index': i,
+                    'size': (low[i-2] - high[i]) / low[i-2]
+                })
+        
+        # Filter significant gaps
+        significant_fvgs = [fvg for fvg in fvgs if fvg['size'] > 0.0005]
+        
+        return significant_fvgs[-10:]  # Last 10 FVGs
+    
+    def detect_liquidity_pools(self, prices: np.ndarray, high: np.ndarray, low: np.ndarray) -> Dict[str, List[float]]:
+        """Detect liquidity pools"""
+        liquidity = {'buy': [], 'sell': []}
+        
+        if len(prices) < 20:
+            return liquidity
+        
+        # Find equal highs (sell-side liquidity)
+        if SCIPY_AVAILABLE:
+            # Use scipy to find peaks
+            peaks, _ = find_peaks(high, distance=5)
+            for peak in peaks:
+                # Check for equal highs
+                for other_peak in peaks:
+                    if peak != other_peak and abs(high[peak] - high[other_peak]) / high[peak] < 0.001:
+                        liquidity['sell'].append(high[peak])
+                        break
+            
+            # Find equal lows (buy-side liquidity)
+            troughs, _ = find_peaks(-low, distance=5)
+            for trough in troughs:
+                for other_trough in troughs:
+                    if trough != other_trough and abs(low[trough] - low[other_trough]) / low[trough] < 0.001:
+                        liquidity['buy'].append(low[trough])
+                        break
+        else:
+            # Manual detection
+            for i in range(20, len(high)):
+                # Check for double tops
+                for j in range(i+1, len(high)):
+                    if abs(high[i] - high[j]) / high[i] < 0.001:
+                        liquidity['sell'].append(high[i])
+                        break
+            
+            for i in range(20, len(low)):
+                # Check for double bottoms
+                for j in range(i+1, len(low)):
+                    if abs(low[i] - low[j]) / low[i] < 0.001:
+                        liquidity['buy'].append(low[i])
+                        break
+        
+        # Cluster similar levels
+        liquidity['buy'] = self.cluster_levels(liquidity['buy'])
+        liquidity['sell'] = self.cluster_levels(liquidity['sell'])
+        
+        return liquidity
+    
+    def cluster_levels(self, levels: List[float], tolerance: float = 0.002) -> List[float]:
+        """Cluster price levels"""
+        if not levels:
+            return []
+        
+        levels.sort()
+        clusters = []
+        current_cluster = [levels[0]]
+        
+        for level in levels[1:]:
+            if abs(level - current_cluster[-1]) / current_cluster[-1] < tolerance:
+                current_cluster.append(level)
+            else:
+                clusters.append(np.mean(current_cluster))
+                current_cluster = [level]
+        
+        clusters.append(np.mean(current_cluster))
+        return clusters
+    
+    def detect_supply_demand(self, prices: np.ndarray, high: np.ndarray, low: np.ndarray, volumes: np.ndarray) -> Tuple[List[Dict], List[Dict]]:
+        """Detect supply and demand zones"""
+        supply_zones = []
+        demand_zones = []
+        
+        if len(prices) < 30:
+            return supply_zones, demand_zones
+        
+        # Find strong moves
+        for i in range(15, len(prices) - 5):
+            # Calculate move strength
+            move = (prices[i] - prices[i-5]) / prices[i-5]
+            
+            # Strong downward move = supply zone
+            if move < -0.005:
+                supply_zones.append({
+                    'price': prices[i],
+                    'high': max(high[i-5:i]),
+                    'low': min(low[i-5:i]),
+                    'strength': abs(move),
+                    'volume': np.mean(volumes[i-5:i]) if i < len(volumes) else 0
+                })
+            
+            # Strong upward move = demand zone
+            elif move > 0.005:
+                demand_zones.append({
+                    'price': prices[i],
+                    'high': max(high[i-5:i]),
+                    'low': min(low[i-5:i]),
+                    'strength': abs(move),
+                    'volume': np.mean(volumes[i-5:i]) if i < len(volumes) else 0
+                })
+        
+        # Sort by strength
+        supply_zones.sort(key=lambda x: x['strength'], reverse=True)
+        demand_zones.sort(key=lambda x: x['strength'], reverse=True)
+        
+        return supply_zones[:5], demand_zones[:5]
+    
+    def detect_breaker_blocks(self, prices: np.ndarray, high: np.ndarray, low: np.ndarray) -> List[Dict[str, Any]]:
+        """Detect breaker blocks"""
+        breaker_blocks = []
+        
+        if len(prices) < 20:
+            return breaker_blocks
+        
+        # Look for broken order blocks that become support/resistance
+        for i in range(10, len(prices) - 5):
+            # Bullish breaker (broken resistance becomes support)
+            if prices[i] > max(high[max(0, i-10):i]) and prices[i+1] > prices[i]:
+                breaker_blocks.append({
+                    'type': 'bullish',
+                    'price': prices[i],
+                    'level': max(high[max(0, i-10):i]),
+                    'index': i,
+                    'strength': 0.7
+                })
+            
+            # Bearish breaker (broken support becomes resistance)
+            if prices[i] < min(low[max(0, i-10):i]) and prices[i+1] < prices[i]:
+                breaker_blocks.append({
+                    'type': 'bearish',
+                    'price': prices[i],
+                    'level': min(low[max(0, i-10):i]),
+                    'index': i,
+                    'strength': 0.7
+                })
+        
+        return breaker_blocks[-5:]
+    
+    def calculate_premium_discount(self, prices: np.ndarray) -> Dict[str, float]:
+        """Calculate premium and discount zones"""
+        if len(prices) < 50:
+            return {}
+        
+        # Calculate range
+        range_high = np.max(prices[-50:])
+        range_low = np.min(prices[-50:])
+        range_size = range_high - range_low
+        
+        if range_size == 0:
+            return {}
+        
+        # Calculate equilibrium
+        equilibrium = (range_high + range_low) / 2
+        
+        # Premium zone (above equilibrium)
+        premium_high = equilibrium + range_size * 0.25
+        premium_low = equilibrium + range_size * 0.05
+        
+        # Discount zone (below equilibrium)
+        discount_high = equilibrium - range_size * 0.05
+        discount_low = equilibrium - range_size * 0.25
+        
+        return {
+            'range_high': range_high,
+            'range_low': range_low,
+            'equilibrium': equilibrium,
+            'premium_high': premium_high,
+            'premium_low': premium_low,
+            'discount_high': discount_high,
+            'discount_low': discount_low,
+            'current_price': prices[-1],
+            'current_zone': 'premium' if prices[-1] > equilibrium else 'discount'
+        }
+    
+    def analyze_market_structure(self, prices: np.ndarray, high: np.ndarray, low: np.ndarray) -> Dict[str, Any]:
+        """Analyze market structure"""
+        if len(prices) < 30:
+            return {}
+        
+        structure = {
+            'type': 'ranging',
+            'trend': 'neutral',
+            'hh': False,  # Higher High
+            'hl': False,  # Higher Low
+            'lh': False,  # Lower High
+            'll': False,  # Lower Low
+            'bos': False,  # Break of Structure
+            'choch': False  # Change of Character
+        }
+        
+        # Find swing points
+        swings_high = []
+        swings_low = []
+        
+        for i in range(2, len(high) - 2):
+            if high[i] > high[i-1] and high[i] > high[i-2] and high[i] > high[i+1] and high[i] > high[i+2]:
+                swings_high.append((i, high[i]))
+            if low[i] < low[i-1] and low[i] < low[i-2] and low[i] < low[i+1] and low[i] < low[i+2]:
+                swings_low.append((i, low[i]))
+        
+        if len(swings_high) >= 2 and len(swings_low) >= 2:
+            # Check for higher highs
+            if swings_high[-1][1] > swings_high[-2][1]:
+                structure['hh'] = True
+            else:
+                structure['lh'] = True
+            
+            # Check for higher lows
+            if swings_low[-1][1] > swings_low[-2][1]:
+                structure['hl'] = True
+            else:
+                structure['ll'] = True
+            
+            # Determine structure type
+            if structure['hh'] and structure['hl']:
+                structure['type'] = 'bullish'
+                structure['trend'] = 'up'
+            elif structure['lh'] and structure['ll']:
+                structure['type'] = 'bearish'
+                structure['trend'] = 'down'
+            else:
+                structure['type'] = 'ranging'
+                structure['trend'] = 'neutral'
+            
+            # Check for break of structure
+            if structure['trend'] == 'up' and prices[-1] > swings_high[-2][1]:
+                structure['bos'] = True
+            elif structure['trend'] == 'down' and prices[-1] < swings_low[-2][1]:
+                structure['bos'] = True
+            
+            # Check for change of character
+            if structure['trend'] == 'up' and prices[-1] < swings_low[-1][1]:
+                structure['choch'] = True
+            elif structure['trend'] == 'down' and prices[-1] > swings_high[-1][1]:
+                structure['choch'] = True
+        
+        return structure
+    
+    def _calculate_cvd_python(self, prices: np.ndarray, volumes: np.ndarray) -> np.ndarray:
+        """Python fallback for CVD"""
+        cvd = np.zeros(len(prices))
+        
+        for i in range(1, len(prices)):
+            if prices[i] > prices[i-1]:
+                cvd[i] = cvd[i-1] + volumes[i]
+            elif prices[i] < prices[i-1]:
+                cvd[i] = cvd[i-1] - volumes[i]
+            else:
+                cvd[i] = cvd[i-1]
+        
+        return cvd
+    
+    def _calculate_manipulation_python(self, prices: np.ndarray, volumes: np.ndarray) -> float:
+        """Python fallback for manipulation detection"""
+        manipulation_score = 0.0
+        
+        for i in range(len(prices) - 10, len(prices)):
+            price_change = abs(prices[i] - prices[i-5]) / prices[i-5]
+            avg_volume = np.mean(volumes[max(0, i-5):i])
+            
+            if price_change > 0.003 and avg_volume < np.mean(volumes[max(0, i-20):i]) * 0.7:
+                manipulation_score += 1.0
+        
+        return manipulation_score / 10.0
+
+class SmartMoneyForexBot(UltraAdvancedBaseBot):
+    """
+    Ultra Advanced Smart Money Forex Bot
+    Institutional-grade analysis with manipulation detection
+    """
+    
+    def __init__(self,
+                 symbol: str = "EURUSD",
+                 initial_capital: float = 10000.0,
+                 config: Optional[Dict[str, Any]] = None):
+        """
+        Initialize Smart Money Bot
+        
+        Args:
+            symbol: Forex pair
+            initial_capital: Starting capital
+            config: Configuration dictionary
+        """
+        super().__init__(
+            bot_name=f"SmartMoney_{symbol}",
+            symbol=symbol,
+            initial_capital=initial_capital
+        )
+        
+        # Initialize components
+        self.smart_money_analyzer = SmartMoneyAnalyzer()
+        
+        # Configuration
+        self.config = self._load_config(config)
+        
+        # Smart Money specific tracking
+        self.smc_signals = deque(maxlen=1000)
+        self.institutional_activity = deque(maxlen=100)
+        self.liquidity_grabs = deque(maxlen=50)
+        self.manipulation_events = deque(maxlen=50)
+        
+        # Performance tracking
+        self.smc_win_rate = deque(maxlen=100)
+        self.institutional_following_accuracy = deque(maxlen=100)
+        self.liquidity_grab_success = deque(maxlen=50)
+        
+        # Threading
+        self.smc_lock = threading.Lock()
+        self.analysis_cache = {}
+        self.cache_expiry = 3  # seconds
+        
+        self.logger.info(f"Smart Money Bot initialized for {symbol}")
+        self.logger.info(f"Config: {self.config}")
+    
+    def _load_config(self, config: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        """Load configuration"""
+        default_config = {
+            # Entry/Exit
+            'min_order_block_strength': 0.6,
+            'min_liquidity_pool_size': 0.002,
+            'fvg_entry_requirement': 0.0008,
+            'risk_reward_min': 2.5,
+            'max_holding_time': 14400,  # 4 hours
+            
+            # Risk Management
+            'risk_per_trade': 0.02,
+            'max_daily_risk': 0.06,
+            'max_position_size': 0.15,
+            'trailing_stop_percentage': 0.012,
+            
+            # Smart Money Filters
+            'require_order_block': True,
+            'require_fvg': True,
+            'require_liquidity_engineered': True,
+            'trade_with_institutional_flow': True,
+            'avoid_manipulation': True,
+            'min_manipulation_score': 0.7,
+            
+            # Session Filters
+            'trade_london_ny_overlap': True,
+            'avoid_low_liquidity': True,
+            'min_volume_ratio': 0.8
+        }
+        
+        if config:
+            default_config.update(config)
+        
+        return default_config
+    
+    def analyze_market(self, market_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Perform Smart Money analysis
+        """
+        try:
+            # Check cache
+            cache_key = self._generate_cache_key(market_data)
+            if cache_key in self.analysis_cache:
+                cached = self.analysis_cache[cache_key]
+                if (datetime.now() - cached['timestamp']).seconds < self.cache_expiry:
+                    return cached['analysis']
+            
+            # Smart Money analysis
+            smc_analysis = self.smart_money_analyzer.analyze_smart_money(market_data)
+            
+            # Order flow detection
+            order_flows = self.order_flow_detector.detect_order_flow(market_data)
+            
+            # Neural network prediction
+            nn_features = self.neural_engine.prepare_features(market_data)
+            nn_prediction = self.neural_engine.predict(nn_features)
+            
+            # Institutional activity detection
+            institutional_activity = self.detect_institutional_activity(market_data)
+            
+            # Liquidity engineering detection
+            liquidity_engineering = self.detect_liquidity_engineering(market_data)
+            
+            analysis = {
+                'smc': smc_analysis,
+                'order_flows': order_flows,
+                'neural_prediction': nn_prediction,
+                'institutional_activity': institutional_activity,
+                'liquidity_engineering': liquidity_engineering,
+                'timestamp': datetime.now()
+            }
+            
+            # Cache analysis
+            self.analysis_cache[cache_key] = {
+                'analysis': analysis,
+                'timestamp': datetime.now()
+            }
+            
+            return analysis
+            
+        except Exception as e:
+            self.logger.error(f"Error in analyze_market: {e}")
+            return self._get_fallback_analysis()
+    
+    def _generate_cache_key(self, market_data: Dict[str, Any]) -> str:
+        """Generate cache key"""
+        prices = market_data.get('prices', [])
+        if not prices:
+            return "empty"
+        
+        key_data = str(prices[-10:]) + str(market_data.get('volumes', [])[-10:])
+        return hashlib.md5(key_data.encode()).hexdigest()
+    
+    def detect_institutional_activity(self, market_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Detect institutional activity"""
+        prices = market_data.get('prices', [])
+        volumes = market_data.get('volumes', [])
+        
+        if len(prices) < 20 or not volumes:
+            return {}
+        
+        # Large volume detection
+        avg_volume = np.mean(volumes[-20:])
+        recent_volumes = volumes[-5:]
+        
+        large_volume_bars = [i for i, v in enumerate(recent_volumes) if v > avg_volume * 1.5]
+        
+        # Price action with volume
+        bullish_pressure = 0
+        bearish_pressure = 0
+        
+        for i in range(1, min(20, len(prices))):
+            if prices[-i] > prices[-i-1]:
+                bullish_pressure += volumes[-i]
+            else:
+                bearish_pressure += volumes[-i]
+        
+        total_pressure = bullish_pressure + bearish_pressure
+        buy_ratio = bullish_pressure / total_pressure if total_pressure > 0 else 0.5
+        
+        activity = {
+            'large_volume_bars': len(large_volume_bars),
+            'buy_ratio': buy_ratio,
+            'institutional_buying': buy_ratio > 0.6,
+            'institutional_selling': buy_ratio < 0.4,
+            'volume_spike': bool(large_volume_bars),
+            'activity_score': min(1.0, len(large_volume_bars) / 3)
+        }
+        
+        self.institutional_activity.append(activity)
+        
+        return activity
+    
+    def detect_liquidity_engineering(self, market_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Detect liquidity engineering patterns"""
+        prices = market_data.get('prices', [])
+        high = market_data.get('high', prices)
+        low = market_data.get('low', prices)
+        
+        if len(prices) < 20:
+            return {}
+        
+        engineering = {
+            'liquidity_grab': False,
+            'stop_hunt': False,
+            'fake_breakout': False,
+            'inducement': False,
+            'trap': False,
+            'engineered_move': False,
+            'confidence': 0.0
+        }
+        
+        # Detect liquidity grab
+        if self.detect_liquidity_grab(prices, high, low):
+            engineering['liquidity_grab'] = True
+            engineering['confidence'] += 0.3
+            self.liquidity_grabs.append({
+                'time': datetime.now(),
+                'type': 'liquidity_grab',
+                'price': prices[-1]
+            })
+        
+        # Detect stop hunt
+        if self.detect_stop_hunt(prices, high, low):
+            engineering['stop_hunt'] = True
+            engineering['confidence'] += 0.25
+            self.manipulation_events.append({
+                'time': datetime.now(),
+                'type': 'stop_hunt',
+                'price': prices[-1]
+            })
+        
+        # Detect fake breakout
+        if self.detect_fake_breakout(prices, high, low):
+            engineering['fake_breakout'] = True
+            engineering['confidence'] += 0.25
+            self.manipulation_events.append({
+                'time': datetime.now(),
+                'type': 'fake_breakout',
+                'price': prices[-1]
+            })
+        
+        # Detect inducement
+        if self.detect_inducement(prices):
+            engineering['inducement'] = True
+            engineering['confidence'] += 0.2
+        
+        if engineering['confidence'] >= 0.5:
+            engineering['engineered_move'] = True
+        
+        return engineering
+    
+    def detect_liquidity_grab(self, prices: List[float], high: List[float], low: List[float]) -> bool:
+        """Detect liquidity grab"""
+        if len(prices) < 10:
+            return False
+        
+        # Check for sweep of recent highs/lows followed by reversal
+        recent_high = max(high[-10:-1])
+        recent_low = min(low[-10:-1])
+        
+        current_high = high[-1]
+        current_low = low[-1]
+        current_price = prices[-1]
+        
+        # Sweep above high then close below
+        if current_high > recent_high and current_price < recent_high:
+            return True
+        
+        # Sweep below low then close above
+        if current_low < recent_low and current_price > recent_low:
+            return True
+        
+        return False
+    
+    def detect_stop_hunt(self, prices: List[float], high: List[float], low: List[float]) -> bool:
+        """Detect stop hunt"""
+        if len(prices) < 20:
+            return False
+        
+        # Look for sharp move to trigger stops followed by reversal
+        for i in range(2, min(10, len(prices))):
+            # Sharp drop then recovery
+            if low[-i] < min(low[-20:-i]) and prices[-1] > prices[-i]:
+                return True
+            
+            # Sharp rise then reversal
+            if high[-i] > max(high[-20:-i]) and prices[-1] < prices[-i]:
+                return True
+        
+        return False
+    
+    def detect_fake_breakout(self, prices: List[float], high: List[float], low: List[float]) -> bool:
+        """Detect fake breakout"""
+        if len(prices) < 20:
+            return False
+        
+        # Check for breakout that fails
+        range_high = max(high[-20:-5])
+        range_low = min(low[-20:-5])
+        
+        current_price = prices[-1]
+        current_high = high[-1]
+        current_low = low[-1]
+        
+        # Breakout above range then close back inside
+        if current_high > range_high and current_price < range_high:
+            return True
+        
+        # Breakdown below range then close back inside
+        if current_low < range_low and current_price > range_low:
+            return True
+        
+        return False
+    
+    def detect_inducement(self, prices: List[float]) -> bool:
+        """Detect inducement pattern"""
+        if len(prices) < 15:
+            return False
+        
+        # Look for false move to induce retail traders
+        recent_prices = prices[-15:]
+        
+        # Check for sharp move against trend
+        if prices[-1] > prices[-5]:
+            # Sharp drop then strong recovery (induce sell)
+            if min(recent_prices) < prices[-10] * 0.998:
+                return True
+        else:
+            # Sharp rise then strong drop (induce buy)
+            if max(recent_prices) > prices[-10] * 1.002:
+                return True
+        
+        return False
+    
+    def generate_signal(self, analysis: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate Smart Money trading signal"""
+        try:
+            smc = analysis.get('smc', {})
+            institutional = analysis.get('institutional_activity', {})
+            liquidity_eng = analysis.get('liquidity_engineering', {})
+            order_flows = analysis.get('order_flows', [])
+            nn_prediction = analysis.get('neural_prediction', {})
+            
+            # Extract key data
+            market_structure = smc.get('market_structure', {})
+            premium_discount = smc.get('premium_discount', {})
+            manipulation_score = smc.get('manipulation_score', 0)
+            order_blocks = smc.get('order_blocks', [])
+            fvgs = smc.get('fair_value_gaps', [])
+            liquidity_pools = smc.get('liquidity_pools', {})
+            
+            # Initialize signal
+            signal = {
+                'action': 'neutral',
+                'confidence': 0,
+                'strength': 0,
+                'reasons': [],
+                'timestamp': datetime.now()
+            }
+            
+            # Check market structure
+            structure_type = market_structure.get('type', 'ranging')
+            trend = market_structure.get('trend', 'neutral')
+            
+            # Check for manipulation
+            if self.config.get('avoid_manipulation', True):
+                if manipulation_score > self.config.get('min_manipulation_score', 0.7):
+                    signal['reasons'].append('high_manipulation')
+                    return signal
+            
+            # Check institutional activity
+            if self.config.get('trade_with_institutional_flow', True):
+                buy_ratio = institutional.get('buy_ratio', 0.5)
+                if buy_ratio > 0.6:
+                    signal['reasons'].append('institutional_buying')
+                    signal['strength'] += 0.2
+                elif buy_ratio < 0.4:
+                    signal['reasons'].append('institutional_selling')
+                    signal['strength'] += 0.2
+            
+            # Check liquidity engineering
+            if liquidity_eng.get('engineered_move', False):
+                if liquidity_eng.get('liquidity_grab'):
+                    signal['reasons'].append('liquidity_grab_detected')
+                    signal['strength'] += 0.15
+                if liquidity_eng.get('stop_hunt'):
+                    signal['reasons'].append('stop_hunt_detected')
+                    signal['strength'] += 0.15
+            
+            # Check order blocks
+            relevant_blocks = [ob for ob in order_blocks if ob.get('strength', 0) >= self.config.get('min_order_block_strength', 0.6)]
+            
+            bullish_blocks = [ob for ob in relevant_blocks if ob['type'] == 'bullish']
+            bearish_blocks = [ob for ob in relevant_blocks if ob['type'] == 'bearish']
+            
+            # Determine direction based on Smart Money concepts
+            if structure_type == 'bullish' and trend == 'up':
+                if bullish_blocks or fvgs:
+                    signal['action'] = 'long'
+                    signal['confidence'] += 0.3
+                    signal['strength'] += 0.3
+                    signal['reasons'].append('bullish_structure')
+            
+            elif structure_type == 'bearish' and trend == 'down':
+                if bearish_blocks or fvgs:
+                    signal['action'] = 'short'
+                    signal['confidence'] += 0.3
+                    signal['strength'] += 0.3
+                    signal['reasons'].append('bearish_structure')
+            
+            # Check premium/discount zones
+            if premium_discount:
+                current_zone = premium_discount.get('current_zone', 'neutral')
+                current_price = premium_discount.get('current_price', 0)
+                equilibrium = premium_discount.get('equilibrium', 0)
+                
+                if signal['action'] == 'long' and current_zone == 'discount':
+                    signal['confidence'] += 0.2
+                    signal['strength'] += 0.2
+                    signal['reasons'].append('discount_zone_entry')
+                
+                elif signal['action'] == 'short' and current_zone == 'premium':
+                    signal['confidence'] += 0.2
+                    signal['strength'] += 0.2
+                    signal['reasons'].append('premium_zone_entry')
+            
+            # Neural network confirmation
+            if nn_prediction:
+                nn_signal = nn_prediction.get('signal', 0)
+                nn_confidence = nn_prediction.get('confidence', 0)
+                
+                if (signal['action'] == 'long' and nn_signal == 1) or \
+                   (signal['action'] == 'short' and nn_signal == -1):
+                    signal['confidence'] += nn_confidence * 0.2
+                    signal['strength'] += 0.1
+                    signal['reasons'].append('neural_confirmation')
+            
+            # Normalize values
+            signal['confidence'] = min(1.0, signal['confidence'])
+            signal['strength'] = min(1.0, signal['strength'])
+            
+            # Final check
+            if signal['confidence'] < 0.6 or signal['strength'] < 0.5:
+                signal['action'] = 'neutral'
+                signal['reasons'].append('insufficient_confidence')
+            
+            return signal
+            
+        except Exception as e:
+            self.logger.error(f"Error in generate_signal: {e}")
+            return {'action': 'neutral', 'confidence': 0, 'strength': 0}
+    
+    def execute_strategy(self, market_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute Smart Money strategy"""
+        try:
+            with self.smc_lock:
+                # Analyze market
+                analysis = self.analyze_market(market_data)
+                
+                # Generate signal
+                signal = self.generate_signal(analysis)
+                
+                if signal['action'] == 'neutral':
+                    return {
+                        'action': 'hold',
+                        'reason': 'no_smart_money_signal',
+                        'analysis': analysis,
+                        'signal': signal
+                    }
+                
+                # Get current price
+                prices = market_data.get('prices', [])
+                if not prices:
+                    return {'action': 'hold', 'reason': 'no_price'}
+                
+                current_price = prices[-1]
+                
+                # Calculate position size
+                position_size = self._calculate_smc_position_size(
+                    current_price,
+                    signal['confidence']
+                )
+                
+                # Set stop loss and take profit based on Smart Money levels
+                stop_loss, take_profit = self._calculate_smc_levels(
+                    signal['action'],
+                    current_price,
+                    analysis
+                )
+                
+                # Open position
+                position = self.open_position(
+                    signal['action'],
+                    current_price,
+                    signal['confidence'],
+                    position_size
+                )
+                
+                if position:
+                    # Override stop loss and take profit
+                    position.stop_loss = stop_loss
+                    position.take_profit = take_profit
+                    
+                    # Record signal
+                    self.smc_signals.append({
+                        'time': datetime.now(),
+                        'action': signal['action'],
+                        'confidence': signal['confidence'],
+                        'reasons': signal['reasons'],
+                        'price': current_price
+                    })
+                    
+                    return {
+                        'action': 'buy' if signal['action'] == 'long' else 'sell',
+                        'reason': 'smart_money_signal',
+                        'analysis': analysis,
+                        'signal': signal,
+                        'position': position
+                    }
+                
+                return {
+                    'action': 'hold',
+                    'reason': 'position_not_opened',
+                    'signal': signal
+                }
+                
+        except Exception as e:
+            self.logger.error(f"Error in execute_strategy: {e}")
+            return {'action': 'hold', 'reason': 'error', 'error': str(e)}
+    
+    def _calculate_smc_position_size(self, price: float, confidence: float) -> float:
+        """Calculate position size for Smart Money trading"""
+        risk_per_trade = self.config.get('risk_per_trade', 0.02)
+        max_position_size = self.config.get('max_position_size', 0.15)
+        
+        # Base size
+        risk_amount = self.current_capital * risk_per_trade
+        
+        # Adjust for confidence
+        size_multiplier = 0.5 + confidence
+        
+        # Calculate position value
+        position_value = risk_amount * size_multiplier * 5  # 5x for SMC
+        position_size = position_value / price
+        
+        # Apply maximum
+        max_value = self.current_capital * max_position_size
+        max_size = max_value / price
+        
+        return min(position_size, max_size)
+    
+    def _calculate_smc_levels(self, action: str, current_price: float, analysis: Dict[str, Any]) -> Tuple[float, float]:
+        """Calculate stop loss and take profit based on SMC levels"""
+        smc = analysis.get('smc', {})
+        order_blocks = smc.get('order_blocks', [])
+        liquidity_pools = smc.get('liquidity_pools', {})
+        
+        if action == 'long':
+            # Stop loss below nearest demand/order block
+            bullish_blocks = [ob for ob in order_blocks if ob['type'] == 'bullish']
+            
+            if bullish_blocks:
+                stop_loss = min(ob['low'] for ob in bullish_blocks[:3])
+            else:
+                stop_loss = current_price * 0.99
+            
+            # Take profit at sell-side liquidity
+            sell_liquidity = liquidity_pools.get('sell', [])
+            
+            if sell_liquidity:
+                take_profit = min(sell_liquidity)
+            else:
+                take_profit = current_price * 1.03
+            
+        else:  # Short
+            # Stop loss above nearest supply/order block
+            bearish_blocks = [ob for ob in order_blocks if ob['type'] == 'bearish']
+            
+            if bearish_blocks:
+                stop_loss = max(ob['high'] for ob in bearish_blocks[:3])
+            else:
+                stop_loss = current_price * 1.01
+            
+            # Take profit at buy-side liquidity
+            buy_liquidity = liquidity_pools.get('buy', [])
+            
+            if buy_liquidity:
+                take_profit = max(buy_liquidity)
+            else:
+                take_profit = current_price * 0.97
+        
+        # Ensure minimum risk-reward
+        risk = abs(current_price - stop_loss)
+        reward = abs(take_profit - current_price)
+        
+        min_rr = self.config.get('risk_reward_min', 2.5)
+        
+        if reward / risk < min_rr if risk > 0 else False:
+            take_profit = current_price + (stop_loss - current_price) * min_rr if action == 'long' else current_price - (current_price - stop_loss) * min_rr
+        
+        return stop_loss, take_profit
+    
+    def _get_fallback_analysis(self) -> Dict[str, Any]:
+        """Get fallback analysis"""
+        return {
+            'smc': {},
+            'order_flows': [],
+            'neural_prediction': {},
+            'institutional_activity': {},
+            'liquidity_engineering': {},
+            'timestamp': datetime.now(),
+            'is_fallback': True
+        }
+    
+    def get_performance_metrics(self) -> Dict[str, Any]:
+        """Get enhanced performance metrics"""
+        metrics = super().get_performance_metrics()
+        
+        # Smart Money specific metrics
+        smc_metrics = {
+            'total_smc_signals': len(self.smc_signals),
+            'institutional_accuracy': np.mean(self.institutional_following_accuracy) if self.institutional_following_accuracy else 0,
+            'liquidity_grab_success': np.mean(self.liquidity_grab_success) if self.liquidity_grab_success else 0,
+            'manipulation_events_detected': len(self.manipulation_events),
+            'liquidity_grabs_detected': len(self.liquidity_grabs),
+            'avg_signal_confidence': np.mean([s['confidence'] for s in self.smc_signals]) if self.smc_signals else 0,
+            'smc_win_rate': np.mean(self.smc_win_rate) if self.smc_win_rate else 0
+        }
+        
+        metrics.update(smc_metrics)
+        return metrics
+    
+    def adaptive_optimization(self) -> None:
+        """Optimize Smart Money parameters"""
+        if len(self.closed_positions) < 10:
+            return
+        
+        # Calculate recent performance
+        recent_trades = self.closed_positions[-20:]
+        win_rate = sum(1 for t in recent_trades if t.realized_pnl > 0) / len(recent_trades)
+        
+        # Adjust parameters
+        if win_rate < 0.4:
+            self.config['min_order_block_strength'] = min(0.8, self.config['min_order_block_strength'] * 1.1)
+            self.config['risk_reward_min'] = min(3.0, self.config['risk_reward_min'] * 1.1)
+            self.logger.info("Adjusted SMC parameters for conservative trading")
+        elif win_rate > 0.6:
+            self.config['min_order_block_strength'] = max(0.5, self.config['min_order_block_strength'] * 0.95)
+            self.config['risk_reward_min'] = max(2.0, self.config['risk_reward_min'] * 0.95)
+            self.logger.info("Adjusted SMC parameters for aggressive trading")

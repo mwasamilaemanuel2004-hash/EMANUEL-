@@ -1,0 +1,421 @@
+"""
+ESH.TRADE - Portfolio Model
+ULTRA ADVANCED SINGLE FILE
+Forex + Crypto + Commodities - Separate Systems
+"""
+
+import uuid
+import hashlib
+import json
+import statistics
+import logging
+import threading
+from datetime import datetime, timedelta
+from typing import Optional, Dict, Any, List, Tuple
+from enum import Enum
+
+logger = logging.getLogger(__name__)
+
+
+# ============ ENUMS ============
+class PortfolioType(Enum):
+    FOREX = "forex"
+    CRYPTO = "crypto"
+    COMMODITIES = "commodities"
+    MIXED = "mixed"
+
+class ForexPair(Enum):
+    EURUSD = "EURUSD"
+    GBPUSD = "GBPUSD"
+    USDJPY = "USDJPY"
+    AUDUSD = "AUDUSD"
+    USDCAD = "USDCAD"
+    USDCHF = "USDCHF"
+    NZDUSD = "NZDUSD"
+    EURGBP = "EURGBP"
+    EURJPY = "EURJPY"
+    GBPJPY = "GBPJPY"
+
+class CryptoAsset(Enum):
+    BTC = "BTC"
+    ETH = "ETH"
+    BNB = "BNB"
+    XRP = "XRP"
+    ADA = "ADA"
+    SOL = "SOL"
+    DOGE = "DOGE"
+
+class CommodityContract(Enum):
+    XAUUSD = "XAUUSD"
+    XAGUSD = "XAGUSD"
+    WTI = "WTI"
+    BRENT = "BRENT"
+    NATGAS = "NATGAS"
+
+class LotSize(Enum):
+    MICRO = 0.01
+    MINI = 0.10
+    STANDARD = 1.0
+
+
+# ============ FOREX POSITION ============
+class ForexPosition:
+    """FOREX - Pip/Lot based"""
+    
+    def __init__(self, pair: ForexPair, lot_size: LotSize, entry_price: float, direction: str = "long"):
+        self.pair = pair
+        self.lot_size = lot_size.value
+        self.entry_price = entry_price
+        self.current_price = entry_price
+        self.direction = direction.lower()
+        self.units = lot_size.value * 100000
+        self.swap_rate = 0.0
+        self.commission = 0.0
+        self.pip_value = self._calculate_pip_value()
+        self._update_values()
+    
+    def _calculate_pip_value(self) -> float:
+        jpy_pairs = [ForexPair.USDJPY, ForexPair.EURJPY, ForexPair.GBPJPY]
+        if self.pair in jpy_pairs:
+            return (0.01 / self.entry_price) * self.units
+        return (0.0001 / self.entry_price) * self.units
+    
+    def _get_pip_size(self) -> float:
+        jpy_pairs = [ForexPair.USDJPY, ForexPair.EURJPY, ForexPair.GBPJPY]
+        return 0.01 if self.pair in jpy_pairs else 0.0001
+    
+    def _update_values(self):
+        if self.direction == "long":
+            self.pips = (self.current_price - self.entry_price) / self._get_pip_size()
+        else:
+            self.pips = (self.entry_price - self.current_price) / self._get_pip_size()
+        
+        self.unrealized_pnl = self.pips * self.pip_value
+        self.cost_basis = self.units * self.entry_price
+        self.current_value = self.units * self.current_price
+        self.unrealized_pnl_percent = (self.unrealized_pnl / self.cost_basis * 100) if self.cost_basis > 0 else 0
+    
+    def update_price(self, new_price: float):
+        self.current_price = new_price
+        self._update_values()
+    
+    def to_dict(self) -> Dict:
+        return {
+            'pair': self.pair.value,
+            'lot_size': self.lot_size,
+            'units': self.units,
+            'direction': self.direction,
+            'entry_price': self.entry_price,
+            'current_price': self.current_price,
+            'pips': round(self.pips, 2),
+            'pip_value': round(self.pip_value, 4),
+            'unrealized_pnl': round(self.unrealized_pnl, 2),
+            'pnl_percent': round(self.unrealized_pnl_percent, 2)
+        }
+
+
+# ============ CRYPTO POSITION ============
+class CryptoPosition:
+    """CRYPTO - Coin/Satoshi based"""
+    
+    def __init__(self, asset: CryptoAsset, quantity: float, entry_price: float, direction: str = "long"):
+        self.asset = asset
+        self.quantity = quantity
+        self.entry_price = entry_price
+        self.current_price = entry_price
+        self.direction = direction.lower()
+        self.satoshi_amount = quantity * 100000000
+        self.network_fee = 0.0
+        self._update_values()
+    
+    def _update_values(self):
+        self.cost_basis = self.quantity * self.entry_price
+        self.current_value = self.quantity * self.current_price
+        
+        if self.direction == "long":
+            self.unrealized_pnl = self.current_value - self.cost_basis
+        else:
+            self.unrealized_pnl = self.cost_basis - self.current_value
+        
+        self.unrealized_pnl_percent = (self.unrealized_pnl / self.cost_basis * 100) if self.cost_basis > 0 else 0
+    
+    def update_price(self, new_price: float):
+        self.current_price = new_price
+        self._update_values()
+    
+    def to_dict(self) -> Dict:
+        return {
+            'asset': self.asset.value,
+            'quantity': self.quantity,
+            'satoshi': self.satoshi_amount,
+            'direction': self.direction,
+            'entry_price': self.entry_price,
+            'current_price': self.current_price,
+            'unrealized_pnl': round(self.unrealized_pnl, 8),
+            'pnl_percent': round(self.unrealized_pnl_percent, 2)
+        }
+
+
+# ============ COMMODITY POSITION ============
+class CommodityPosition:
+    """COMMODITY - Contract based"""
+    
+    def __init__(self, contract: CommodityContract, contracts: float, entry_price: float, direction: str = "long"):
+        self.contract = contract
+        self.contracts = contracts
+        self.entry_price = entry_price
+        self.current_price = entry_price
+        self.direction = direction.lower()
+        self.contract_size = self._get_contract_size()
+        self.tick_size = self._get_tick_size()
+        self.tick_value = self.contract_size * self.tick_size
+        self.expiry_date = None
+        self.rollover_cost = 0.0
+        self._update_values()
+    
+    def _get_contract_size(self) -> float:
+        sizes = {
+            CommodityContract.XAUUSD: 100,
+            CommodityContract.XAGUSD: 5000,
+            CommodityContract.WTI: 1000,
+            CommodityContract.BRENT: 1000,
+            CommodityContract.NATGAS: 10000
+        }
+        return sizes.get(self.contract, 100)
+    
+    def _get_tick_size(self) -> float:
+        ticks = {
+            CommodityContract.XAUUSD: 0.1,
+            CommodityContract.XAGUSD: 0.01,
+            CommodityContract.WTI: 0.01,
+            CommodityContract.BRENT: 0.01,
+            CommodityContract.NATGAS: 0.001
+        }
+        return ticks.get(self.contract, 0.01)
+    
+    def _update_values(self):
+        self.total_units = self.contracts * self.contract_size
+        self.cost_basis = self.total_units * self.entry_price
+        self.current_value = self.total_units * self.current_price
+        
+        if self.direction == "long":
+            self.unrealized_pnl = self.current_value - self.cost_basis
+        else:
+            self.unrealized_pnl = self.cost_basis - self.current_value
+        
+        self.unrealized_pnl_percent = (self.unrealized_pnl / self.cost_basis * 100) if self.cost_basis > 0 else 0
+    
+    def update_price(self, new_price: float):
+        self.current_price = new_price
+        self._update_values()
+    
+    def to_dict(self) -> Dict:
+        return {
+            'contract': self.contract.value,
+            'contracts': self.contracts,
+            'contract_size': self.contract_size,
+            'total_units': self.total_units,
+            'direction': self.direction,
+            'entry_price': self.entry_price,
+            'current_price': self.current_price,
+            'tick_size': self.tick_size,
+            'unrealized_pnl': round(self.unrealized_pnl, 2),
+            'pnl_percent': round(self.unrealized_pnl_percent, 2)
+        }
+
+
+# ============ MAIN PORTFOLIO ============
+class Portfolio:
+    """ULTRA ADVANCED Portfolio - MIFUMO MITATU TOFAUTI"""
+    
+    def __init__(self, user_id: str):
+        if not user_id:
+            raise ValueError("user_id required")
+        
+        self.id = str(uuid.uuid4())
+        self.user_id = user_id
+        
+        # Separate stores
+        self.forex_positions: Dict[str, ForexPosition] = {}
+        self.crypto_positions: Dict[str, CryptoPosition] = {}
+        self.commodity_positions: Dict[str, CommodityPosition] = {}
+        
+        # Balance
+        self.available_balance: float = 0.0
+        self.total_balance: float = 0.0
+        self.initial_capital: float = 0.0
+        
+        # PnL
+        self.total_pnl: float = 0.0
+        self.realized_pnl: float = 0.0
+        self.unrealized_pnl: float = 0.0
+        
+        # Timestamps
+        self.created_at = datetime.utcnow()
+        self.updated_at = datetime.utcnow()
+        
+        self._lock = threading.RLock()
+    
+    # FOREX
+    def add_forex(self, pair: ForexPair, lot: LotSize, price: float, direction: str = "long") -> Optional[ForexPosition]:
+        try:
+            with self._lock:
+                key = f"{pair.value}_{direction}"
+                pos = ForexPosition(pair, lot, price, direction)
+                self.forex_positions[key] = pos
+                self._update_totals()
+                return pos
+        except Exception as e:
+            logger.error(f"Add forex error: {e}")
+            return None
+    
+    def update_forex_price(self, pair: ForexPair, price: float, direction: str = "long") -> bool:
+        key = f"{pair.value}_{direction}"
+        with self._lock:
+            if key in self.forex_positions:
+                self.forex_positions[key].update_price(price)
+                self._update_totals()
+                return True
+        return False
+    
+    # CRYPTO
+    def add_crypto(self, asset: CryptoAsset, qty: float, price: float, direction: str = "long") -> Optional[CryptoPosition]:
+        try:
+            with self._lock:
+                key = f"{asset.value}_{direction}"
+                pos = CryptoPosition(asset, qty, price, direction)
+                self.crypto_positions[key] = pos
+                self._update_totals()
+                return pos
+        except Exception as e:
+            logger.error(f"Add crypto error: {e}")
+            return None
+    
+    def update_crypto_price(self, asset: CryptoAsset, price: float, direction: str = "long") -> bool:
+        key = f"{asset.value}_{direction}"
+        with self._lock:
+            if key in self.crypto_positions:
+                self.crypto_positions[key].update_price(price)
+                self._update_totals()
+                return True
+        return False
+    
+    # COMMODITY
+    def add_commodity(self, contract: CommodityContract, contracts: float, price: float, direction: str = "long") -> Optional[CommodityPosition]:
+        try:
+            with self._lock:
+                key = f"{contract.value}_{direction}"
+                pos = CommodityPosition(contract, contracts, price, direction)
+                self.commodity_positions[key] = pos
+                self._update_totals()
+                return pos
+        except Exception as e:
+            logger.error(f"Add commodity error: {e}")
+            return None
+    
+    def update_commodity_price(self, contract: CommodityContract, price: float, direction: str = "long") -> bool:
+        key = f"{contract.value}_{direction}"
+        with self._lock:
+            if key in self.commodity_positions:
+                self.commodity_positions[key].update_price(price)
+                self._update_totals()
+                return True
+        return False
+    
+    # BALANCE
+    def deposit(self, amount: float) -> bool:
+        if amount <= 0:
+            return False
+        with self._lock:
+            self.available_balance += amount
+            self.initial_capital += amount
+            self._update_totals()
+            return True
+    
+    def withdraw(self, amount: float) -> bool:
+        if amount <= 0 or amount > self.available_balance:
+            return False
+        with self._lock:
+            self.available_balance -= amount
+            self._update_totals()
+            return True
+    
+    # TOTALS
+    def _update_totals(self):
+        try:
+            forex_value = sum(p.current_value for p in self.forex_positions.values())
+            crypto_value = sum(p.current_value for p in self.crypto_positions.values())
+            commodity_value = sum(p.current_value for p in self.commodity_positions.values())
+            
+            forex_pnl = sum(p.unrealized_pnl for p in self.forex_positions.values())
+            crypto_pnl = sum(p.unrealized_pnl for p in self.crypto_positions.values())
+            commodity_pnl = sum(p.unrealized_pnl for p in self.commodity_positions.values())
+            
+            self.unrealized_pnl = forex_pnl + crypto_pnl + commodity_pnl
+            self.total_balance = self.available_balance + forex_value + crypto_value + commodity_value
+            self.total_pnl = self.realized_pnl + self.unrealized_pnl
+            self.updated_at = datetime.utcnow()
+        except Exception as e:
+            logger.error(f"Update totals error: {e}")
+    
+    # SUMMARY
+    def get_summary(self) -> Dict:
+        return {
+            'forex': {
+                'count': len(self.forex_positions),
+                'value': sum(p.current_value for p in self.forex_positions.values()),
+                'pnl': sum(p.unrealized_pnl for p in self.forex_positions.values()),
+                'positions': [p.to_dict() for p in self.forex_positions.values()]
+            },
+            'crypto': {
+                'count': len(self.crypto_positions),
+                'value': sum(p.current_value for p in self.crypto_positions.values()),
+                'pnl': sum(p.unrealized_pnl for p in self.crypto_positions.values()),
+                'positions': [p.to_dict() for p in self.crypto_positions.values()]
+            },
+            'commodities': {
+                'count': len(self.commodity_positions),
+                'value': sum(p.current_value for p in self.commodity_positions.values()),
+                'pnl': sum(p.unrealized_pnl for p in self.commodity_positions.values()),
+                'positions': [p.to_dict() for p in self.commodity_positions.values()]
+            },
+            'totals': {
+                'available_balance': self.available_balance,
+                'total_balance': self.total_balance,
+                'total_pnl': self.total_pnl,
+                'unrealized_pnl': self.unrealized_pnl,
+                'realized_pnl': self.realized_pnl
+            }
+        }
+    
+    def to_dict(self) -> Dict:
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'summary': self.get_summary(),
+            'created_at': self.created_at.isoformat(),
+            'updated_at': self.updated_at.isoformat()
+        }
+
+
+# ============ MANAGER ============
+class PortfolioManager:
+    def __init__(self):
+        self.portfolios: Dict[str, Portfolio] = {}
+        self._lock = threading.RLock()
+    
+    def create_portfolio(self, user_id: str) -> Optional[Portfolio]:
+        with self._lock:
+            if user_id in self.portfolios:
+                return self.portfolios[user_id]
+            portfolio = Portfolio(user_id)
+            self.portfolios[user_id] = portfolio
+            return portfolio
+    
+    def get_portfolio(self, user_id: str) -> Optional[Portfolio]:
+        with self._lock:
+            return self.portfolios.get(user_id)
+
+
+# Global
+portfolio_manager = PortfolioManager()

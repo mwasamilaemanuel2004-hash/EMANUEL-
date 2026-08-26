@@ -1,0 +1,130 @@
+# backend/app/models/settings.py
+"""
+USER SETTINGS MODEL - ULTRA PERFECT
+"""
+
+from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, Text, JSON
+from sqlalchemy import func
+from sqlalchemy.orm import relationship
+from .base import BaseModel
+from ..database import Base
+
+class UserSettings(Base, BaseModel):
+    __tablename__ = "user_settings"
+    
+    # ============================================
+    # RELATIONSHIPS
+    # ============================================
+    user_id = Column(Integer, unique=True, nullable=False, index=True)
+    user = relationship("User", back_populates="settings", foreign_keys=[user_id])
+    
+    # ============================================
+    # RISK SETTINGS
+    # ============================================
+    risk_per_trade = Column(Float, default=1.5)
+    max_daily_loss = Column(Float, default=5.0)
+    max_weekly_loss = Column(Float, default=10.0)
+    max_monthly_loss = Column(Float, default=20.0)
+    max_position_size = Column(Float, default=5000)
+    min_position_size = Column(Float, default=10)
+    max_concurrent_trades = Column(Integer, default=5)
+    max_drawdown = Column(Float, default=15.0)
+    
+    # ============================================
+    # TP/SL SETTINGS
+    # ============================================
+    take_profit = Column(Float, default=2.0)
+    stop_loss = Column(Float, default=0.8)
+    risk_reward_ratio = Column(Float, default=2.5)
+    
+    # ============================================
+    # BOT SETTINGS
+    # ============================================
+    active_bots = Column(Text, default="all")
+    selected_pairs = Column(Text, default="BTC/USDT,ETH/USDT,EURUSD,XAUUSD,USOIL")
+    timeframes = Column(Text, default="15m,1h,4h")
+    bot_mode = Column(String(20), default="auto")  # auto, manual, hybrid
+    
+    # ============================================
+    # TRADING MODE
+    # ============================================
+    trading_mode = Column(String(20), default="auto")
+    is_paused = Column(Boolean, default=False)
+    is_paper_trading = Column(Boolean, default=False)
+    is_pro_trading = Column(Boolean, default=False)
+    
+    # ============================================
+    # NOTIFICATIONS
+    # ============================================
+    enable_telegram = Column(Boolean, default=False)
+    enable_email = Column(Boolean, default=False)
+    enable_push = Column(Boolean, default=False)
+    enable_sound = Column(Boolean, default=True)
+    enable_sms = Column(Boolean, default=False)
+    
+    # ============================================
+    # DISPLAY SETTINGS
+    # ============================================
+    theme = Column(String(50), default="plum-lavender")
+    chart_style = Column(String(50), default="dark")
+    language = Column(String(10), default="en")
+    timezone = Column(String(50), default="UTC")
+    
+    # ============================================
+    # API SETTINGS
+    # ============================================
+    api_rate_limit = Column(Integer, default=100)
+    api_timeout = Column(Integer, default=30)
+    
+    # ============================================
+    # SECURITY SETTINGS
+    # ============================================
+    require_2fa = Column(Boolean, default=False)
+    session_timeout = Column(Integer, default=3600)
+    
+    # ============================================
+    # METHODS
+    # ============================================
+    
+    def __repr__(self):
+        return f"<UserSettings(user_id={self.user_id})>"
+    
+    def to_dict(self):
+        return {
+            "user_id": self.user_id,
+            "risk_per_trade": self.risk_per_trade,
+            "max_daily_loss": self.max_daily_loss,
+            "max_weekly_loss": self.max_weekly_loss,
+            "max_monthly_loss": self.max_monthly_loss,
+            "max_position_size": self.max_position_size,
+            "min_position_size": self.min_position_size,
+            "max_concurrent_trades": self.max_concurrent_trades,
+            "max_drawdown": self.max_drawdown,
+            "take_profit": self.take_profit,
+            "stop_loss": self.stop_loss,
+            "risk_reward_ratio": self.risk_reward_ratio,
+            "active_bots": self.active_bots,
+            "selected_pairs": self.selected_pairs.split(",") if self.selected_pairs else [],
+            "timeframes": self.timeframes.split(",") if self.timeframes else [],
+            "bot_mode": self.bot_mode,
+            "trading_mode": self.trading_mode,
+            "is_paused": self.is_paused,
+            "is_paper_trading": self.is_paper_trading,
+            "is_pro_trading": self.is_pro_trading,
+            "enable_telegram": self.enable_telegram,
+            "enable_email": self.enable_email,
+            "enable_push": self.enable_push,
+            "enable_sound": self.enable_sound,
+            "enable_sms": self.enable_sms,
+            "theme": self.theme,
+            "chart_style": self.chart_style,
+            "language": self.language,
+            "timezone": self.timezone,
+            "api_rate_limit": self.api_rate_limit,
+            "api_timeout": self.api_timeout,
+            "require_2fa": self.require_2fa,
+            "session_timeout": self.session_timeout,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "version": self.version
+        }

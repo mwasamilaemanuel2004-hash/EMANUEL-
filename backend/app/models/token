@@ -1,0 +1,348 @@
+"""
+ESH.TRADE - Token Model
+ULTRA ADVANCED EDITION
+Complete Token Management System
+"""
+
+import uuid
+import hashlib
+import hmac
+import base64
+import secrets
+import time
+import struct
+from datetime import datetime, timedelta
+from typing import Optional, Dict, Any, List, Tuple
+from enum import Enum
+import logging
+import threading
+
+logger = logging.getLogger(__name__)
+
+
+class TokenType(Enum):
+    """Token types"""
+    ACCESS = "access"
+    REFRESH = "refresh"
+    API_KEY = "api_key"
+    API_SECRET = "api_secret"
+    SESSION = "session"
+    VERIFICATION = "verification"
+    PASSWORD_RESET = "password_reset"
+    EMAIL_VERIFICATION = "email_verification"
+    TOTP = "totp"
+    BACKUP = "backup"
+    WEBHOOK = "webhook"
+
+
+class TokenStatus(Enum):
+    """Token status"""
+    ACTIVE = "active"
+    EXPIRED = "expired"
+    REVOKED = "revoked"
+    USED = "used"
+    INACTIVE = "inactive"
+
+
+class Token:
+    """ULTRA ADVANCED Token Model"""
+    
+    def __init__(self, 
+                 user_id: str,
+                 token_type: TokenType = TokenType.ACCESS,
+                 expires_in: int = 3600):
+        
+        # Basic
+        self.id = str(uuid.uuid4())
+        self.user_id = user_id
+        self.token_type = token_type
+        self.status = TokenStatus.ACTIVE
+        
+        # Token
+        self.token = self._generate_token()
+        self.token_hash = self._hash_token(self.token)
+        
+        # Expiry
+        self.created_at = datetime.utcnow()
+        self.expires_at = self.created_at + timedelta(seconds=expires_in)
+        self.last_used_at: Optional[datetime] = None
+        
+        # Usage
+        self.use_count: int = 0
+        self.max_uses: Optional[int] = None
+        
+        # Metadata
+        self.ip_address: Optional[str] = None
+        self.user_agent: Optional[str] = None
+        self.device_info: Optional[str] = None
+        
+        # Thread safety
+        self._lock = threading.RLock()
+    
+    def _generate_token(self) -> str:
+        """Generate secure token"""
+        if self.token_type == TokenType.API_KEY:
+            return secrets.token_urlsafe(32)
+        elif self.token_type == TokenType.API_SECRET:
+            return secrets.token_urlsafe(64)
+        elif self.token_type == TokenType.TOTP:
+            return base64.b32encode(secrets.token_bytes(20)).decode().rstrip('=')
+        elif self.token_type == TokenType.BACKUP:
+            return '-'.join([secrets.token_hex(2).upper() for _ in range(3)])
+        else:
+            return secrets.token_urlsafe(48)
+    
+    @staticmethod
+    def _hash_token(token: str) -> str:
+        """Hash token with SHA256"""
+        return hashlib.sha256(token.encode()).hexdigest()
+    
+    def verify(self, token: str) -> bool:
+        """Verify token"""
+        try:
+            with self._lock:
+                if self.status != TokenStatus.ACTIVE:
+                    return False
+                
+                if self.is_expired():
+                    self.status = TokenStatus.EXPIRED
+                    return False
+                
+                if self.max_uses and self.use_count >= self.max_uses:
+                    self.status = TokenStatus.USED
+                    return False
+                
+                token_hash = self._hash_token(token)
+                valid = secrets.compare_digest(token_hash, self.token_hash)
+                
+                if valid:
+                    self.use_count += 1
+                    self.last_used_at = datetime.utcnow()
+                
+                return valid
+                
+        except Exception as e:
+            logger.error(f"Error verifying token: {e}")
+            return False
+    
+    def is_expired(self) -> bool:
+        """Check if token is expired"""
+        return datetime.utcnow() > self.expires_at
+    
+    def is_active(self) -> bool:
+        """Check if token is active"""
+        return self.status == TokenStatus.ACTIVE and not self.is_expired()
+    
+    def revoke(self) -> bool:
+        """Revoke token"""
+        try:
+            with self._lock:
+                self.status = TokenStatus.REVOKED
+                return True
+        except Exception as e:
+            logger.error(f"Error revoking token: {e}")
+            return False
+    
+    def extend(self, seconds: int) -> bool:
+        """Extend token expiry"""
+        try:
+            with self._lock:
+                if self.status != TokenStatus.ACTIVE:
+                    return False
+                self.expires_at = datetime.utcnow() + timedelta(seconds=seconds)
+                return True
+        except Exception as e:
+            logger.error(f"Error extending token: {e}")
+            return False
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary"""
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'token_type': self.token_type.value,
+            'status': self.status.value,
+            'created_at': self.created_at.isoformat(),
+            'expires_at': self.expires_at.isoformat(),
+            'last_used_at': self.last_used_at.isoformat() if self.last_used_at else None,
+            'use_count': self.use_count,
+            'is_expired': self.is_expired()
+        }
+    
+    def __repr__(self) -> str:
+        return f"<Token {self.token_type.value} status={self.status.value}>"
+
+
+class AccessToken(Token):
+    """Access Token - Short lived"""
+    
+    def __init__(self, user_id: str, expires_in: int = 1800):
+        super().__init__(user_id, TokenType.ACCESS, expires_in)
+        self.max_uses = 1000
+
+
+class RefreshToken(Token):
+    """Refresh Token - Long lived"""
+    
+    def __init__(self, user_id: str, expires_in: int = 604800):
+        super().__init__(user_id, TokenType.REFRESH, expires_in)
+        self.max_uses = 1
+
+
+class APIKey(Token):
+    """API Key"""
+    
+    def __init__(self, user_id: str, expires_in: int = 31536000):
+        super().__init__(user_id, TokenType.API_KEY, expires_in)
+        self.api_secret = secrets.token_urlsafe(64)
+        self.api_secret_hash = self._hash_token(self.api_secret)
+
+
+class TOTPToken(Token):
+    """TOTP Token"""
+    
+    def __init__(self, user_id: str, secret: str = None):
+        super().__init__(user_id, TokenType.TOTP, 0)
+        self.secret = secret or self.token
+        self.interval = 30
+        self.digits = 6
+    
+    def generate_code(self) -> str:
+        """Generate current TOTP code"""
+        try:
+            padding = '=' * ((8 - len(self.secret) % 8) % 8)
+            key = base64.b32decode(self.secret + padding)
+            counter = int(time.time() // self.interval)
+            msg = struct.pack('>Q', counter)
+            digest = hmac.new(key, msg, hashlib.sha1).digest()
+            offset = digest[-1] & 0x0F
+            code = struct.unpack('>I', digest[offset:offset+4])[0] & 0x7FFFFFFF
+            return str(code % (10 ** self.digits)).zfill(self.digits)
+        except:
+            return ''.join([str(secrets.randbelow(10)) for _ in range(self.digits)])
+    
+    def verify_code(self, user_code: str) -> bool:
+        """Verify TOTP code"""
+        try:
+            padding = '=' * ((8 - len(self.secret) % 8) % 8)
+            key = base64.b32decode(self.secret + padding)
+            current = int(time.time() // self.interval)
+            
+            for offset in [-1, 0, 1]:
+                counter = current + offset
+                msg = struct.pack('>Q', counter)
+                digest = hmac.new(key, msg, hashlib.sha1).digest()
+                off = digest[-1] & 0x0F
+                val = struct.unpack('>I', digest[off:off+4])[0] & 0x7FFFFFFF
+                expected = str(val % (10 ** self.digits)).zfill(self.digits)
+                if hmac.compare_digest(expected, user_code):
+                    return True
+            return False
+        except:
+            return False
+
+
+class TokenManager:
+    """ULTRA ADVANCED Token Manager"""
+    
+    def __init__(self):
+        self.tokens: Dict[str, Token] = {}
+        self._lock = threading.RLock()
+    
+    def create_token(self, user_id: str, token_type: TokenType, 
+                    expires_in: int = 3600) -> Token:
+        """Create token"""
+        with self._lock:
+            token = Token(user_id, token_type, expires_in)
+            self.tokens[token.id] = token
+            return token
+    
+    def create_access_token(self, user_id: str) -> AccessToken:
+        """Create access token"""
+        token = AccessToken(user_id)
+        with self._lock:
+            self.tokens[token.id] = token
+        return token
+    
+    def create_refresh_token(self, user_id: str) -> RefreshToken:
+        """Create refresh token"""
+        token = RefreshToken(user_id)
+        with self._lock:
+            self.tokens[token.id] = token
+        return token
+    
+    def create_api_key(self, user_id: str) -> APIKey:
+        """Create API key"""
+        token = APIKey(user_id)
+        with self._lock:
+            self.tokens[token.id] = token
+        return token
+    
+    def create_totp_token(self, user_id: str) -> TOTPToken:
+        """Create TOTP token"""
+        token = TOTPToken(user_id)
+        with self._lock:
+            self.tokens[token.id] = token
+        return token
+    
+    def verify_token(self, token_string: str) -> Optional[Token]:
+        """Verify token"""
+        token_hash = Token._hash_token(token_string)
+        
+        with self._lock:
+            for token in self.tokens.values():
+                if token.token_hash == token_hash:
+                    if token.verify(token_string):
+                        return token
+                    return None
+        return None
+    
+    def revoke_token(self, token_id: str) -> bool:
+        """Revoke token"""
+        with self._lock:
+            if token_id in self.tokens:
+                return self.tokens[token_id].revoke()
+        return False
+    
+    def revoke_all_user_tokens(self, user_id: str) -> int:
+        """Revoke all tokens for user"""
+        count = 0
+        with self._lock:
+            for token in self.tokens.values():
+                if token.user_id == user_id and token.is_active():
+                    token.revoke()
+                    count += 1
+        return count
+    
+    def cleanup(self) -> int:
+        """Cleanup expired tokens"""
+        count = 0
+        with self._lock:
+            expired = [
+                token_id for token_id, token in self.tokens.items()
+                if token.is_expired()
+            ]
+            for token_id in expired:
+                del self.tokens[token_id]
+                count += 1
+        return count
+    
+    def get_user_tokens(self, user_id: str) -> List[Token]:
+        """Get user tokens"""
+        with self._lock:
+            return [t for t in self.tokens.values() if t.user_id == user_id]
+    
+    def get_active_tokens(self) -> List[Token]:
+        """Get active tokens"""
+        with self._lock:
+            return [t for t in self.tokens.values() if t.is_active()]
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """Get token statistics"""
+        with self._lock:
+            return {
+                'total_tokens': len(self.tokens),
+                'active_tokens': len(self.get_active_tokens()),
+                'expired_tokens': sum(1 for t in self.tokens.values() if t.is_expired()),
+                'revoked_tokens': sum(1 for t in self.tokens.values() if t.status == TokenStatus.REVOKED)
+            }

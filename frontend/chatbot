@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b1a2e" />
+    <title>ESH TRADE · AI Chatbot</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800;14..32,900&display=swap" rel="stylesheet" />
+    <style>
+        /* ================================================================
+           RESET & BASE
+           ================================================================ */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #f0f7ff;
+            min-height: 100vh;
+            transition: background 0.4s;
+            -webkit-font-smoothing: antialiased;
+            overflow-x: hidden;
+        }
+
+        /* ================================================================
+           THEMES (6) - COMPLETE
+           ================================================================ */
+        body {
+            --bg-body: #f0f7ff; --bg-card: #ffffff; --bg-sidebar: #0b1a2e;
+            --text-primary: #0b1a2e; --text-secondary: #475569; --text-sidebar: #94a3b8;
+            --border: #dbeafe; --accent: #2563eb; --accent-light: #dbeafe; --accent-hover: #1d4ed8;
+            --shadow: 0 4px 24px rgba(37,99,235,0.08); --shadow-hover: 0 8px 32px rgba(37,99,235,0.15);
+            --positive: #22c55e; --negative: #ef4444; --warning: #f59e0b;
+            --badge-bg: #dbeafe; --badge-text: #1e3a8a;
+            --gradient-start: #2563eb; --gradient-end: #0b1a2e;
+            --chat-bg: #f8fafc; --bubble-user: #2563eb; --bubble-ai: #ffffff;
+            --scrollbar-track: #f1f5f9; --scrollbar-thumb: #cbd5e1;
+        }
+
+        body.theme-charcoal {
+            --bg-body: #eef0f2; --bg-card: #ffffff; --bg-sidebar: #1a1d23;
+            --text-primary: #1a1d23; --text-secondary: #4b5563; --text-sidebar: #9ca3af;
+            --border: #d1d5db; --accent: #84cc16; --accent-light: #e5f4d0; --accent-hover: #65a30d;
+            --shadow: 0 4px 24px rgba(132,204,22,0.08); --badge-bg: #e5f4d0; --badge-text: #3f6212;
+            --gradient-start: #84cc16; --gradient-end: #1a1d23;
+            --bubble-user: #84cc16; --scrollbar-thumb: #d1d5db;
+        }
+
+        body.theme-emerald {
+            --bg-body: #ecfdf5; --bg-card: #ffffff; --bg-sidebar: #064e3b;
+            --text-primary: #064e3b; --text-secondary: #065f46; --text-sidebar: #6ee7b7;
+            --border: #a7f3d0; --accent: #059669; --accent-light: #d1fae5; --accent-hover: #047857;
+            --shadow: 0 4px 24px rgba(5,150,105,0.08); --badge-bg: #d1fae5; --badge-text: #065f46;
+            --gradient-start: #059669; --gradient-end: #064e3b;
+            --bubble-user: #059669; --scrollbar-thumb: #a7f3d0;
+        }
+
+        body.theme-teal {
+            --bg-body: #f0fdfa; --bg-card: #ffffff; --bg-sidebar: #0f3b3b;
+            --text-primary: #0f3b3b; --text-secondary: #115e59; --text-sidebar: #5eead4;
+            --border: #99f6e4; --accent: #0d9488; --accent-light: #ccfbf1; --accent-hover: #0f766e;
+            --shadow: 0 4px 24px rgba(13,148,136,0.08); --badge-bg: #ccfbf1; --badge-text: #115e59;
+            --positive: #f97316; --gradient-start: #0d9488; --gradient-end: #0f3b3b;
+            --bubble-user: #0d9488; --scrollbar-thumb: #99f6e4;
+        }
+
+        body.theme-plum {
+            --bg-body: #faf5ff; --bg-card: #ffffff; --bg-sidebar: #3b1f4a;
+            --text-primary: #3b1f4a; --text-secondary: #5b21b6; --text-sidebar: #c4b5d4;
+            --border: #e9d5ff; --accent: #8b5cf6; --accent-light: #ede9fe; --accent-hover: #7c3aed;
+            --shadow: 0 4px 24px rgba(139,92,246,0.08); --badge-bg: #ede9fe; --badge-text: #5b21b6;
+            --gradient-start: #8b5cf6; --gradient-end: #3b1f4a;
+            --bubble-user: #8b5cf6; --scrollbar-thumb: #e9d5ff;
+        }
+
+        body.theme-terracotta {
+            --bg-body: #fef6f0; --bg-card: #ffffff; --bg-sidebar: #4a2818;
+            --text-primary: #4a2818; --text-secondary: #7c2d12; --text-sidebar: #fbbf8d;
+            --border: #fed7aa; --accent: #c2410c; --accent-light: #fee2d6; --accent-hover: #9a3412;
+            --shadow: 0 4px 24px rgba(194,65,12,0.08); --badge-bg: #fee2d6; --badge-text: #7c2d12;
+            --gradient-start: #c2410c; --gradient-end: #4a2818;
+            --bubble-user: #c2410c; --scrollbar-thumb: #fed7aa;
+        }
+
+        /* ================================================================
+           LAYOUT
+           ================================================================ */
+        .layout { display: flex; min-height: 100vh; }
+
+        /* ================================================================
+           SIDEBAR
+           ================================================================ */
+        .sidebar {
+            width: 260px; background: var(--bg-sidebar);
+            position: fixed; top: 0; left: 0; bottom: 0;
+            display: flex; flex-direction: column; padding: 1.5rem 1rem; gap: 1.5rem;
+            z-index: 100; transition: transform 0.3s, background 0.4s;
+            overflow-y: auto;
+        }
+        .sidebar::-webkit-scrollbar { width: 4px; }
+        .sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+        .sidebar-brand {
+            display: flex; align-items: center; gap: 0.6rem;
+            color: #fff; font-size: 1.3rem; font-weight: 800;
+            padding: 0 0.5rem 1rem; border-bottom: 1px solid rgba(255,255,255,0.08);
+            text-decoration: none; flex-shrink: 0;
+        }
+        .sidebar-brand i { color: var(--accent); font-size: 1.5rem; }
+        .sidebar-brand span {
+            background: linear-gradient(135deg, #fff 60%, var(--accent));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .sidebar-nav { display: flex; flex-direction: column; gap: 0.2rem; flex: 1; }
+        .nav-label {
+            font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.1em;
+            color: var(--text-sidebar); opacity: 0.4;
+            padding: 0.8rem 0.8rem 0.3rem; font-weight: 600;
+        }
+        .sidebar-nav a {
+            display: flex; align-items: center; gap: 0.8rem;
+            padding: 0.7rem 0.8rem; border-radius: 12px;
+            color: var(--text-sidebar); text-decoration: none;
+            font-size: 0.85rem; font-weight: 500; cursor: pointer;
+            transition: all 0.25s; position: relative;
+        }
+        .sidebar-nav a:hover { background: rgba(255,255,255,0.06); color: #fff; transform: translateX(4px); }
+        .sidebar-nav a.active { background: var(--accent); color: #fff; box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
+        .sidebar-nav a i { width: 20px; text-align: center; }
+
+        .sidebar-footer {
+            padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.08);
+            display: flex; flex-direction: column; gap: 0.2rem; flex-shrink: 0;
+        }
+        .sidebar-footer a {
+            display: flex; align-items: center; gap: 0.8rem;
+            padding: 0.6rem 0.8rem; border-radius: 12px;
+            color: var(--text-sidebar); text-decoration: none;
+            font-size: 0.8rem; cursor: pointer; transition: all 0.25s;
+        }
+        .sidebar-footer a:hover { background: rgba(255,255,255,0.06); color: #fff; }
+
+        .sidebar-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.5); z-index: 95; backdrop-filter: blur(4px);
+        }
+        .sidebar-overlay.active { display: block; }
+
+        /* ================================================================
+           MAIN
+           ================================================================ */
+        .main { flex: 1; margin-left: 260px; padding: 1rem 1.5rem; transition: margin 0.3s; }
+
+        /* ================================================================
+           HEADER
+           ================================================================ */
+        .header {
+            display: flex; align-items: center; justify-content: space-between;
+            flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;
+        }
+        .header-left { display: flex; align-items: center; gap: 0.8rem; }
+        .header h1 { font-size: 1.5rem; font-weight: 800; color: var(--text-primary); }
+        .header h1 i { color: var(--accent); }
+        .header-right { display: flex; gap: 0.3rem; align-items: center; }
+
+        .mobile-toggle {
+            display: none; background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 10px; padding: 0.5rem; cursor: pointer; font-size: 1.2rem;
+            color: var(--text-primary); transition: all 0.25s;
+        }
+        .mobile-toggle:hover { background: var(--accent); color: #fff; }
+
+        .theme-btn {
+            width: 24px; height: 24px; border-radius: 50%;
+            border: 2px solid transparent; cursor: pointer; transition: all 0.25s;
+        }
+        .theme-btn:hover { transform: scale(1.2); }
+        .theme-btn.active { border-color: #fff; box-shadow: 0 0 0 2px var(--accent); }
+        .theme-btn[data-theme="navy"] { background: linear-gradient(135deg, #0b1a2e 50%, #2563eb 50%); }
+        .theme-btn[data-theme="charcoal"] { background: linear-gradient(135deg, #1a1d23 50%, #84cc16 50%); }
+        .theme-btn[data-theme="emerald"] { background: linear-gradient(135deg, #064e3b 50%, #059669 50%); }
+        .theme-btn[data-theme="teal"] { background: linear-gradient(135deg, #0f3b3b 50%, #0d9488 50%); }
+        .theme-btn[data-theme="plum"] { background: linear-gradient(135deg, #3b1f4a 50%, #8b5cf6 50%); }
+        .theme-btn[data-theme="terracotta"] { background: linear-gradient(135deg, #4a2818 50%, #c2410c 50%); }
+
+        /* ================================================================
+           CHAT CONTAINER
+           ================================================================ */
+        .chat-container {
+            display: flex; flex-direction: column;
+            height: calc(100vh - 130px); min-height: 500px;
+            background: var(--bg-card); border-radius: 20px;
+            border: 1px solid var(--border); box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+
+        .chat-header {
+            background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+            padding: 1rem 1.5rem; display: flex; align-items: center; gap: 0.8rem;
+            flex-shrink: 0;
+        }
+        .chat-avatar {
+            width: 45px; height: 45px; border-radius: 50%;
+            background: rgba(255,255,255,0.2); color: #fff;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.3rem; border: 2px solid rgba(255,255,255,0.3);
+            position: relative; flex-shrink: 0;
+        }
+        .online-dot {
+            position: absolute; bottom: 0; right: 0;
+            width: 10px; height: 10px; background: var(--positive);
+            border-radius: 50%; border: 2px solid #fff;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.3); }
+        }
+        .chat-info .name { color: #fff; font-weight: 700; font-size: 0.95rem; }
+        .chat-info .status { color: rgba(255,255,255,0.7); font-size: 0.7rem; }
+
+        /* ================================================================
+           MESSAGES
+           ================================================================ */
+        .chat-messages {
+            flex: 1; overflow-y: auto; padding: 1.5rem;
+            display: flex; flex-direction: column; gap: 1rem;
+            background: var(--chat-bg);
+            scroll-behavior: smooth;
+        }
+        .chat-messages::-webkit-scrollbar { width: 6px; }
+        .chat-messages::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+        .chat-messages::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
+
+        .message {
+            max-width: 75%; padding: 0.75rem 1rem; border-radius: 16px;
+            font-size: 0.85rem; line-height: 1.5;
+            animation: messageIn 0.3s ease;
+            word-wrap: break-word; overflow-wrap: break-word;
+        }
+        .message.user {
+            background: var(--bubble-user); color: #fff;
+            align-self: flex-end; border-bottom-right-radius: 4px;
+        }
+        .message.ai {
+            background: var(--bubble-ai); color: var(--text-primary);
+            align-self: flex-start; border-bottom-left-radius: 4px;
+            border: 1px solid var(--border);
+        }
+        .message-time {
+            font-size: 0.6rem; opacity: 0.5; margin-top: 0.3rem; display: block;
+            user-select: none;
+        }
+
+        @keyframes messageIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ================================================================
+           TYPING INDICATOR
+           ================================================================ */
+        .typing-indicator {
+            display: flex; gap: 0.3rem; padding: 0.75rem 1rem;
+            background: var(--bubble-ai); border: 1px solid var(--border);
+            border-radius: 16px; border-bottom-left-radius: 4px;
+            align-self: flex-start; width: fit-content;
+        }
+        .typing-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: var(--text-secondary); animation: typing 1.4s infinite;
+        }
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes typing {
+            0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+            30% { transform: translateY(-8px); opacity: 1; }
+        }
+
+        /* ================================================================
+           QUICK QUESTIONS
+           ================================================================ */
+        .quick-questions {
+            display: flex; gap: 0.5rem; flex-wrap: wrap;
+            padding: 0.5rem 1rem; border-top: 1px solid var(--border);
+            background: var(--bg-card); flex-shrink: 0;
+        }
+        .quick-btn {
+            padding: 0.4rem 1rem; border-radius: 20px;
+            border: 1px solid var(--border); background: var(--bg-body);
+            color: var(--text-secondary); font-size: 0.7rem;
+            cursor: pointer; transition: all 0.2s; font-family: inherit;
+            white-space: nowrap;
+        }
+        .quick-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+        /* ================================================================
+           INPUT
+           ================================================================ */
+        .chat-input {
+            display: flex; gap: 0.5rem; padding: 1rem;
+            border-top: 1px solid var(--border); background: var(--bg-card);
+            flex-shrink: 0;
+        }
+        .chat-input input {
+            flex: 1; padding: 0.7rem 1rem; border-radius: 30px;
+            border: 1px solid var(--border); background: var(--bg-body);
+            color: var(--text-primary); font-family: inherit;
+            font-size: 0.85rem; outline: none; transition: border 0.25s;
+            min-width: 0;
+        }
+        .chat-input input:focus { border-color: var(--accent); }
+        .chat-input input::placeholder { color: var(--text-secondary); opacity: 0.5; }
+        .chat-send-btn {
+            width: 45px; height: 45px; border-radius: 50%;
+            background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+            color: #fff; border: none; cursor: pointer; font-size: 1rem;
+            transition: all 0.25s; display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+        }
+        .chat-send-btn:hover { transform: scale(1.1); box-shadow: var(--shadow-hover); }
+        .chat-send-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+        /* ================================================================
+           RESPONSIVE
+           ================================================================ */
+        @media (max-width: 768px) {
+            .sidebar { transform: translateX(-100%); }
+            .sidebar.mobile-open { transform: translateX(0); box-shadow: 0 0 40px rgba(0,0,0,0.3); }
+            .main { margin-left: 0; padding: 0.75rem; }
+            .mobile-toggle { display: block; }
+            .header h1 { font-size: 1.2rem; }
+            .message { max-width: 85%; }
+            .quick-btn { font-size: 0.6rem; padding: 0.3rem 0.7rem; }
+            .chat-container { height: calc(100vh - 100px); }
+        }
+
+        @media (max-width: 400px) {
+            .theme-btn { width: 20px; height: 20px; }
+            .chat-avatar { width: 35px; height: 35px; font-size: 1rem; }
+            .message { font-size: 0.75rem; max-width: 90%; }
+            .chat-input { padding: 0.75rem; }
+            .chat-send-btn { width: 40px; height: 40px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="layout">
+        <!-- OVERLAY -->
+        <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+        <!-- SIDEBAR -->
+        <aside class="sidebar" id="sidebar">
+            <a href="index.html" class="sidebar-brand">
+                <i class="fas fa-chart-line"></i> <span>ESH TRADE</span>
+            </a>
+            <nav class="sidebar-nav">
+                <div class="nav-label">Navigation</div>
+                <a href="dashboard.html"><i class="fas fa-home"></i> Dashboard</a>
+                <a href="explore.html"><i class="fas fa-compass"></i> Explore</a>
+                <a href="inbox.html"><i class="fas fa-inbox"></i> Inbox</a>
+                <a href="terminal.html"><i class="fas fa-terminal"></i> Terminal</a>
+                <a class="active" href="chatbot.html"><i class="fas fa-robot"></i> Chatbot</a>
+                <a href="me.html"><i class="fas fa-user"></i> Profile</a>
+            </nav>
+            <div class="sidebar-footer">
+                <a href="about.html"><i class="fas fa-info-circle"></i> About</a>
+                <a href="index.html"><i class="fas fa-sign-out-alt"></i> Logout</a>
+            </div>
+        </aside>
+
+        <!-- MAIN -->
+        <main class="main">
+            <div class="header">
+                <div class="header-left">
+                    <button class="mobile-toggle" id="mobileToggle" aria-label="Menu"><i class="fas fa-bars"></i></button>
+                    <h1><i class="fas fa-robot"></i> AI Assistant</h1>
+                </div>
+                <div class="header-right">
+                    <button class="theme-btn active" data-theme="navy" title="Navy"></button>
+                    <button class="theme-btn" data-theme="charcoal" title="Charcoal"></button>
+                    <button class="theme-btn" data-theme="emerald" title="Emerald"></button>
+                    <button class="theme-btn" data-theme="teal" title="Teal"></button>
+                    <button class="theme-btn" data-theme="plum" title="Plum"></button>
+                    <button class="theme-btn" data-theme="terracotta" title="Terracotta"></button>
+                </div>
+            </div>
+
+            <div class="chat-container">
+                <div class="chat-header">
+                    <div class="chat-avatar"><i class="fas fa-robot"></i><span class="online-dot"></span></div>
+                    <div class="chat-info">
+                        <div class="name">ESH Trade AI</div>
+                        <div class="status"><i class="fas fa-circle" style="font-size:0.4rem; color:var(--positive);"></i> Online · Always here to help</div>
+                    </div>
+                </div>
+
+                <div class="chat-messages" id="chatMessages">
+                    <div class="message ai">
+                        👋 Hello! I'm your ESH TRADE AI assistant.<br><br>
+                        I can help you with:<br>
+                        📊 Market analysis<br>
+                        🤖 Bot management<br>
+                        💰 Trading strategies<br>
+                        📈 Price information<br>
+                        🔐 Security tips
+                        <span class="message-time">Just now</span>
+                    </div>
+                </div>
+
+                <div class="quick-questions">
+                    <button class="quick-btn" onclick="quickAsk('What is the BTC price?')">₿ BTC Price</button>
+                    <button class="quick-btn" onclick="quickAsk('How are my bots performing?')">🤖 Bot Status</button>
+                    <button class="quick-btn" onclick="quickAsk('What is the best trading strategy?')">📊 Strategy</button>
+                    <button class="quick-btn" onclick="quickAsk('Show my portfolio summary')">💰 Portfolio</button>
+                    <button class="quick-btn" onclick="quickAsk('Give me a market update')">📈 Market Update</button>
+                </div>
+
+                <div class="chat-input">
+                    <input type="text" id="chatInput" placeholder="Type your message..." autocomplete="off" />
+                    <button class="chat-send-btn" id="chatSend" aria-label="Send"><i class="fas fa-paper-plane"></i></button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        (function() {
+            'use strict';
+
+            // ===== DOM ELEMENTS =====
+            const themeBtns = document.querySelectorAll('.theme-btn');
+            const chatMessages = document.getElementById('chatMessages');
+            const chatInput = document.getElementById('chatInput');
+            const chatSend = document.getElementById('chatSend');
+            const mobileToggle = document.getElementById('mobileToggle');
+            const sidebar = document.getElementById('sidebar');
+            const sidebarOverlay = document.getElementById('sidebarOverlay');
+
+            // ===== STATE =====
+            let isProcessing = false;
+            let messageHistory = [];
+
+            // ===== THEME SYSTEM =====
+            function setTheme(theme) {
+                document.body.className = document.body.className
+                    .split(' ').filter(c => !c.startsWith('theme-')).join(' ');
+                if (theme !== 'navy') document.body.classList.add('theme-' + theme);
+                themeBtns.forEach(btn => btn.classList.toggle('active', btn.dataset.theme === theme));
+                localStorage.setItem('esh_theme', theme);
+            }
+
+            themeBtns.forEach(btn => btn.addEventListener('click', function() {
+                setTheme(this.dataset.theme);
+            }));
+            setTheme(localStorage.getItem('esh_theme') || 'navy');
+
+            // ===== MOBILE MENU =====
+            function openMobileMenu() { sidebar.classList.add('mobile-open'); sidebarOverlay.classList.add('active'); }
+            function closeMobileMenu() { sidebar.classList.remove('mobile-open'); sidebarOverlay.classList.remove('active'); }
+
+            mobileToggle.addEventListener('click', function() {
+                if (sidebar.classList.contains('mobile-open')) closeMobileMenu();
+                else openMobileMenu();
+            });
+            sidebarOverlay.addEventListener('click', closeMobileMenu);
+
+            // ===== UTILITIES =====
+            function getTime() {
+                return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            }
+
+            function escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            function scrollToBottom() {
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+
+            // ===== MESSAGE FUNCTIONS =====
+            function addMessage(text, sender) {
+                const div = document.createElement('div');
+                div.className = 'message ' + sender;
+                div.innerHTML = text + '<span class="message-time">' + getTime() + '</span>';
+                chatMessages.appendChild(div);
+                scrollToBottom();
+                messageHistory.push({ text: text, sender: sender, time: getTime() });
+            }
+
+            function addTyping() {
+                const div = document.createElement('div');
+                div.className = 'typing-indicator';
+                div.id = 'typingIndicator';
+                div.innerHTML = '<span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>';
+                chatMessages.appendChild(div);
+                scrollToBottom();
+            }
+
+            function removeTyping() {
+                const typing = document.getElementById('typingIndicator');
+                if (typing) typing.remove();
+            }
+
+            // ===== AI RESPONSES =====
+            function getAIResponse(message) {
+                const msg = message.toLowerCase();
+
+                if (msg.includes('btc') || msg.includes('bitcoin')) {
+                    const price = (Math.random() * 5000 + 65000).toFixed(2);
+                    return '₿ Bitcoin (BTC) is currently trading at <strong>$' + price + '</strong>.<br><br>📈 24h Change: +2.3%<br>📊 Support: $65,000 | Resistance: $68,500<br><br>💡 <em>Tip: Consider DCA strategy for long-term BTC accumulation.</em>';
+                }
+                if (msg.includes('eth') || msg.includes('ethereum')) {
+                    const price = (Math.random() * 300 + 3200).toFixed(2);
+                    return '⟠ Ethereum (ETH) is trading at <strong>$' + price + '</strong>.<br><br>📈 24h Change: +1.8%<br>💡 <em>ETH gas fees are low right now, good time for DeFi.</em>';
+                }
+                if (msg.includes('bot') || msg.includes('bots')) {
+                    return '🤖 <strong>Your Bots Status:</strong><br><br>✅ Scalper Bot: <span style="color:var(--positive)">Running</span> (+$450)<br>✅ DCA Bot: <span style="color:var(--positive)">Running</span> (+$230)<br>❌ Grid Bot: <span style="color:var(--negative)">Stopped</span> (-$45)<br>⏸️ Whale Bot: <span style="color:var(--warning)">Idle</span><br><br>💡 <em>Total bot profit today: +$635</em>';
+                }
+                if (msg.includes('strateg') || msg.includes('trade')) {
+                    return '📊 <strong>Trading Strategies:</strong><br><br>1️⃣ <strong>Scalping</strong> - Quick trades (seconds-minutes)<br>2️⃣ <strong>DCA</strong> - Dollar Cost Averaging<br>3️⃣ <strong>Grid Trading</strong> - Buy low, sell high<br>4️⃣ <strong>Trend Following</strong> - Follow market trends<br><br>💡 <em>For beginners, DCA is recommended. For pros, scalping.</em>';
+                }
+                if (msg.includes('portfolio') || msg.includes('balance')) {
+                    return '💰 <strong>Portfolio Summary:</strong><br><br>Total Balance: <strong>$12,304.00</strong><br>Available: $8,450.00<br>Locked: $2,340.00<br><br>📈 Total P&L: +$4,230 (+8.3%)<br>Win Rate: 68%<br><br>💡 <em>Your portfolio is performing well above average!</em>';
+                }
+                if (msg.includes('market') || msg.includes('update')) {
+                    return '📈 <strong>Market Update:</strong><br><br>₿ BTC: $67,234 (+2.3%)<br>⟠ ETH: $3,456 (+1.8%)<br>💱 EUR/USD: 1.0842 (+0.3%)<br>🥇 Gold: $2,345 (+1.2%)<br>🛢️ Oil: $82.34 (+0.5%)<br><br>💡 <em>Markets are showing bullish momentum today.</em>';
+                }
+                if (msg.includes('price')) {
+                    return '📊 <strong>Current Prices:</strong><br><br>₿ BTC: $67,234<br>⟠ ETH: $3,456<br>💱 EUR/USD: 1.0842<br>💱 GBP/USD: 1.2645<br>🥇 Gold: $2,345<br>🛢️ Oil: $82.34<br><br>💡 <em>Ask me about any specific symbol!</em>';
+                }
+                if (msg.includes('security') || msg.includes('safe') || msg.includes('secure')) {
+                    return '🔐 <strong>Security Tips:</strong><br><br>✅ Enable 2FA (TOTP + Biometric)<br>✅ Use strong passwords (12+ chars)<br>✅ Never share your API keys<br>✅ Enable login alerts<br>✅ Review active sessions regularly<br><br>💡 <em>Your account security is our priority!</em>';
+                }
+                if (msg.includes('help') || msg.includes('what can you do')) {
+                    return '🤖 I can help you with:<br><br>📊 <strong>Market Analysis</strong> - Ask about any symbol<br>🤖 <strong>Bot Management</strong> - Check bot status<br>💰 <strong>Trading Strategies</strong> - Get recommendations<br>📈 <strong>Price Information</strong> - Real-time prices<br>🔐 <strong>Security</strong> - Security tips<br><br>💡 <em>Just type your question!</em>';
+                }
+                if (msg.includes('hello') || msg.includes('hi') || msg.includes('hey')) {
+                    return '👋 Hello! Great to see you!<br><br>How can I help you today? You can ask me about:<br>📊 Markets<br>🤖 Bots<br>💰 Trading<br>📈 Prices';
+                }
+                if (msg.includes('thank')) {
+                    return '😊 You\'re welcome! Is there anything else I can help you with?';
+                }
+                if (msg.includes('bye') || msg.includes('goodbye')) {
+                    return '👋 Goodbye! Have a great trading day! Remember to check your bots regularly.';
+                }
+                if (msg.includes('gold') || msg.includes('xau')) {
+                    return '🥇 Gold (XAUUSD) is trading at <strong>$2,345.12</strong>.<br><br>📈 24h Change: +1.2%<br>📊 Support: $2,330 | Resistance: $2,360<br><br>💡 <em>Gold is a safe haven asset, good for diversification.</em>';
+                }
+                if (msg.includes('oil') || msg.includes('wti')) {
+                    return '🛢️ Oil (WTI) is trading at <strong>$82.34</strong>.<br><br>📈 24h Change: +0.5%<br>💡 <em>Oil prices are affected by OPEC decisions and global demand.</em>';
+                }
+                if (msg.includes('eurusd') || msg.includes('eur/usd')) {
+                    return '💱 EUR/USD is trading at <strong>1.0842</strong>.<br><br>📈 24h Change: +0.3%<br>💡 <em>EUR/USD is the most traded forex pair globally.</em>';
+                }
+
+                return 'I understand your question about "' + escapeHtml(message) + '".<br><br>I\'m still learning, but I can help with:<br>📊 Market prices<br>🤖 Bot status<br>💰 Portfolio<br>📈 Strategies<br>🔐 Security<br><br>💡 <em>Try asking about BTC price or your bots!</em>';
+            }
+
+            // ===== SEND MESSAGE =====
+            function sendMessage() {
+                if (isProcessing) return;
+
+                const text = chatInput.value.trim();
+                if (!text) return;
+
+                addMessage(escapeHtml(text), 'user');
+                chatInput.value = '';
+                isProcessing = true;
+                chatSend.disabled = true;
+
+                addTyping();
+
+                setTimeout(function() {
+                    removeTyping();
+                    const response = getAIResponse(text);
+                    addMessage(response, 'ai');
+                    isProcessing = false;
+                    chatSend.disabled = false;
+                    chatInput.focus();
+                }, 1200 + Math.random() * 800); // Random delay for realism
+            }
+
+            chatSend.addEventListener('click', sendMessage);
+            chatInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter' && !isProcessing) sendMessage();
+            });
+
+            // ===== QUICK ASK =====
+            window.quickAsk = function(question) {
+                chatInput.value = question;
+                sendMessage();
+            };
+
+            // ===== INIT =====
+            console.log('%c 🚀 ESH TRADE Chatbot ', 'background:linear-gradient(135deg,#0b1a2e,#2563eb); color:#fff; font-size:1.2rem; padding:0.8rem 1.5rem; border-radius:8px; font-weight:bold;');
+            console.log('%c 💬 AI Assistant Ready ', 'color:#60a5fa; font-size:0.9rem;');
+        })();
+    </script>
+
+</body>
+</html>

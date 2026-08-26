@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b1a2e" />
+    <title>ESH TRADE · Explore Markets</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800;14..32,900&display=swap" rel="stylesheet" />
+    <style>
+        /* ================================================================
+           ROOT
+           ================================================================ */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #f0f7ff;
+            min-height: 100vh;
+            transition: background 0.4s;
+            -webkit-font-smoothing: antialiased;
+            overflow-x: hidden;
+        }
+
+        /* ================================================================
+           THEMES (6)
+           ================================================================ */
+        body {
+            --bg-body: #f0f7ff;
+            --bg-card: #ffffff;
+            --bg-sidebar: #0b1a2e;
+            --text-primary: #0b1a2e;
+            --text-secondary: #475569;
+            --text-sidebar: #94a3b8;
+            --border: #dbeafe;
+            --accent: #2563eb;
+            --accent-light: #dbeafe;
+            --accent-hover: #1d4ed8;
+            --shadow: 0 4px 24px rgba(37, 99, 235, 0.08);
+            --shadow-hover: 0 8px 32px rgba(37, 99, 235, 0.15);
+            --positive: #22c55e;
+            --negative: #ef4444;
+            --badge-bg: #dbeafe;
+            --badge-text: #1e3a8a;
+            --gradient-start: #2563eb;
+            --gradient-end: #0b1a2e;
+        }
+
+        body.theme-charcoal {
+            --bg-body: #eef0f2; --bg-card: #ffffff; --bg-sidebar: #1a1d23;
+            --text-primary: #1a1d23; --text-secondary: #4b5563; --text-sidebar: #9ca3af;
+            --border: #d1d5db; --accent: #84cc16; --accent-light: #e5f4d0; --accent-hover: #65a30d;
+            --shadow: 0 4px 24px rgba(132,204,22,0.08); --badge-bg: #e5f4d0; --badge-text: #3f6212;
+            --gradient-start: #84cc16; --gradient-end: #1a1d23;
+        }
+
+        body.theme-emerald {
+            --bg-body: #ecfdf5; --bg-card: #ffffff; --bg-sidebar: #064e3b;
+            --text-primary: #064e3b; --text-secondary: #065f46; --text-sidebar: #6ee7b7;
+            --border: #a7f3d0; --accent: #059669; --accent-light: #d1fae5; --accent-hover: #047857;
+            --shadow: 0 4px 24px rgba(5,150,105,0.08); --badge-bg: #d1fae5; --badge-text: #065f46;
+            --gradient-start: #059669; --gradient-end: #064e3b;
+        }
+
+        body.theme-teal {
+            --bg-body: #f0fdfa; --bg-card: #ffffff; --bg-sidebar: #0f3b3b;
+            --text-primary: #0f3b3b; --text-secondary: #115e59; --text-sidebar: #5eead4;
+            --border: #99f6e4; --accent: #0d9488; --accent-light: #ccfbf1; --accent-hover: #0f766e;
+            --shadow: 0 4px 24px rgba(13,148,136,0.08); --badge-bg: #ccfbf1; --badge-text: #115e59;
+            --positive: #f97316; --gradient-start: #0d9488; --gradient-end: #0f3b3b;
+        }
+
+        body.theme-plum {
+            --bg-body: #faf5ff; --bg-card: #ffffff; --bg-sidebar: #3b1f4a;
+            --text-primary: #3b1f4a; --text-secondary: #5b21b6; --text-sidebar: #c4b5d4;
+            --border: #e9d5ff; --accent: #8b5cf6; --accent-light: #ede9fe; --accent-hover: #7c3aed;
+            --shadow: 0 4px 24px rgba(139,92,246,0.08); --badge-bg: #ede9fe; --badge-text: #5b21b6;
+            --gradient-start: #8b5cf6; --gradient-end: #3b1f4a;
+        }
+
+        body.theme-terracotta {
+            --bg-body: #fef6f0; --bg-card: #ffffff; --bg-sidebar: #4a2818;
+            --text-primary: #4a2818; --text-secondary: #7c2d12; --text-sidebar: #fbbf8d;
+            --border: #fed7aa; --accent: #c2410c; --accent-light: #fee2d6; --accent-hover: #9a3412;
+            --shadow: 0 4px 24px rgba(194,65,12,0.08); --badge-bg: #fee2d6; --badge-text: #7c2d12;
+            --gradient-start: #c2410c; --gradient-end: #4a2818;
+        }
+
+        /* ================================================================
+           TOP NAV
+           ================================================================ */
+        .top-nav {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: var(--bg-sidebar);
+            padding: 0.8rem 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1rem;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            transition: background 0.4s;
+        }
+
+        .top-nav-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            color: #fff;
+            font-size: 1.3rem;
+            font-weight: 800;
+            text-decoration: none;
+        }
+        .top-nav-brand i { color: var(--accent); font-size: 1.5rem; }
+
+        .top-nav-links {
+            display: flex;
+            gap: 0.3rem;
+            flex-wrap: wrap;
+        }
+        .top-nav-links a {
+            color: var(--text-sidebar);
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border-radius: 10px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: all 0.25s;
+            cursor: pointer;
+        }
+        .top-nav-links a:hover { background: rgba(255,255,255,0.06); color: #fff; }
+        .top-nav-links a.active { background: var(--accent); color: #fff; }
+
+        .top-nav-actions {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+        .theme-btn {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: all 0.25s;
+        }
+        .theme-btn:hover { transform: scale(1.2); }
+        .theme-btn.active { border-color: #fff; box-shadow: 0 0 0 2px var(--accent); }
+        .theme-btn[data-theme="navy"] { background: linear-gradient(135deg, #0b1a2e 50%, #2563eb 50%); }
+        .theme-btn[data-theme="charcoal"] { background: linear-gradient(135deg, #1a1d23 50%, #84cc16 50%); }
+        .theme-btn[data-theme="emerald"] { background: linear-gradient(135deg, #064e3b 50%, #059669 50%); }
+        .theme-btn[data-theme="teal"] { background: linear-gradient(135deg, #0f3b3b 50%, #0d9488 50%); }
+        .theme-btn[data-theme="plum"] { background: linear-gradient(135deg, #3b1f4a 50%, #8b5cf6 50%); }
+        .theme-btn[data-theme="terracotta"] { background: linear-gradient(135deg, #4a2818 50%, #c2410c 50%); }
+
+        /* ================================================================
+           MAIN
+           ================================================================ */
+        .main {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 1.5rem;
+        }
+
+        /* ================================================================
+           HERO
+           ================================================================ */
+        .hero {
+            text-align: center;
+            padding: 2rem 1rem;
+            margin-bottom: 2rem;
+        }
+        .hero h1 {
+            font-size: 2.5rem;
+            font-weight: 900;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+        }
+        .hero h1 span {
+            background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .hero p {
+            color: var(--text-secondary);
+            font-size: 1rem;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        /* ================================================================
+           SEARCH BAR
+           ================================================================ */
+        .search-bar {
+            max-width: 500px;
+            margin: 1rem auto 2rem;
+            display: flex;
+            gap: 0.5rem;
+        }
+        .search-bar input {
+            flex: 1;
+            padding: 0.8rem 1.2rem;
+            border-radius: 40px;
+            border: 1px solid var(--border);
+            background: var(--bg-card);
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 0.9rem;
+            outline: none;
+            transition: border 0.25s;
+        }
+        .search-bar input:focus { border-color: var(--accent); }
+        .search-bar button {
+            padding: 0.8rem 1.5rem;
+            border-radius: 40px;
+            border: none;
+            background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+            color: #fff;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.25s;
+        }
+        .search-bar button:hover { transform: translateY(-2px); box-shadow: var(--shadow-hover); }
+
+        /* ================================================================
+           MARKET TABS
+           ================================================================ */
+        .market-tabs {
+            display: flex;
+            justify-content: center;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+        .market-tab {
+            padding: 0.7rem 1.5rem;
+            border-radius: 40px;
+            border: 1px solid var(--border);
+            background: var(--bg-card);
+            color: var(--text-primary);
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: all 0.25s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .market-tab:hover { transform: translateY(-2px); }
+        .market-tab.active {
+            background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+            color: #fff;
+            border-color: transparent;
+            box-shadow: var(--shadow);
+        }
+
+        /* ================================================================
+           GRID
+           ================================================================ */
+        .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+
+        /* ================================================================
+           CARDS
+           ================================================================ */
+        .card {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 1.25rem;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow);
+            transition: all 0.3s;
+        }
+        .card:hover { box-shadow: var(--shadow-hover); transform: translateY(-3px); }
+        .card-title {
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text-secondary);
+            opacity: 0.5;
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .card-title i { color: var(--accent); }
+
+        /* ================================================================
+           PRICE ROW
+           ================================================================ */
+        .price-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .price-row:hover { padding-left: 0.5rem; }
+        .price-row:last-child { border-bottom: none; }
+        .price-row .symbol { font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem; }
+        .price-row .change { font-weight: 600; padding: 0.1rem 0.6rem; border-radius: 20px; font-size: 0.75rem; }
+        .price-row .change.up { color: var(--positive); background: rgba(34,197,94,0.08); }
+        .price-row .change.down { color: var(--negative); background: rgba(239,68,68,0.08); }
+
+        /* ================================================================
+           BADGE
+           ================================================================ */
+        .badge {
+            background: var(--badge-bg);
+            color: var(--badge-text);
+            padding: 0.15rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.65rem;
+            font-weight: 600;
+        }
+
+        /* ================================================================
+           MARKET CONTENT
+           ================================================================ */
+        .market-content { display: none; animation: fadeUp 0.4s ease; }
+        .market-content.active { display: block; }
+
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ================================================================
+           RESPONSIVE
+           ================================================================ */
+        @media (max-width: 1024px) {
+            .grid-4 { grid-template-columns: 1fr 1fr; }
+        }
+        @media (max-width: 768px) {
+            .grid-3, .grid-2 { grid-template-columns: 1fr; }
+            .hero h1 { font-size: 1.8rem; }
+            .top-nav { padding: 0.6rem 1rem; }
+        }
+        @media (max-width: 500px) {
+            .grid-4 { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- TOP NAV -->
+    <nav class="top-nav">
+        <a href="index.html" class="top-nav-brand"><i class="fas fa-chart-line"></i> ESH TRADE</a>
+        <div class="top-nav-links">
+            <a href="dashboard.html">Dashboard</a>
+            <a class="active" href="explore.html">Explore</a>
+            <a href="inbox.html">Inbox</a>
+            <a href="terminal.html">Terminal</a>
+            <a href="chatbot.html">Chatbot</a>
+        </div>
+        <div class="top-nav-actions">
+            <button class="theme-btn active" data-theme="navy"></button>
+            <button class="theme-btn" data-theme="charcoal"></button>
+            <button class="theme-btn" data-theme="emerald"></button>
+            <button class="theme-btn" data-theme="teal"></button>
+            <button class="theme-btn" data-theme="plum"></button>
+            <button class="theme-btn" data-theme="terracotta"></button>
+        </div>
+    </nav>
+
+    <!-- MAIN -->
+    <main class="main">
+
+        <!-- HERO -->
+        <div class="hero">
+            <h1>Explore <span>Global Markets</span></h1>
+            <p>Discover trading opportunities across Forex, Crypto, and Commodities</p>
+        </div>
+
+        <!-- SEARCH -->
+        <div class="search-bar">
+            <input type="text" id="searchInput" placeholder="Search symbols... (e.g., EURUSD, BTC, Gold)" />
+            <button id="searchBtn"><i class="fas fa-search"></i> Search</button>
+        </div>
+
+        <!-- MARKET TABS -->
+        <div class="market-tabs">
+            <button class="market-tab active" data-market="forex"><i class="fas fa-dollar-sign"></i> Forex</button>
+            <button class="market-tab" data-market="crypto"><i class="fab fa-bitcoin"></i> Crypto</button>
+            <button class="market-tab" data-market="commodities"><i class="fas fa-gem"></i> Commodities</button>
+        </div>
+
+        <!-- FOREX CONTENT -->
+        <div class="market-content active" id="content-forex">
+            <div class="grid-4" style="margin-bottom:1rem;">
+                <div class="card"><div class="card-title">Total Pairs</div><div style="font-size:2rem;font-weight:800;color:var(--text-primary);">50+</div></div>
+                <div class="card"><div class="card-title">Session</div><div style="font-size:1.2rem;font-weight:700;color:var(--accent);">London Open</div></div>
+                <div class="card"><div class="card-title">Avg Spread</div><div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);">0.8 pips</div></div>
+                <div class="card"><div class="card-title">Leverage</div><div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);">100:1</div></div>
+            </div>
+            <div class="grid-2">
+                <div class="card">
+                    <div class="card-title"><i class="fas fa-star"></i> Major Pairs</div>
+                    <div class="price-row"><span class="symbol">🇪🇺 EUR/USD</span><span>1.0842</span><span class="change up">▲ 0.3%</span></div>
+                    <div class="price-row"><span class="symbol">🇬🇧 GBP/USD</span><span>1.2645</span><span class="change up">▲ 0.1%</span></div>
+                    <div class="price-row"><span class="symbol">🇯🇵 USD/JPY</span><span>148.23</span><span class="change down">▼ 0.2%</span></div>
+                    <div class="price-row"><span class="symbol">🇦🇺 AUD/USD</span><span>0.6523</span><span class="change up">▲ 0.4%</span></div>
+                    <div class="price-row"><span class="symbol">🇨🇦 USD/CAD</span><span>1.3456</span><span class="change down">▼ 0.1%</span></div>
+                </div>
+                <div class="card">
+                    <div class="card-title"><i class="fas fa-globe"></i> Cross Pairs</div>
+                    <div class="price-row"><span class="symbol">🇪🇺🇬🇧 EUR/GBP</span><span>0.8578</span><span class="change up">▲ 0.2%</span></div>
+                    <div class="price-row"><span class="symbol">🇪🇺🇯🇵 EUR/JPY</span><span>160.45</span><span class="change up">▲ 0.3%</span></div>
+                    <div class="price-row"><span class="symbol">🇬🇧🇯🇵 GBP/JPY</span><span>187.32</span><span class="change down">▼ 0.1%</span></div>
+                    <div class="price-row"><span class="symbol">🇦🇺🇯🇵 AUD/JPY</span><span>96.78</span><span class="change up">▲ 0.5%</span></div>
+                    <div class="price-row"><span class="symbol">🇳🇿🇺🇸 NZD/USD</span><span>0.5987</span><span class="change up">▲ 0.2%</span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CRYPTO CONTENT -->
+        <div class="market-content" id="content-crypto">
+            <div class="grid-4" style="margin-bottom:1rem;">
+                <div class="card"><div class="card-title">Coins</div><div style="font-size:2rem;font-weight:800;color:var(--text-primary);">100+</div></div>
+                <div class="card"><div class="card-title">Market Cap</div><div style="font-size:1.2rem;font-weight:700;color:var(--accent);">$2.3T</div></div>
+                <div class="card"><div class="card-title">24h Volume</div><div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);">$89B</div></div>
+                <div class="card"><div class="card-title">BTC Dominance</div><div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);">52%</div></div>
+            </div>
+            <div class="grid-4">
+                <div class="card"><div class="card-title">₿ Bitcoin</div><div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);">$67,234</div><span class="badge" style="background:rgba(34,197,94,0.1);color:#22c55e;">▲ 2.3%</span></div>
+                <div class="card"><div class="card-title">⟠ Ethereum</div><div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);">$3,456</div><span class="badge" style="background:rgba(34,197,94,0.1);color:#22c55e;">▲ 1.8%</span></div>
+                <div class="card"><div class="card-title">🔷 Solana</div><div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);">$145.30</div><span class="badge" style="background:rgba(34,197,94,0.1);color:#22c55e;">▲ 5.2%</span></div>
+                <div class="card"><div class="card-title">🐕 Dogecoin</div><div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);">$0.1234</div><span class="badge" style="background:rgba(239,68,68,0.1);color:#ef4444;">▼ 1.2%</span></div>
+                <div class="card"><div class="card-title">🔶 Cardano</div><div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);">$0.4567</div><span class="badge" style="background:rgba(34,197,94,0.1);color:#22c55e;">▲ 0.8%</span></div>
+                <div class="card"><div class="card-title">🌐 Polkadot</div><div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);">$7.89</div><span class="badge" style="background:rgba(239,68,68,0.1);color:#ef4444;">▼ 0.5%</span></div>
+                <div class="card"><div class="card-title">🔗 Chainlink</div><div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);">$14.56</div><span class="badge" style="background:rgba(34,197,94,0.1);color:#22c55e;">▲ 3.2%</span></div>
+                <div class="card"><div class="card-title">💎 Avalanche</div><div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);">$32.45</div><span class="badge" style="background:rgba(34,197,94,0.1);color:#22c55e;">▲ 4.1%</span></div>
+            </div>
+        </div>
+
+        <!-- COMMODITIES CONTENT -->
+        <div class="market-content" id="content-commodities">
+            <div class="grid-4" style="margin-bottom:1rem;">
+                <div class="card"><div class="card-title">Assets</div><div style="font-size:2rem;font-weight:800;color:var(--text-primary);">20+</div></div>
+                <div class="card"><div class="card-title">Gold</div><div style="font-size:1.2rem;font-weight:700;color:var(--accent);">$2,345/oz</div></div>
+                <div class="card"><div class="card-title">Oil</div><div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);">$82.34</div></div>
+                <div class="card"><div class="card-title">Silver</div><div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);">$28.45</div></div>
+            </div>
+            <div class="grid-3">
+                <div class="card"><div class="card-title">🥇 Gold</div><div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);">$2,345.12</div><span class="badge" style="background:rgba(34,197,94,0.1);color:#22c55e;">▲ 1.2%</span></div>
+                <div class="card"><div class="card-title">🥈 Silver</div><div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);">$28.45</div><span class="badge" style="background:rgba(34,197,94,0.1);color:#22c55e;">▲ 0.8%</span></div>
+                <div class="card"><div class="card-title">🛢️ WTI Oil</div><div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);">$82.34</div><span class="badge" style="background:rgba(34,197,94,0.1);color:#22c55e;">▲ 0.5%</span></div>
+                <div class="card"><div class="card-title">🛢️ Brent Oil</div><div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);">$86.12</div><span class="badge" style="background:rgba(34,197,94,0.1);color:#22c55e;">▲ 0.6%</span></div>
+                <div class="card"><div class="card-title">🌾 Wheat</div><div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);">$5.45</div><span class="badge" style="background:rgba(239,68,68,0.1);color:#ef4444;">▼ 0.2%</span></div>
+                <div class="card"><div class="card-title">🌽 Corn</div><div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);">$4.28</div><span class="badge" style="background:rgba(239,68,68,0.1);color:#ef4444;">▼ 0.2%</span></div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        (function() {
+            'use strict';
+
+            // ===== THEME SWITCHER =====
+            const themeBtns = document.querySelectorAll('.theme-btn');
+            
+            function setTheme(theme) {
+                document.body.className = document.body.className
+                    .split(' ')
+                    .filter(c => !c.startsWith('theme-'))
+                    .join(' ');
+                if (theme !== 'navy') document.body.classList.add('theme-' + theme);
+                themeBtns.forEach(btn => btn.classList.toggle('active', btn.dataset.theme === theme));
+                localStorage.setItem('esh_theme', theme);
+            }
+
+            themeBtns.forEach(btn => btn.addEventListener('click', () => setTheme(btn.dataset.theme)));
+            setTheme(localStorage.getItem('esh_theme') || 'navy');
+
+            // ===== MARKET TABS =====
+            const marketTabs = document.querySelectorAll('.market-tab');
+            const marketContents = {
+                forex: document.getElementById('content-forex'),
+                crypto: document.getElementById('content-crypto'),
+                commodities: document.getElementById('content-commodities')
+            };
+
+            function switchMarket(market) {
+                marketTabs.forEach(tab => tab.classList.toggle('active', tab.dataset.market === market));
+                Object.keys(marketContents).forEach(key => {
+                    marketContents[key].classList.toggle('active', key === market);
+                });
+            }
+
+            marketTabs.forEach(tab => {
+                tab.addEventListener('click', () => switchMarket(tab.dataset.market));
+            });
+
+            // ===== SEARCH =====
+            const searchInput = document.getElementById('searchInput');
+            const searchBtn = document.getElementById('searchBtn');
+
+            function performSearch() {
+                const query = searchInput.value.trim().toLowerCase();
+                if (!query) return;
+                
+                const allSymbols = document.querySelectorAll('.price-row .symbol, .card-title');
+                let found = false;
+                
+                allSymbols.forEach(el => {
+                    if (el.textContent.toLowerCase().includes(query)) {
+                        el.closest('.card, .price-row')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        el.closest('.card, .price-row')?.style.outline = '2px solid var(--accent)';
+                        setTimeout(() => {
+                            el.closest('.card, .price-row').style.outline = '';
+                        }, 2000);
+                        found = true;
+                    }
+                });
+                
+                if (!found) {
+                    alert('🔍 No results found for: ' + query);
+                }
+            }
+
+            searchBtn.addEventListener('click', performSearch);
+            searchInput.addEventListener('keypress', e => { if (e.key === 'Enter') performSearch(); });
+
+            // ===== LIVE UPDATES =====
+            setInterval(() => {
+                const activeContent = document.querySelector('.market-content.active');
+                if (!activeContent) return;
+                
+                activeContent.querySelectorAll('.price-row span:nth-child(2)').forEach(el => {
+                    const current = parseFloat(el.textContent.replace(/[$,€]/g, ''));
+                    if (!isNaN(current)) {
+                        const change = (Math.random() - 0.48) * 0.2;
+                        el.textContent = (current + change).toFixed(4);
+                    }
+                });
+            }, 3000);
+
+            // ===== INIT =====
+            switchMarket('forex');
+            console.log('%c 🚀 ESH TRADE Explore ', 'background:linear-gradient(135deg,#0b1a2e,#2563eb); color:#fff; font-size:1.2rem; padding:0.8rem 1.5rem; border-radius:8px; font-weight:bold;');
+        })();
+    </script>
+
+</body>
+</html>

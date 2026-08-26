@@ -1,0 +1,180 @@
+# backend/app/database.py
+"""
+DATABASE - ULTRA ADVANCED
+Ina manage database connection, migrations, na backups
+"""
+
+import os
+import json
+from datetime import datetime
+from sqlalchemy import create_engine, event
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, Session
+from typing import Generator
+from loguru import logger
+
+from .config import settings
+
+# ============================================
+# CREATE DIRECTORIES
+# ============================================
+os.makedirs("data", exist_ok=True)
+os.makedirs("data/backups", exist_ok=True)
+os.makedirs("data/logs", exist_ok=True)
+os.makedirs("data/migrations", exist_ok=True)
+
+# ============================================
+# DATABASE URL
+# ============================================
+DATABASE_URL = settings.DATABASE_URL
+
+# ============================================
+# CREATE ENGINE
+# ============================================
+engine = create_engine(
+    DATABASE_URL,
+    connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {},
+    echo=settings.DEBUG,
+    pool_size=settings.DATABASE_POOL_SIZE,
+    max_overflow=settings.DATABASE_MAX_OVERFLOW,
+    pool_pre_ping=True,
+    pool_recycle=3600
+)
+
+# ============================================
+# SESSION FACTORY
+# ============================================
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine
+)
+
+# ============================================
+# BASE CLASS
+# ============================================
+Base = declarative_base()
+
+# ============================================
+# DEPENDENCY
+# ============================================
+def get_db() -> Generator[Session, None, None]:
+    """Get database session"""
+    db = SessionLocal()
+    try:
+        yield db
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Database error: {e}")
+        raise
+    finally:
+        db.close()
+
+# ============================================
+# INITIALIZE DATABASE
+# ============================================
+def init_db() -> bool:
+    """Create all tables"""
+    try:
+        from .models import User, Trade, Position, UserSettings, Token, AuditLog, Session as SessionModel
+        from .models import VerificationLog, KYCSubmission, Alert, Stock, Portfolio, ScannerResult, OrderBook, Performance
+        
+        Base.metadata.create_all(bind=engine)
+        logger.info("✅ Database tables created successfully!")
+        
+        # Create admin user if not exists
+        create_admin_user()
+        
+        return True
+    except Exception as e:
+        logger.error(f"❌ Database initialization error: {e}")
+        return False
+
+# ============================================
+# CREATE ADMIN USER
+# ============================================
+def create_admin_user():
+    """Create default admin user"""
+    try:
+        db = SessionLocal()
+        
+        # Check if admin exists
+        admin = db.query(User).filter(User.username == "admin").first()
+        if not admin:
+            import hashlib
+            admin = User(
+                username="admin",
+                email="estradingmachine@gmail.com",
+                password_hash=hashlib.sha256("eSmwas@2004".encode()).hexdigest(),
+                full_name="ESM Admin",
+                role="admin",
+                is_active=True,
+                is_verified=True,
+                is_email_verified=True,
+                trust_score=100
+            )
+            db.add(admin)
+            db.commit()
+            logger.info("✅ Admin user created: admin / eSmwas@2004")
+        
+        db.close()
+    except Exception as e:
+        logger.error(f"Create admin error: {e}")
+
+# ============================================
+# BACKUP DATABASE
+# ============================================
+def backup_database() -> str:
+    """Backup database"""
+    try:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_name = f"backup_{timestamp}.db"
+        backup_path = f"data/backups/{backup_name}"
+        
+        if os.path.exists("data/estrade.db"):
+            import shutil
+            shutil.copy2("data/estrade.db", backup_path)
+            logger.info(f"💾 Database backup created: {backup_path}")
+            return backup_path
+        return None
+    except Exception as e:
+        logger.error(f"Backup error: {e}")
+        return None
+
+# ============================================
+# RESTORE DATABASE
+# ============================================
+def restore_database(backup_file: str) -> bool:
+    """Restore database from backup"""
+    try:
+        if os.path.exists(backup_file):
+            import shutil
+            shutil.copy2(backup_file, "data/estrade.db")
+            logger.info(f"🔄 Database restored from: {backup_file}")
+            return True
+        return False
+    except Exception as e:
+        logger.error(f"Restore error: {e}")
+        return False
+
+# ============================================
+# TEST CONNECTION
+# ============================================
+def test_connection() -> bool:
+    """Test database connection"""
+    try:
+        db = SessionLocal()
+        db.execute("SELECT 1")
+        db.close()
+        logger.info("✅ Database connection successful!")
+        return True
+    except Exception as e:
+        logger.error(f"❌ Database connection failed: {e}")
+        return False
+
+# ============================================
+# AUTO INIT
+# ============================================
+if settings.ENVIRONMENT == "development":
+    test_connection()
+    init_db()

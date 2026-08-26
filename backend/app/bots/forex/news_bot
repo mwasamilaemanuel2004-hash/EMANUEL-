@@ -1,0 +1,901 @@
+"""
+NEWS FOREX BOT - ULTIMATE ADVANCED EDITION v3.0
+Real-Time News Processing, Multi-Source Sentiment, Predictive Analytics
+Quantum-Inspired News Impact Forecasting, Adaptive Strategy Selection
+"""
+
+import numpy as np
+import pandas as pd
+from typing import Dict, List, Optional, Tuple, Any, Union, Callable
+from datetime import datetime, timedelta
+from enum import Enum
+import logging
+from collections import deque
+import json
+import time
+import threading
+import asyncio
+from functools import lru_cache, partial
+import hashlib
+import re
+import warnings
+warnings.filterwarnings('ignore')
+
+# Optimized imports
+try:
+    from numba import jit, njit, prange, vectorize, cuda
+    NUMBA_AVAILABLE = True
+except ImportError:
+    NUMBA_AVAILABLE = False
+
+try:
+    from scipy import signal, stats, optimize, interpolate
+    from scipy.stats import norm, percentileofscore, skew, kurtosis
+    from scipy.optimize import minimize_scalar
+    SCIPY_AVAILABLE = True
+except ImportError:
+    SCIPY_AVAILABLE = False
+
+try:
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.naive_bayes import MultinomialNB
+    from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+    from sklearn.svm import SVC
+    SKLEARN_AVAILABLE = True
+except ImportError:
+    SKLEARN_AVAILABLE = False
+
+try:
+    import nltk
+    from nltk.sentiment import SentimentIntensityAnalyzer
+    from nltk.tokenize import word_tokenize
+    from nltk.corpus import stopwords
+    NLTK_AVAILABLE = True
+    try:
+        nltk.download('vader_lexicon', quiet=True)
+        nltk.download('punkt', quiet=True)
+        nltk.download('stopwords', quiet=True)
+    except:
+        pass
+except ImportError:
+    NLTK_AVAILABLE = False
+
+try:
+    from textblob import TextBlob
+    TEXTBLOB_AVAILABLE = True
+except ImportError:
+    TEXTBLOB_AVAILABLE = False
+
+from ..base_bot import (
+    UltraAdvancedBaseBot,
+    MarketRegime,
+    MarketPhase,
+    OrderFlowType,
+    TradeSide,
+    Position,
+    QuantumOptimizer,
+    NeuralNetworkEngine
+)
+
+logger = logging.getLogger(__name__)
+
+class NewsImpactLevel(Enum):
+    """Enhanced news impact levels"""
+    NEGLIGIBLE = 0
+    LOW = 1
+    MEDIUM = 2
+    HIGH = 3
+    CRITICAL = 4
+    EXTREME = 5
+    MARKET_MOVING = 6
+
+class NewsCategory(Enum):
+    """Comprehensive news categories"""
+    INTEREST_RATE = "interest_rate"
+    EMPLOYMENT = "employment"
+    INFLATION = "inflation"
+    GDP = "gdp"
+    TRADE_BALANCE = "trade_balance"
+    RETAIL_SALES = "retail_sales"
+    MANUFACTURING = "manufacturing"
+    SERVICES = "services"
+    CONSUMER_CONFIDENCE = "consumer_confidence"
+    BUSINESS_CONFIDENCE = "business_confidence"
+    CENTRAL_BANK = "central_bank"
+    POLITICAL = "political"
+    GEOPOLITICAL = "geopolitical"
+    NATURAL_DISASTER = "natural_disaster"
+    PANDEMIC = "pandemic"
+    ENERGY = "energy"
+    TECHNOLOGY = "technology"
+    CRYPTO = "crypto"
+    REGULATION = "regulation"
+    WAR = "war"
+    ELECTION = "election"
+    TRADE_WAR = "trade_war"
+    SANCTIONS = "sanctions"
+
+class SentimentLevel(Enum):
+    """Granular sentiment levels"""
+    EXTREME_BULLISH = 1.0
+    VERY_BULLISH = 0.75
+    BULLISH = 0.5
+    SLIGHTLY_BULLISH = 0.25
+    NEUTRAL = 0.0
+    SLIGHTLY_BEARISH = -0.25
+    BEARISH = -0.5
+    VERY_BEARISH = -0.75
+    EXTREME_BEARISH = -1.0
+
+@njit(cache=True, parallel=True)
+def news_impact_scorer_numba(historical_impacts: np.ndarray, 
+                            current_forecast: float, 
+                            previous_value: float,
+                            market_volatility: float) -> float:
+    """Numba optimized news impact scoring"""
+    if len(historical_impacts) == 0:
+        return 0.5
+    
+    # Calculate deviation
+    deviation = abs(current_forecast - previous_value) / abs(previous_value) if previous_value != 0 else 0
+    
+    # Historical impact analysis
+    avg_impact = np.mean(historical_impacts)
+    max_impact = np.max(historical_impacts)
+    
+    # Combine factors
+    impact_score = (deviation * 10 + avg_impact * 0.5 + market_volatility * 0.3) / (1 + max_impact)
+    
+    return min(1.0, impact_score)
+
+@njit(cache=True, parallel=True)
+def sentiment_momentum_numba(sentiment_series: np.ndarray, period: int = 10) -> float:
+    """Numba optimized sentiment momentum"""
+    if len(sentiment_series) < period:
+        return 0.0
+    
+    recent = sentiment_series[-period:]
+    momentum = (recent[-1] - recent[0]) / period
+    
+    return momentum
+
+class NewsSourceType(Enum):
+    """News source types"""
+    REUTERS = "reuters"
+    BLOOMBERG = "bloomberg"
+    CNBC = "cnbc"
+    FOREX_FACTORY = "forex_factory"
+    TWITTER = "twitter"
+    REDDIT = "reddit"
+    TELEGRAM = "telegram"
+    OFFICIAL = "official"
+    CENTRAL_BANK = "central_bank"
+    GOVERNMENT = "government"
+
+class NewsDataStream:
+    """Real-time news data stream processor"""
+    
+    def __init__(self):
+        self.news_stream = deque(maxlen=10000)
+        self.source_weights = {
+            NewsSourceType.REUTERS: 1.0,
+            NewsSourceType.BLOOMBERG: 1.0,
+            NewsSourceType.CNBC: 0.8,
+            NewsSourceType.FOREX_FACTORY: 0.9,
+            NewsSourceType.TWITTER: 0.5,
+            NewsSourceType.REDDIT: 0.3,
+            NewsSourceType.TELEGRAM: 0.4,
+            NewsSourceType.OFFICIAL: 1.2,
+            NewsSourceType.CENTRAL_BANK: 1.5,
+            NewsSourceType.GOVERNMENT: 1.3
+        }
+        self.processing_queue = asyncio.Queue(maxsize=1000)
+        
+    def add_news(self, news_item: Dict[str, Any]) -> None:
+        """Add news item to stream"""
+        self.news_stream.append({
+            **news_item,
+            'timestamp': datetime.now(),
+            'processed': False
+        })
+    
+    def get_recent_news(self, seconds: int = 60) -> List[Dict[str, Any]]:
+        """Get recent news items"""
+        cutoff = datetime.now() - timedelta(seconds=seconds)
+        return [n for n in self.news_stream if n['timestamp'] >= cutoff]
+    
+    def get_weighted_news(self, seconds: int = 300) -> List[Dict[str, Any]]:
+        """Get weighted news items"""
+        recent = self.get_recent_news(seconds)
+        
+        for item in recent:
+            source = item.get('source', NewsSourceType.FOREX_FACTORY)
+            item['weight'] = self.source_weights.get(source, 0.5)
+        
+        return sorted(recent, key=lambda x: x['weight'], reverse=True)
+
+class AdvancedSentimentEngine:
+    """Advanced multi-model sentiment analysis"""
+    
+    def __init__(self):
+        self.models = {}
+        self.sentiment_history = deque(maxlen=5000)
+        self.category_sentiment = {}
+        self.entity_sentiment = {}
+        
+        # Initialize models
+        if NLTK_AVAILABLE:
+            self.models['vader'] = SentimentIntensityAnalyzer()
+        
+        if SKLEARN_AVAILABLE:
+            self.models['tfidf'] = TfidfVectorizer(max_features=5000)
+            self.models['naive_bayes'] = MultinomialNB()
+            self.models['random_forest'] = RandomForestClassifier(n_estimators=100)
+            self.models['gradient_boosting'] = GradientBoostingClassifier(n_estimators=100)
+            self.models['svm'] = SVC(probability=True)
+        
+        self.trained = False
+    
+    def analyze_sentiment(self, text: str, source: NewsSourceType = NewsSourceType.FOREX_FACTORY) -> Dict[str, Any]:
+        """Analyze sentiment using multiple models"""
+        sentiment_scores = {}
+        confidences = {}
+        
+        # VADER analysis
+        if 'vader' in self.models:
+            vader_scores = self.models['vader'].polarity_scores(text)
+            sentiment_scores['vader'] = vader_scores['compound']
+            confidences['vader'] = max(abs(vader_scores['pos']), abs(vader_scores['neg']))
+        
+        # TextBlob analysis
+        if TEXTBLOB_AVAILABLE:
+            blob = TextBlob(text)
+            sentiment_scores['textblob'] = blob.sentiment.polarity
+            confidences['textblob'] = blob.sentiment.subjectivity
+        
+        # Keyword analysis
+        keyword_score = self._keyword_sentiment(text)
+        sentiment_scores['keyword'] = keyword_score
+        confidences['keyword'] = 0.6
+        
+        # Combine scores
+        if sentiment_scores:
+            # Weighted average
+            weights = {
+                'vader': 1.0,
+                'textblob': 0.8,
+                'keyword': 0.6
+            }
+            
+            total_weight = sum(weights.get(k, 0.5) for k in sentiment_scores)
+            weighted_score = sum(sentiment_scores[k] * weights.get(k, 0.5) for k in sentiment_scores) / total_weight
+            
+            # Average confidence
+            avg_confidence = np.mean(list(confidences.values()))
+            
+            # Determine sentiment level
+            sentiment_level = self._score_to_level(weighted_score)
+            
+            result = {
+                'score': weighted_score,
+                'confidence': avg_confidence,
+                'level': sentiment_level,
+                'individual_scores': sentiment_scores,
+                'individual_confidences': confidences,
+                'source': source.value if isinstance(source, NewsSourceType) else str(source)
+            }
+            
+            # Store in history
+            self.sentiment_history.append(result)
+            
+            return result
+        
+        return {'score': 0, 'confidence': 0, 'level': SentimentLevel.NEUTRAL}
+    
+    def _keyword_sentiment(self, text: str) -> float:
+        """Enhanced keyword sentiment analysis"""
+        bullish_words = {
+            'growth': 1, 'increase': 1, 'improve': 1, 'strong': 1, 'positive': 1,
+            'beat': 2, 'exceed': 2, 'up': 0.5, 'gain': 1, 'rally': 2,
+            'bullish': 2, 'optimistic': 1, 'surge': 2, 'boom': 2, 'expand': 1,
+            'record': 2, 'breakthrough': 2, 'success': 1, 'profit': 1, 'upgrade': 2
+        }
+        
+        bearish_words = {
+            'decline': -1, 'decrease': -1, 'worse': -1, 'weak': -1, 'negative': -1,
+            'miss': -2, 'below': -2, 'down': -0.5, 'loss': -1, 'fall': -1,
+            'bearish': -2, 'pessimistic': -1, 'crash': -2, 'recession': -2, 'contract': -1,
+            'downgrade': -2, 'failure': -1, 'debt': -1, 'crisis': -2, 'collapse': -2
+        }
+        
+        text_lower = text.lower()
+        score = 0
+        word_count = 0
+        
+        for word, weight in bullish_words.items():
+            if word in text_lower:
+                score += weight
+                word_count += 1
+        
+        for word, weight in bearish_words.items():
+            if word in text_lower:
+                score += weight
+                word_count += 1
+        
+        return score / max(1, word_count) if word_count > 0 else 0
+    
+    def _score_to_level(self, score: float) -> SentimentLevel:
+        """Convert score to sentiment level"""
+        if score > 0.8:
+            return SentimentLevel.EXTREME_BULLISH
+        elif score > 0.6:
+            return SentimentLevel.VERY_BULLISH
+        elif score > 0.3:
+            return SentimentLevel.BULLISH
+        elif score > 0.1:
+            return SentimentLevel.SLIGHTLY_BULLISH
+        elif score < -0.8:
+            return SentimentLevel.EXTREME_BEARISH
+        elif score < -0.6:
+            return SentimentLevel.VERY_BEARISH
+        elif score < -0.3:
+            return SentimentLevel.BEARISH
+        elif score < -0.1:
+            return SentimentLevel.SLIGHTLY_BEARISH
+        else:
+            return SentimentLevel.NEUTRAL
+    
+    def train_models(self, X: List[str], y: List[int]) -> None:
+        """Train ML models"""
+        if not SKLEARN_AVAILABLE or len(X) < 10:
+            return
+        
+        try:
+            # TF-IDF transformation
+            X_tfidf = self.models['tfidf'].fit_transform(X)
+            
+            # Train models
+            self.models['naive_bayes'].fit(X_tfidf, y)
+            self.models['random_forest'].fit(X_tfidf, y)
+            self.models['gradient_boosting'].fit(X_tfidf, y)
+            self.models['svm'].fit(X_tfidf, y)
+            
+            self.trained = True
+            logger.info("Sentiment models trained")
+            
+        except Exception as e:
+            logger.error(f"Error training sentiment models: {e}")
+    
+    def get_sentiment_momentum(self, period: int = 10) -> float:
+        """Get sentiment momentum"""
+        if len(self.sentiment_history) < period:
+            return 0.0
+        
+        recent_scores = [s['score'] for s in list(self.sentiment_history)[-period:]]
+        
+        if NUMBA_AVAILABLE:
+            return sentiment_momentum_numba(np.array(recent_scores), period)
+        
+        return (recent_scores[-1] - recent_scores[0]) / period
+
+class PredictiveNewsEngine:
+    """Predictive analytics for news impact"""
+    
+    def __init__(self):
+        self.impact_predictions = {}
+        self.historical_impacts = {}
+        self.prediction_history = deque(maxlen=1000)
+        self.accuracy_history = deque(maxlen=100)
+        self.feature_importance = {}
+        
+    def predict_impact(self, event: Dict[str, Any], market_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Predict news impact using multiple methods"""
+        
+        # Extract event features
+        category = event.get('category')
+        impact_level = event.get('impact')
+        forecast = event.get('forecast')
+        previous = event.get('previous')
+        
+        # Historical impact analysis
+        historical_impact = self._get_historical_impact(category, impact_level)
+        
+        # Market condition factor
+        market_factor = self._get_market_condition_factor(market_data)
+        
+        # Surprise factor
+        surprise = self._calculate_surprise_factor(forecast, previous)
+        
+        # Volatility prediction
+        predicted_volatility = self._predict_volatility(historical_impact, market_factor, surprise)
+        
+        # Direction prediction
+        predicted_direction = self._predict_direction(event, market_data)
+        
+        # Confidence calculation
+        confidence = self._calculate_prediction_confidence(
+            historical_impact,
+            market_factor,
+            surprise
+        )
+        
+        prediction = {
+            'predicted_volatility': predicted_volatility,
+            'predicted_direction': predicted_direction,
+            'confidence': confidence,
+            'historical_impact': historical_impact,
+            'market_factor': market_factor,
+            'surprise_factor': surprise
+        }
+        
+        # Store prediction
+        self.prediction_history.append({
+            'timestamp': datetime.now(),
+            'event': event.get('title', 'unknown'),
+            'prediction': prediction
+        })
+        
+        return prediction
+    
+    def _get_historical_impact(self, category: str, impact_level: str) -> float:
+        """Get historical impact for category"""
+        if category in self.historical_impacts:
+            impacts = self.historical_impacts[category]
+            if impacts:
+                return np.mean(impacts)
+        
+        # Default based on impact level
+        impact_values = {
+            'low': 0.2,
+            'medium': 0.4,
+            'high': 0.6,
+            'critical': 0.8,
+            'extreme': 1.0
+        }
+        
+        return impact_values.get(impact_level.lower(), 0.4)
+    
+    def _get_market_condition_factor(self, market_data: Dict[str, Any]) -> float:
+        """Get market condition factor"""
+        prices = market_data.get('prices', [])
+        
+        if len(prices) < 50:
+            return 1.0
+        
+        # Calculate current volatility
+        returns = np.diff(prices[-50:]) / prices[-50:-1]
+        current_vol = np.std(returns)
+        
+        # Normalize
+        return min(2.0, max(0.5, current_vol * 100))
+    
+    def _calculate_surprise_factor(self, forecast: Optional[float], previous: Optional[float]) -> float:
+        """Calculate surprise factor"""
+        if forecast is None or previous is None:
+            return 1.0
+        
+        expected_change = abs(forecast - previous) / abs(previous) if previous != 0 else 0
+        
+        return 1.0 + expected_change * 10
+    
+    def _predict_volatility(self, historical: float, market_factor: float, surprise: float) -> float:
+        """Predict volatility"""
+        base = historical * 0.5 + market_factor * 0.3 + surprise * 0.2
+        return min(1.0, base)
+    
+    def _predict_direction(self, event: Dict[str, Any], market_data: Dict[str, Any]) -> float:
+        """Predict direction of impact"""
+        # Use sentiment if available
+        sentiment = event.get('sentiment', {})
+        sentiment_score = sentiment.get('score', 0) if sentiment else 0
+        
+        # Use forecast vs previous
+        forecast = event.get('forecast')
+        previous = event.get('previous')
+        
+        forecast_direction = 0
+        if forecast is not None and previous is not None:
+            if forecast > previous:
+                forecast_direction = 0.3
+            elif forecast < previous:
+                forecast_direction = -0.3
+        
+        # Combine
+        direction = sentiment_score * 0.7 + forecast_direction * 0.3
+        
+        return max(-1.0, min(1.0, direction))
+    
+    def _calculate_prediction_confidence(self, historical: float, market_factor: float, surprise: float) -> float:
+        """Calculate prediction confidence"""
+        # More confidence with higher impact and stable market
+        confidence = (historical * 0.4 + (2 - abs(market_factor - 1)) * 0.3 + min(surprise, 3) / 3 * 0.3)
+        return min(1.0, confidence)
+    
+    def update_accuracy(self, predicted: float, actual: float) -> None:
+        """Update prediction accuracy"""
+        accuracy = 1.0 - abs(predicted - actual)
+        self.accuracy_history.append(accuracy)
+
+class UltimateNewsForexBot(UltraAdvancedBaseBot):
+    """
+    Ultimate News Forex Bot v3.0
+    Real-time news processing with predictive analytics
+    """
+    
+    def __init__(self,
+                 symbol: str = "EURUSD",
+                 initial_capital: float = 10000.0,
+                 config: Optional[Dict[str, Any]] = None):
+        """
+        Initialize Ultimate News Bot
+        """
+        super().__init__(
+            bot_name=f"UltimateNews_{symbol}",
+            symbol=symbol,
+            initial_capital=initial_capital
+        )
+        
+        # Initialize advanced components
+        self.news_stream = NewsDataStream()
+        self.sentiment_engine = AdvancedSentimentEngine()
+        self.predictive_engine = PredictiveNewsEngine()
+        
+        # Configuration
+        self.config = self._load_config(config)
+        
+        # News trading state
+        self.news_positions = {}
+        self.news_trade_history = deque(maxlen=2000)
+        self.active_strategies = {}
+        self.strategy_performance = {}
+        
+        # Performance tracking
+        self.news_win_rate = deque(maxlen=200)
+        self.strategy_win_rates = {}
+        self.avg_news_profit = deque(maxlen=200)
+        self.prediction_accuracy = deque(maxlen=200)
+        
+        # Real-time processing
+        self.processing_thread = None
+        self.is_processing = False
+        self.news_buffer = deque(maxlen=1000)
+        
+        # Threading
+        self.news_lock = threading.Lock()
+        self.strategy_lock = threading.Lock()
+        
+        self.logger.info(f"Ultimate News Bot initialized for {symbol}")
+    
+    def _load_config(self, config: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        """Load configuration"""
+        default_config = {
+            # News filters
+            'min_impact_level': NewsImpactLevel.HIGH,
+            'trade_high_impact': True,
+            'trade_critical_impact': True,
+            'trade_extreme_impact': True,
+            'news_window_before': 600,  # 10 minutes
+            'news_window_after': 1800,  # 30 minutes
+            
+            # Risk management
+            'risk_per_news_trade': 0.015,
+            'max_news_exposure': 0.08,
+            'news_stop_loss': 0.004,
+            'news_take_profit': 0.008,
+            'max_concurrent_news_trades': 3,
+            
+            # Strategy settings
+            'use_sentiment_analysis': True,
+            'use_predictive_analytics': True,
+            'min_sentiment_confidence': 0.35,
+            'min_prediction_confidence': 0.4,
+            'strategy_selection': 'adaptive',
+            
+            # Real-time processing
+            'processing_interval': 0.5,  # seconds
+            'buffer_size': 1000,
+            'max_news_age': 300,  # 5 minutes
+            
+            # Performance
+            'target_win_rate': 0.55,
+            'max_drawdown': 0.05,
+            'adaptation_rate': 0.1
+        }
+        
+        if config:
+            default_config.update(config)
+        
+        return default_config
+    
+    def process_news_item(self, news_item: Dict[str, Any]) -> Dict[str, Any]:
+        """Process individual news item"""
+        try:
+            # Extract text
+            title = news_item.get('title', '')
+            description = news_item.get('description', '')
+            text = f"{title} {description}"
+            
+            # Analyze sentiment
+            sentiment = self.sentiment_engine.analyze_sentiment(text)
+            
+            # Predict impact
+            prediction = self.predictive_engine.predict_impact(news_item, {})
+            
+            # Determine tradability
+            impact_level = news_item.get('impact', 'low')
+            tradable = self._is_tradable(impact_level, sentiment, prediction)
+            
+            result = {
+                'news_item': news_item,
+                'sentiment': sentiment,
+                'prediction': prediction,
+                'tradable': tradable,
+                'timestamp': datetime.now()
+            }
+            
+            # Add to buffer
+            self.news_buffer.append(result)
+            
+            # Generate trading signal if tradable
+            if tradable:
+                signal = self._generate_news_signal(result)
+                if signal['action'] != 'neutral':
+                    self._execute_news_trade(signal, result)
+            
+            return result
+            
+        except Exception as e:
+            self.logger.error(f"Error processing news: {e}")
+            return {}
+    
+    def _is_tradable(self, impact_level: str, sentiment: Dict[str, Any], prediction: Dict[str, Any]) -> bool:
+        """Check if news is tradable"""
+        # Check impact level
+        impact_mapping = {
+            'low': NewsImpactLevel.LOW,
+            'medium': NewsImpactLevel.MEDIUM,
+            'high': NewsImpactLevel.HIGH,
+            'critical': NewsImpactLevel.CRITICAL,
+            'extreme': NewsImpactLevel.EXTREME
+        }
+        
+        impact = impact_mapping.get(impact_level.lower(), NewsImpactLevel.LOW)
+        
+        if impact.value < self.config['min_impact_level'].value:
+            return False
+        
+        # Check sentiment confidence
+        if self.config.get('use_sentiment_analysis', True):
+            if sentiment.get('confidence', 0) < self.config.get('min_sentiment_confidence', 0.35):
+                return False
+        
+        # Check prediction confidence
+        if self.config.get('use_predictive_analytics', True):
+            if prediction.get('confidence', 0) < self.config.get('min_prediction_confidence', 0.4):
+                return False
+        
+        return True
+    
+    def _generate_news_signal(self, news_result: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate news trading signal"""
+        sentiment = news_result.get('sentiment', {})
+        prediction = news_result.get('prediction', {})
+        
+        sentiment_score = sentiment.get('score', 0)
+        predicted_direction = prediction.get('predicted_direction', 0)
+        predicted_volatility = prediction.get('predicted_volatility', 0.5)
+        
+        # Combine signals
+        combined_direction = sentiment_score * 0.6 + predicted_direction * 0.4
+        confidence = (abs(combined_direction) * 0.5 + predicted_volatility * 0.5)
+        
+        # Determine action
+        if combined_direction > 0.2:
+            action = 'long'
+        elif combined_direction < -0.2:
+            action = 'short'
+        else:
+            action = 'neutral'
+        
+        return {
+            'action': action,
+            'confidence': min(1.0, confidence),
+            'strength': abs(combined_direction),
+            'predicted_volatility': predicted_volatility,
+            'sentiment_score': sentiment_score
+        }
+    
+    def _execute_news_trade(self, signal: Dict[str, Any], news_result: Dict[str, Any]) -> None:
+        """Execute news trade"""
+        try:
+            with self.news_lock:
+                # Check concurrent trades
+                if len(self.news_positions) >= self.config.get('max_concurrent_news_trades', 3):
+                    return
+                
+                # Calculate position size
+                position_size = self._calculate_position_size(signal['confidence'])
+                
+                # Open position
+                position = self.open_position(
+                    signal['action'],
+                    self.current_market_context.price if self.current_market_context else 0,
+                    signal['confidence'],
+                    position_size
+                )
+                
+                if position:
+                    # Set news-specific stops
+                    stop_loss = position.entry_price * (1 - self.config['news_stop_loss']) if signal['action'] == 'long' else position.entry_price * (1 + self.config['news_stop_loss'])
+                    take_profit = position.entry_price * (1 + self.config['news_take_profit']) if signal['action'] == 'long' else position.entry_price * (1 - self.config['news_take_profit'])
+                    
+                    position.stop_loss = stop_loss
+                    position.take_profit = take_profit
+                    
+                    # Store position info
+                    self.news_positions[position.id] = {
+                        'position': position,
+                        'news_result': news_result,
+                        'signal': signal,
+                        'entry_time': datetime.now()
+                    }
+                    
+                    self.logger.info(f"News trade opened: {signal['action']} @ {position.entry_price}")
+                    
+        except Exception as e:
+            self.logger.error(f"Error executing news trade: {e}")
+    
+    def _calculate_position_size(self, confidence: float) -> float:
+        """Calculate position size"""
+        risk_amount = self.current_capital * self.config.get('risk_per_news_trade', 0.015)
+        position_value = risk_amount * (0.5 + confidence) * 3
+        
+        if self.current_market_context and self.current_market_context.price > 0:
+            return position_value / self.current_market_context.price
+        
+        return 0
+    
+    def start_real_time_processing(self) -> None:
+        """Start real-time news processing"""
+        if self.is_processing:
+            return
+        
+        self.is_processing = True
+        self.processing_thread = threading.Thread(target=self._process_stream)
+        self.processing_thread.start()
+        
+        self.logger.info("Real-time news processing started")
+    
+    def stop_real_time_processing(self) -> None:
+        """Stop real-time news processing"""
+        self.is_processing = False
+        self.logger.info("Real-time news processing stopped")
+    
+    def _process_stream(self) -> None:
+        """Process news stream"""
+        while self.is_processing:
+            try:
+                # Process buffered news
+                while self.news_buffer:
+                    news_result = self.news_buffer.popleft()
+                    self._update_strategy_performance(news_result)
+                
+                # Check for new news
+                recent_news = self.news_stream.get_recent_news(seconds=5)
+                
+                for news_item in recent_news:
+                    if not news_item.get('processed', False):
+                        self.process_news_item(news_item)
+                        news_item['processed'] = True
+                
+                time.sleep(self.config.get('processing_interval', 0.5))
+                
+            except Exception as e:
+                self.logger.error(f"Error in news processing: {e}")
+                time.sleep(1)
+    
+    def _update_strategy_performance(self, news_result: Dict[str, Any]) -> None:
+        """Update strategy performance"""
+        # This would track performance of different strategies
+        pass
+    
+    def update_positions(self, current_price: float) -> None:
+        """Update positions with news-specific logic"""
+        super().update_positions(current_price)
+        
+        # Update news positions
+        for position_id, trade_info in list(self.news_positions.items()):
+            position = trade_info['position']
+            
+            # Check time-based exit
+            trade_duration = (datetime.now() - trade_info['entry_time']).total_seconds()
+            
+            if trade_duration > self.config.get('news_window_after', 1800):
+                self.close_position(position_id, current_price, "news_window_expired")
+                del self.news_positions[position_id]
+                continue
+            
+            # Update position
+            position.update_pnl(current_price)
+            
+            # Check stop loss and take profit
+            if position.side == TradeSide.LONG:
+                if current_price <= position.stop_loss:
+                    self.close_position(position_id, current_price, "stop_loss")
+                    del self.news_positions[position_id]
+                elif current_price >= position.take_profit:
+                    self.close_position(position_id, current_price, "take_profit")
+                    del self.news_positions[position_id]
+            else:
+                if current_price >= position.stop_loss:
+                    self.close_position(position_id, current_price, "stop_loss")
+                    del self.news_positions[position_id]
+                elif current_price <= position.take_profit:
+                    self.close_position(position_id, current_price, "take_profit")
+                    del self.news_positions[position_id]
+    
+    def close_position(self, position_id: str, price: float, reason: str) -> Optional[Position]:
+        """Close position with news metrics"""
+        position = super().close_position(position_id, price, reason)
+        
+        if position:
+            # Update news trade history
+            self.news_trade_history.append({
+                'position_id': position.id,
+                'entry_time': position.entry_time,
+                'exit_time': datetime.now(),
+                'pnl': position.realized_pnl,
+                'reason': reason
+            })
+            
+            # Update performance
+            self.news_win_rate.append(1 if position.realized_pnl > 0 else 0)
+            self.avg_news_profit.append(position.realized_pnl)
+        
+        return position
+    
+    def get_performance_metrics(self) -> Dict[str, Any]:
+        """Get comprehensive performance metrics"""
+        metrics = super().get_performance_metrics()
+        
+        # News-specific metrics
+        news_metrics = {
+            'total_news_trades': len(self.news_trade_history),
+            'news_win_rate': np.mean(self.news_win_rate) * 100 if self.news_win_rate else 0,
+            'avg_news_profit': np.mean(self.avg_news_profit) if self.avg_news_profit else 0,
+            'total_news_pnl': sum(t['pnl'] for t in self.news_trade_history) if self.news_trade_history else 0,
+            'active_news_positions': len(self.news_positions),
+            'prediction_accuracy': np.mean(self.predictive_engine.accuracy_history) if self.predictive_engine.accuracy_history else 0,
+            'sentiment_momentum': self.sentiment_engine.get_sentiment_momentum(),
+            'processed_news_count': len(self.news_buffer),
+            'strategy_performance': self.strategy_performance
+        }
+        
+        metrics.update(news_metrics)
+        return metrics
+    
+    def adaptive_optimization(self) -> None:
+        """Adaptive optimization for news trading"""
+        if len(self.news_trade_history) < 10:
+            return
+        
+        # Calculate performance
+        recent_trades = list(self.news_trade_history)[-20:]
+        win_rate = sum(1 for t in recent_trades if t['pnl'] > 0) / len(recent_trades)
+        
+        # Adjust parameters
+        if win_rate < 0.4:
+            self.config['risk_per_news_trade'] *= 0.8
+            self.config['min_sentiment_confidence'] = min(0.5, self.config['min_sentiment_confidence'] * 1.1)
+            self.config['news_stop_loss'] *= 0.9
+            self.logger.info("Conservative news trading parameters applied")
+        elif win_rate > 0.6:
+            self.config['risk_per_news_trade'] = min(0.03, self.config['risk_per_news_trade'] * 1.1)
+            self.config['min_sentiment_confidence'] = max(0.25, self.config['min_sentiment_confidence'] * 0.95)
+            self.config['news_take_profit'] = min(0.01, self.config['news_take_profit'] * 1.05)
+            self.logger.info("Aggressive news trading parameters applied")
+        
+        # Update prediction accuracy
+        if self.predictive_engine.accuracy_history:
+            avg_accuracy = np.mean(self.predictive_engine.accuracy_history)
+            self.prediction_accuracy.append(avg_accuracy)

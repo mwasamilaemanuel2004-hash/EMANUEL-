@@ -1,0 +1,395 @@
+"""
+ESH.TRADE - Alert Model
+ULTRA ADVANCED DEBUGGED EDITION
+Complete Alert Notification System
+"""
+
+import uuid
+import json
+import hashlib
+from datetime import datetime, timedelta
+from typing import Optional, Dict, Any, List, Tuple
+from enum import Enum
+import logging
+import threading
+
+logger = logging.getLogger(__name__)
+
+
+class AlertType(Enum):
+    """Alert types"""
+    PRICE = "price"
+    TRADE = "trade"
+    SECURITY = "security"
+    SYSTEM = "system"
+    BOT = "bot"
+    KYC = "kyc"
+    PAYMENT = "payment"
+    WITHDRAWAL = "withdrawal"
+    DEPOSIT = "deposit"
+    NEWS = "news"
+    MAINTENANCE = "maintenance"
+    ERROR = "error"
+    SUCCESS = "success"
+    WARNING = "warning"
+    INFO = "info"
+
+
+class AlertSeverity(Enum):
+    """Alert severity"""
+    INFO = "info"
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+class AlertPriority(Enum):
+    """Alert priority"""
+    LOW = 1
+    MEDIUM = 2
+    HIGH = 3
+    URGENT = 4
+    EMERGENCY = 5
+
+
+class AlertChannel(Enum):
+    """Alert channels"""
+    IN_APP = "in_app"
+    EMAIL = "email"
+    SMS = "sms"
+    TELEGRAM = "telegram"
+    PUSH = "push"
+    WEBHOOK = "webhook"
+    ALL = "all"
+
+
+class AlertStatus(Enum):
+    """Alert status"""
+    UNREAD = "unread"
+    READ = "read"
+    DELIVERED = "delivered"
+    FAILED = "failed"
+    DISMISSED = "dismissed"
+
+
+class Alert:
+    """ULTRA ADVANCED DEBUGGED Alert Model"""
+    
+    def __init__(self,
+                 user_id: str,
+                 alert_type: AlertType,
+                 title: str,
+                 message: str,
+                 severity: AlertSeverity = AlertSeverity.INFO,
+                 priority: AlertPriority = AlertPriority.MEDIUM,
+                 channel: AlertChannel = AlertChannel.IN_APP):
+        
+        # FIX: Validate inputs
+        if not user_id:
+            raise ValueError("user_id is required")
+        if not title:
+            raise ValueError("title is required")
+        if not message:
+            raise ValueError("message is required")
+        
+        # Basic
+        self.id = str(uuid.uuid4())
+        self.user_id = user_id
+        self.alert_type = alert_type
+        self.title = title.strip()
+        self.message = message.strip()
+        self.severity = severity
+        self.priority = priority
+        self.channel = channel
+        self.status = AlertStatus.UNREAD
+        
+        # Timestamps
+        self.created_at = datetime.utcnow()
+        self.read_at: Optional[datetime] = None
+        self.delivered_at: Optional[datetime] = None
+        self.expires_at: Optional[datetime] = None
+        
+        # Metadata
+        self.metadata: Dict[str, Any] = {}
+        self.link: Optional[str] = None
+        self.action_url: Optional[str] = None
+        
+        # Thread safety
+        self._lock = threading.RLock()
+        
+        # Hash for integrity
+        self.hash = self._generate_hash()
+    
+    def _generate_hash(self) -> str:
+        """FIX: Generate integrity hash"""
+        data = json.dumps({
+            'user_id': self.user_id,
+            'alert_type': self.alert_type.value,
+            'title': self.title,
+            'message': self.message,
+            'created_at': self.created_at.isoformat()
+        }, sort_keys=True)
+        return hashlib.sha256(data.encode()).hexdigest()
+    
+    def mark_read(self) -> bool:
+        """FIX: Mark as read"""
+        try:
+            with self._lock:
+                if self.status == AlertStatus.UNREAD:
+                    self.status = AlertStatus.READ
+                    self.read_at = datetime.utcnow()
+                    return True
+                return False
+        except Exception as e:
+            logger.error(f"Error marking read: {e}")
+            return False
+    
+    def mark_delivered(self) -> bool:
+        """FIX: Mark as delivered"""
+        try:
+            with self._lock:
+                self.status = AlertStatus.DELIVERED
+                self.delivered_at = datetime.utcnow()
+                return True
+        except Exception as e:
+            logger.error(f"Error marking delivered: {e}")
+            return False
+    
+    def dismiss(self) -> bool:
+        """FIX: Dismiss alert"""
+        try:
+            with self._lock:
+                self.status = AlertStatus.DISMISSED
+                return True
+        except Exception as e:
+            logger.error(f"Error dismissing: {e}")
+            return False
+    
+    def is_read(self) -> bool:
+        """FIX: Check if read"""
+        return self.status in [AlertStatus.READ, AlertStatus.DELIVERED, AlertStatus.DISMISSED]
+    
+    def is_expired(self) -> bool:
+        """FIX: Check if expired"""
+        if not self.expires_at:
+            return False
+        return datetime.utcnow() > self.expires_at
+    
+    def verify_integrity(self) -> bool:
+        """FIX: Verify integrity"""
+        return self.hash == self._generate_hash()
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """FIX: Safe dict conversion"""
+        try:
+            return {
+                'id': self.id,
+                'user_id': self.user_id,
+                'alert_type': self.alert_type.value,
+                'title': self.title,
+                'message': self.message,
+                'severity': self.severity.value,
+                'priority': self.priority.value,
+                'channel': self.channel.value,
+                'status': self.status.value,
+                'created_at': self.created_at.isoformat(),
+                'read_at': self.read_at.isoformat() if self.read_at else None,
+                'link': self.link,
+                'metadata': self.metadata
+            }
+        except Exception as e:
+            logger.error(f"Error converting to dict: {e}")
+            return {'id': self.id, 'title': self.title}
+    
+    def __repr__(self) -> str:
+        return f"<Alert {self.alert_type.value} severity={self.severity.value} status={self.status.value}>"
+
+
+class AlertManager:
+    """ULTRA ADVANCED DEBUGGED Alert Manager"""
+    
+    def __init__(self):
+        self.alerts: Dict[str, Alert] = {}
+        self._lock = threading.RLock()
+        self.max_alerts_per_user = 500
+    
+    def create_alert(self,
+                    user_id: str,
+                    alert_type: AlertType,
+                    title: str,
+                    message: str,
+                    severity: AlertSeverity = AlertSeverity.INFO,
+                    priority: AlertPriority = AlertPriority.MEDIUM,
+                    channel: AlertChannel = AlertChannel.IN_APP,
+                    metadata: Dict = None) -> Optional[Alert]:
+        """FIX: Create alert with validation"""
+        try:
+            with self._lock:
+                # Check user alert limit
+                user_alerts = [a for a in self.alerts.values() if a.user_id == user_id]
+                if len(user_alerts) >= self.max_alerts_per_user:
+                    # Remove oldest
+                    oldest = min(user_alerts, key=lambda a: a.created_at)
+                    del self.alerts[oldest.id]
+                
+                alert = Alert(
+                    user_id=user_id,
+                    alert_type=alert_type,
+                    title=title,
+                    message=message,
+                    severity=severity,
+                    priority=priority,
+                    channel=channel
+                )
+                
+                if metadata:
+                    alert.metadata = metadata
+                
+                self.alerts[alert.id] = alert
+                
+                logger.info(f"🔔 Alert created: {alert_type.value} for {user_id}")
+                
+                return alert
+                
+        except Exception as e:
+            logger.error(f"Error creating alert: {e}")
+            return None
+    
+    def get_alert(self, alert_id: str) -> Optional[Alert]:
+        """FIX: Get alert"""
+        with self._lock:
+            return self.alerts.get(alert_id)
+    
+    def get_user_alerts(self, user_id: str, unread_only: bool = False, limit: int = 100) -> List[Alert]:
+        """FIX: Get user alerts"""
+        try:
+            with self._lock:
+                alerts = [a for a in self.alerts.values() if a.user_id == user_id]
+                
+                if unread_only:
+                    alerts = [a for a in alerts if not a.is_read()]
+                
+                return alerts[-limit:]
+                
+        except Exception as e:
+            logger.error(f"Error getting alerts: {e}")
+            return []
+    
+    def get_unread_count(self, user_id: str) -> int:
+        """FIX: Get unread count"""
+        try:
+            with self._lock:
+                return sum(
+                    1 for a in self.alerts.values()
+                    if a.user_id == user_id and not a.is_read()
+                )
+        except Exception as e:
+            logger.error(f"Error getting unread count: {e}")
+            return 0
+    
+    def mark_read(self, alert_id: str) -> bool:
+        """FIX: Mark read"""
+        alert = self.get_alert(alert_id)
+        return alert.mark_read() if alert else False
+    
+    def mark_all_read(self, user_id: str) -> int:
+        """FIX: Mark all read"""
+        count = 0
+        with self._lock:
+            for alert in self.alerts.values():
+                if alert.user_id == user_id and not alert.is_read():
+                    if alert.mark_read():
+                        count += 1
+        return count
+    
+    def delete_alert(self, alert_id: str) -> bool:
+        """FIX: Delete alert"""
+        with self._lock:
+            if alert_id in self.alerts:
+                del self.alerts[alert_id]
+                return True
+            return False
+    
+    def cleanup(self) -> int:
+        """FIX: Cleanup old alerts"""
+        count = 0
+        with self._lock:
+            cutoff = datetime.utcnow() - timedelta(days=30)
+            expired = [
+                aid for aid, a in self.alerts.items()
+                if a.created_at < cutoff or a.is_expired()
+            ]
+            for aid in expired:
+                del self.alerts[aid]
+                count += 1
+        return count
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """FIX: Get statistics"""
+        try:
+            with self._lock:
+                type_counts = {}
+                severity_counts = {}
+                
+                for alert in self.alerts.values():
+                    type_counts[alert.alert_type.value] = type_counts.get(alert.alert_type.value, 0) + 1
+                    severity_counts[alert.severity.value] = severity_counts.get(alert.severity.value, 0) + 1
+                
+                return {
+                    'total': len(self.alerts),
+                    'unread': sum(1 for a in self.alerts.values() if not a.is_read()),
+                    'type_counts': type_counts,
+                    'severity_counts': severity_counts
+                }
+        except Exception as e:
+            logger.error(f"Error getting stats: {e}")
+            return {}
+    
+    def send_price_alert(self, user_id: str, symbol: str, target_price: float, 
+                        current_price: float) -> Optional[Alert]:
+        """FIX: Send price alert"""
+        return self.create_alert(
+            user_id=user_id,
+            alert_type=AlertType.PRICE,
+            title=f"Price Alert: {symbol}",
+            message=f"{symbol} reached ${current_price} (Target: ${target_price})",
+            severity=AlertSeverity.INFO,
+            priority=AlertPriority.MEDIUM,
+            metadata={'symbol': symbol, 'target_price': target_price, 'current_price': current_price}
+        )
+    
+    def send_trade_alert(self, user_id: str, symbol: str, side: str, 
+                        price: float, pnl: float = None) -> Optional[Alert]:
+        """FIX: Send trade alert"""
+        message = f"{side.upper()} {symbol} @ ${price}"
+        if pnl is not None:
+            message += f" - PnL: ${pnl:+.2f}"
+            severity = AlertSeverity.HIGH if pnl > 0 else AlertSeverity.LOW
+        else:
+            severity = AlertSeverity.INFO
+        
+        return self.create_alert(
+            user_id=user_id,
+            alert_type=AlertType.TRADE,
+            title=f"Trade {side.upper()}: {symbol}",
+            message=message,
+            severity=severity,
+            priority=AlertPriority.HIGH
+        )
+    
+    def send_security_alert(self, user_id: str, title: str, message: str) -> Optional[Alert]:
+        """FIX: Send security alert"""
+        return self.create_alert(
+            user_id=user_id,
+            alert_type=AlertType.SECURITY,
+            title=title,
+            message=message,
+            severity=AlertSeverity.CRITICAL,
+            priority=AlertPriority.URGENT,
+            channel=AlertChannel.ALL
+        )
+
+
+# Global alert manager
+alert_manager = AlertManager()

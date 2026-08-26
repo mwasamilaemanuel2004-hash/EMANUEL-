@@ -1,0 +1,182 @@
+# backend/app/exchanges/kucoin.py
+"""
+KUCOIN EXCHANGE - ULTRA ADVANCED
+"""
+
+import hmac
+import hashlib
+import base64
+import time
+from typing import Dict, Optional
+from datetime import datetime
+from loguru import logger
+
+from .base_exchange import BaseExchange, ExchangeConfig, Ticker, OrderBook, Balance, OrderResult
+
+class KuCoinExchange(BaseExchange):
+    """KuCoin Exchange Integration"""
+    
+    def __init__(self, config: ExchangeConfig):
+        super().__init__(config)
+        self.base_url = "https://api.kucoin.com/api/v1"
+        self.testnet_url = "https://sandbox.kucoin.com/api/v1"
+        
+        if config.testnet:
+            self.base_url = self.testnet_url
+        
+        self.passphrase = config.passphrase
+        
+        logger.info(f"📊 KuCoin initialized (Testnet: {config.testnet})")
+    
+    async def ping(self) -> bool:
+        try:
+            response = await self._request('GET', '/timestamp')
+            return 'data' in response
+        except:
+            return False
+    
+    async def get_ticker(self, symbol: str) -> Optional[Ticker]:
+        try:
+            response = await self._request('GET', '/market/orderbook/level1', {'symbol': symbol})
+            
+            if 'error' in response:
+                return None
+            
+            data = response.get('data', {})
+            return Ticker(
+                symbol=symbol,
+                bid=float(data.get('bid', 0)),
+                ask=float(data.get('ask', 0)),
+                last=float(data.get('price', 0)),
+                high=0,
+                low=0,
+                volume=0,
+                change=0,
+                change_percent=0
+            )
+        except Exception as e:
+            logger.error(f"KuCoin get_ticker error: {e}")
+            return None
+    
+    async def get_order_book(self, symbol: str, limit: int = 10) -> Optional[OrderBook]:
+        try:
+            response = await self._request('GET', '/market/orderbook/level2_20', {'symbol': symbol})
+            
+            if 'error' in response:
+                return None
+            
+            data = response.get('data', {})
+            bids = [(float(b[0]), float(b[1])) for b in data.get('bids', [])[:limit]]
+            asks = [(float(a[0]), float(a[1])) for a in data.get('asks', [])[:limit]]
+            
+            return OrderBook(symbol=symbol, bids=bids, asks=asks)
+        except Exception as e:
+            logger.error(f"KuCoin get_order_book error: {e}")
+            return None
+    
+    async def get_balance(self, asset: str) -> Optional[Balance]:
+        try:
+            response = await self._signed_request('GET', '/accounts')
+            
+            if 'error' in response:
+                return None
+            
+            data = response.get('data', [])
+            for account in data:
+                if account['currency'] == asset:
+                    total = float(account.get('balance', 0))
+                    available = float(account.get('available', 0))
+                    frozen = float(account.get('holds', 0))
+                    return Balance(asset=asset, free=available, used=frozen, total=total)
+            
+            return Balance(asset=asset, free=0, used=0, total=0)
+        except Exception as e:
+            logger.error(f"KuCoin get_balance error: {e}")
+            return None
+    
+    async def place_order(
+        self,
+        symbol: str,
+        side: str,
+        quantity: float,
+        order_type: str = 'market',
+        price: Optional[float] = None,
+        stop_price: Optional[float] = None
+    ) -> Optional[OrderResult]:
+        try:
+            params = {
+                'symbol': symbol,
+                'side': side.upper(),
+                'type': order_type.upper(),
+                'size': str(quantity)
+            }
+            
+            if order_type.lower() == 'limit' and price:
+                params['price'] = str(price)
+            
+            if order_type.lower() == 'stop' and stop_price:
+                params['stop'] = 'loss'
+                params['stopPrice'] = str(stop_price)
+            
+            response = await self._signed_request('POST', '/orders', params)
+            
+            if 'error' in response:
+                return None
+            
+            data = response.get('data', {})
+            return OrderResult(
+                order_id=data.get('orderId', ''),
+                symbol=symbol,
+                side=side.lower(),
+                order_type=order_type.lower(),
+                price=float(data.get('price', 0)),
+                quantity=quantity,
+                filled_quantity=0,
+                filled_price=0,
+                status='PENDING'
+            )
+        except Exception as e:
+            logger.error(f"KuCoin place_order error: {e}")
+            return None
+    
+    async def cancel_order(self, order_id: str) -> bool:
+        try:
+            response = await self._signed_request('DELETE', f'/orders/{order_id}')
+            return 'error' not in response
+        except Exception as e:
+            logger.error(f"KuCoin cancel_order error: {e}")
+            return False
+    
+    async def get_order_status(self, order_id: str) -> Dict:
+        try:
+            response = await self._signed_request('GET', f'/orders/{order_id}')
+            return response.get('data', {}) if 'error' not in response else {'status': 'ERROR'}
+        except Exception as e:
+            logger.error(f"KuCoin get_order_status error: {e}")
+            return {'status': 'ERROR'}
+    
+    async def _signed_request(self, method: str, endpoint: str, params: Dict = None) -> Dict:
+        timestamp = str(int(time.time() * 1000))
+        
+        if params is None:
+            params = {}
+        
+        params_str = '&'.join([f"{k}={v}" for k, v in sorted(params.items())])
+        signature_string = f"{timestamp}{method}{endpoint}{params_str}"
+        
+        signature = base64.b64encode(
+            hmac.new(
+                self.config.secret_key.encode('utf-8'),
+                signature_string.encode('utf-8'),
+                hashlib.sha256
+            ).digest()
+        ).decode('utf-8')
+        
+        headers = {
+            'KC-API-KEY': self.config.api_key,
+            'KC-API-TIMESTAMP': timestamp,
+            'KC-API-SIGN': signature,
+            'KC-API-PASSPHRASE': self.passphrase
+        }
+        
+        return await self._request(method, endpoint, params=params, headers=headers)
