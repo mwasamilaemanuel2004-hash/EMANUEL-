@@ -1440,6 +1440,38 @@
                 </div>
                 <button class="btn" style="margin-top:1rem;" onclick="configBot('New Bot')"><i class="fas fa-plus"></i>
                     Create New Bot</button>
+
+                <div class="card" style="margin-top:1rem; border-left:4px solid #f59e0b;">
+                    <div class="card-title"><i class="fas fa-wave-square"></i> Deriv Bot · Adaptive Safety Planner</div>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.7rem;">
+                        <label>Symbol<input id="derivSymbol" value="R_75" maxlength="24" /></label>
+                        <label>Mode<select id="derivMode">
+                                <option value="demo">Demo</option>
+                                <option value="paper">Paper</option>
+                                <option value="live">Live (locked)</option>
+                            </select></label>
+                        <label>Growth<select id="derivGrowth">
+                                <option value="safe_growth">Safe</option>
+                                <option value="balanced_growth">Balanced</option>
+                                <option value="fast_growth">Fast</option>
+                                <option value="ultra_growth">Ultra (explicit)</option>
+                            </select></label>
+                        <label>Risk<select id="derivRisk">
+                                <option value="conservative">Conservative · 0.5%</option>
+                                <option value="medium">Medium · 1%</option>
+                                <option value="aggressive">Aggressive · 2%</option>
+                                <option value="ultra_aggressive">Ultra aggressive · 3%</option>
+                            </select></label>
+                        <label>Balance<input id="derivBalance" type="number" value="10000" min="1" /></label>
+                    </div>
+                    <label style="display:block;margin-top:.7rem;">Recent prices (20+ comma-separated values)<textarea
+                            id="derivPrices"
+                            rows="2">100,100.2,100.1,100.4,100.3,100.6,100.5,100.8,100.7,101,100.9,101.2,101.1,101.4,101.3,101.6,101.5,101.8,101.7,102,101.9,102.2,102.1,102.4</textarea></label>
+                    <button class="btn" style="margin-top:.7rem;" onclick="runDerivPlan()"><i
+                            class="fas fa-magnifying-glass-chart"></i> Analyze &amp; Plan</button>
+                    <pre id="derivPlanResult"
+                        style="margin-top:.7rem;white-space:pre-wrap;color:var(--text-secondary);font-size:.75rem;"></pre>
+                </div>
             </div>
 
             <!-- TRADE PAGE -->
@@ -1656,6 +1688,35 @@
                     <button class="btn" style="width:100%; justify-content:center; margin-top:1rem;" onclick="closeModal()"><i class="fas fa-check"></i> Close</button>
                 `;
                 modalOverlay.classList.add('active');
+            };
+
+            window.runDerivPlan = async function () {
+                const prices = document.getElementById('derivPrices').value.split(',').map(Number);
+                const result = document.getElementById('derivPlanResult');
+                if (prices.some(Number.isNaN) || prices.length < 20) {
+                    result.textContent = 'Enter at least 20 valid positive prices.';
+                    return;
+                }
+                result.textContent = 'Analyzing...';
+                try {
+                    const response = await fetch('http://localhost:8000/api/deriv/plan', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            request: {
+                                symbol: document.getElementById('derivSymbol').value,
+                                mode: document.getElementById('derivMode').value,
+                                risk_level: document.getElementById('derivRisk').value,
+                                growth_mode: document.getElementById('derivGrowth').value,
+                                balance: Number(document.getElementById('derivBalance').value),
+                                execute: false
+                            }, prices
+                        })
+                    });
+                    const data = await response.json();
+                    result.textContent = response.ok ? JSON.stringify({ decision: data.decision, signal: data.analysis.signal, confidence: data.analysis.confidence + '%', probability: data.analysis.probability_up, edge: data.edge, ev: data.expected_value, regime: data.analysis.regime, strategy: data.strategy, risk: data.risk, safety: data.safety }, null, 2) : (data.detail || 'Plan failed');
+                } catch (error) {
+                    result.textContent = 'API unavailable. Start the FastAPI backend first.';
+                }
             };
 
             // ===== TOAST =====

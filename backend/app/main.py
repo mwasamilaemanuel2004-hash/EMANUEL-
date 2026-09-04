@@ -43,11 +43,12 @@ app.add_middleware(
 )
 
 # Include API Routers
-from .api import auth, trading, debug
+from .api import auth, trading, debug, deriv
 
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(trading.router, prefix="/api/trading", tags=["Trading"])
 app.include_router(debug.router, prefix="/api/debug", tags=["Debug"])
+app.include_router(deriv.router, prefix="/api/deriv", tags=["Deriv Bot"])
 
 
 # ============================================
@@ -82,7 +83,8 @@ async def api_status():
             "risk_management": "active",
             "adaptive_engine": "active",
             "indicator_engine": "active",
-            "candle_analyzer": "active"
+            "candle_analyzer": "active",
+            "deriv_bot": "demo-first"
         }
     }
 

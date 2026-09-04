@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     # API Keys (from .env)
     BINANCE_API_KEY: Optional[str] = None
     BINANCE_SECRET_KEY: Optional[str] = None
+
+    DERIV_APP_ID: Optional[str] = None
+    DERIV_API_TOKEN: Optional[str] = None
     
     model_config = SettingsConfigDict(
         env_file=".env",

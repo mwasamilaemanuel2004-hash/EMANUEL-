@@ -54,6 +54,7 @@ from .portfolio import Portfolio
 from .trade_signal import (
     TradeSignal, SignalType, SignalSource
 )
+from .deriv_bot_run import DerivBotRun
 from .bot_performance import BotPerformance
 
 # Security & Management
@@ -101,6 +102,7 @@ __all__ = [
     # Signal & Bot Models
     'TradeSignal', 'SignalType', 'SignalSource',
     'BotPerformance',
+    'DerivBotRun',
     
     # Security & Management
     'APIKey', 'ExchangeName', 'APIKeyStatus',

@@ -13,6 +13,7 @@ from app.models.trade import Trade, TradeStatus, TradeType, OrderType, BotStrate
 from app.models.position import Position
 from app.models.portfolio import Portfolio
 from app.models.trade_signal import TradeSignal
+from app.models.deriv_bot_run import DerivBotRun
 from app.models.bot_performance import BotPerformance
 from app.models.api_key import APIKey
 from app.models.session import Session
