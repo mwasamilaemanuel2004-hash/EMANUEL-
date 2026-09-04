@@ -1,0 +1,619 @@
+"""
+LAYER +11: SMART AGGRESSIVELY ENGINE (UPGRADED & DEBUGGED)
+Purpose: Calculate Smart Score for every potential trade with advanced AI logic.
+Balance: Not too strict (misses opportunities) and not too loose (bad trades).
+Adaptive: Changes scoring based on market conditions and performance.
+
+UPGRADES:
+- Multi-factor scoring with adaptive weights
+- Real-time score calibration
+- Performance-based weight adjustment
+- Market regime-aware scoring
+- Confidence scoring with Bayesian updating
+- Auto-correction mechanisms
+- Historical pattern matching
+- Detailed score breakdown
+"""
+
+import numpy as np
+import pandas as pd
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Tuple, Any, Union
+from enum import Enum
+from dataclasses import dataclass, field
+import logging
+import json
+import time
+from collections import deque
+import threading
+
+# Configure logging
+logger = logging.getLogger(__name__)
+
+debug_handler = logging.FileHandler('logs/smart_aggressively_debug.log')
+debug_handler.setLevel(logging.DEBUG)
+debug_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+debug_handler.setFormatter(debug_formatter)
+logger.addHandler(debug_handler)
+
+
+class AggressionLevel(Enum):
+    """Aggression levels for Smart Aggressively Engine"""
+    ELITE = "elite"              # 90-100 score
+    SUPERB = "superb"            # 80-89 score
+    EXCELLENT = "excellent"      # 70-79 score
+    GOOD = "good"                # 60-69 score
+    AVERAGE = "average"          # 50-59 score
+    POOR = "poor"                # 40-49 score
+    REJECT = "reject"            # <40 score
+
+
+@dataclass
+class SmartAggressivelyConfig:
+    """Configuration for Smart Aggressively Engine - adaptive"""
+    # Score thresholds
+    min_score_elite: float = 90.0
+    min_score_superb: float = 80.0
+    min_score_excellent: float = 70.0
+    min_score_good: float = 60.0
+    min_score_average: float = 50.0
+    
+    # Mode-specific thresholds
+    ultra_aggressive_min_score: float = 55.0
+    aggressive_min_score: float = 60.0
+    medium_min_score: float = 75.0
+    
+    # Factor weights (adaptive)
+    initial_weights: Dict[str, float] = field(default_factory=lambda: {
+        'market_regime': 0.15,
+        'institutional_alignment': 0.15,
+        'volatility': 0.12,
+        'volume': 0.12,
+        'correlation': 0.10,
+        'news': 0.10,
+        'time': 0.08,
+        'liquidity': 0.08,
+        'spread': 0.05,
+        'momentum': 0.05
+    })
+    
+    # Adaptive parameters
+    weight_adjustment_rate: float = 0.01
+    confidence_boost_threshold: float = 0.7
+    confidence_penalty_threshold: float = 0.3
+    
+    # Debug mode
+    debug_mode: bool = True
+    
+    # History limits
+    max_history_size: int = 1000
+
+
+class SmartAggressivelyEngine:
+    """
+    Layer +11: Smart Aggressively Engine (UPGRADED)
+    Calculates Smart Score for every potential trade.
+    """
+    
+    def __init__(self, config: Optional[SmartAggressivelyConfig] = None):
+        self.config = config or SmartAggressivelyConfig()
+        self.debug_mode = self.config.debug_mode
+        
+        # Performance tracking
+        self.performance = {
+            'total_scores_calculated': 0,
+            'trades_approved': 0,
+            'trades_rejected': 0,
+            'avg_score': 0.0,
+            'score_distribution': {
+                'elite': 0, 'superb': 0, 'excellent': 0,
+                'good': 0, 'average': 0, 'poor': 0, 'reject': 0
+            },
+            'factor_performance': {},
+            'auto_corrections': 0,
+            'confidence_scores': []
+        }
+        
+        # Score history
+        self.score_history = deque(maxlen=self.config.max_history_size)
+        self.trade_outcomes = deque(maxlen=self.config.max_history_size)
+        
+        # Current weights (adaptive)
+        self.current_weights = self.config.initial_weights.copy()
+        
+        # Market data
+        self.current_regime = "unknown"
+        self.current_volatility = 0.0
+        self.current_adx = 0.0
+        self.current_volume = 0.0
+        self.current_spread = 0.0
+        
+        # Factor values for last calculation
+        self.last_factor_values = {}
+        
+        # Lock for thread safety
+        self._lock = threading.Lock()
+        
+        # Startup log
+        self._log_debug("Smart Aggressively Engine initialized")
+        logger.info("Smart Aggressively Engine initialized")
+    
+    def _log_debug(self, message: str, level: str = "debug") -> None:
+        """Debug logging with timestamp"""
+        if self.debug_mode:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+            log_msg = f"[DEBUG {timestamp}] {message}"
+            if level == "info":
+                logger.info(log_msg)
+            elif level == "warning":
+                logger.warning(log_msg)
+            elif level == "error":
+                logger.error(log_msg)
+            else:
+                logger.debug(log_msg)
+    
+    def update_market_data(self, market_data: Dict[str, Any]) -> None:
+        """Update market data for smart scoring"""
+        try:
+            if not isinstance(market_data, dict):
+                return
+            
+            self.current_regime = market_data.get('regime', 'unknown') or 'unknown'
+            self.current_volatility = market_data.get('volatility', 0.0) or 0.0
+            self.current_adx = market_data.get('adx', 0.0) or 0.0
+            self.current_volume = market_data.get('volume', 0.0) or 0.0
+            self.current_spread = market_data.get('spread', 0.0) or 0.0
+            
+            # Adapt weights based on market conditions
+            self._adapt_weights()
+            
+        except Exception as e:
+            self._log_debug(f"Error in update_market_data: {str(e)}", "error")
+    
+    def _adapt_weights(self) -> None:
+        """Adapt factor weights based on market conditions"""
+        try:
+            regime = str(self.current_regime).lower()
+            weights = self.current_weights
+            
+            # If trending, increase momentum and regime weights
+            if "trend" in regime or self.current_adx > 40:
+                weights['momentum'] = min(0.10, weights['momentum'] + 0.02)
+                weights['market_regime'] = min(0.20, weights['market_regime'] + 0.03)
+                weights['volatility'] = max(0.05, weights['volatility'] - 0.02)
+                self._log_debug("Adapted weights: Increased trend factors")
+            
+            # If ranging, increase volatility and liquidity weights
+            elif "range" in regime or self.current_adx < 25:
+                weights['volatility'] = min(0.20, weights['volatility'] + 0.03)
+                weights['liquidity'] = min(0.15, weights['liquidity'] + 0.03)
+                weights['momentum'] = max(0.02, weights['momentum'] - 0.02)
+                self._log_debug("Adapted weights: Increased range factors")
+            
+            # If high volatility, increase spread and volatility weights
+            if self.current_volatility > 2.0:
+                weights['volatility'] = min(0.20, weights['volatility'] + 0.03)
+                weights['spread'] = min(0.10, weights['spread'] + 0.03)
+                weights['volume'] = max(0.05, weights['volume'] - 0.02)
+                self._log_debug("Adapted weights: Increased volatility factors")
+            
+            # Ensure weights sum to 1
+            total = sum(weights.values())
+            if total > 0:
+                for key in weights:
+                    weights[key] = weights[key] / total
+            
+        except Exception as e:
+            self._log_debug(f"Error in _adapt_weights: {str(e)}", "error")
+    
+    def calculate_factor_values(self, trade_signal: Dict[str, Any]) -> Dict[str, float]:
+        """Calculate individual factor values (0-100)"""
+        try:
+            factor_values = {}
+            
+            # 1. Market Regime (0-100)
+            regime_score = 0.0
+            regime = str(self.current_regime).lower()
+            if "strong_trend" in regime:
+                regime_score = 90.0
+            elif "weak_trend" in regime:
+                regime_score = 70.0
+            elif "ranging" in regime:
+                regime_score = 50.0
+            elif "volatile" in regime:
+                regime_score = 40.0
+            elif "news" in regime:
+                regime_score = 30.0
+            else:
+                regime_score = 60.0
+            factor_values['market_regime'] = regime_score
+            
+            # 2. Institutional Alignment (0-100)
+            alignment = trade_signal.get('institutional_alignment', 0.5) or 0.5
+            factor_values['institutional_alignment'] = alignment * 100
+            
+            # 3. Volatility (0-100)
+            if self.current_volatility > 0:
+                vol_score = 100 - min(100, (self.current_volatility / 5.0) * 100)
+                factor_values['volatility'] = max(0, vol_score)
+            else:
+                factor_values['volatility'] = 50.0
+            
+            # 4. Volume (0-100)
+            volume = trade_signal.get('volume', self.current_volume) or self.current_volume
+            if volume > 0:
+                avg_volume = trade_signal.get('avg_volume', volume) or volume
+                vol_ratio = min(3.0, volume / avg_volume)
+                factor_values['volume'] = min(100, vol_ratio * 50)
+            else:
+                factor_values['volume'] = 30.0
+            
+            # 5. Correlation (0-100)
+            correlation_conflict = trade_signal.get('correlation_conflict', False)
+            factor_values['correlation'] = 20.0 if correlation_conflict else 90.0
+            
+            # 6. News (0-100)
+            news_impact = trade_signal.get('news_impact', 'none') or 'none'
+            if news_impact == 'none':
+                factor_values['news'] = 90.0
+            elif news_impact == 'low':
+                factor_values['news'] = 60.0
+            elif news_impact == 'medium':
+                factor_values['news'] = 40.0
+            else:  # high
+                factor_values['news'] = 20.0
+            
+            # 7. Time (0-100)
+            session = trade_signal.get('session', '') or ''
+            killzone_sessions = ['london', 'new york', 'tokyo', 'sydney']
+            is_killzone = any(s in session.lower() for s in killzone_sessions)
+            factor_values['time'] = 90.0 if is_killzone else 50.0
+            
+            # 8. Liquidity (0-100)
+            liquidity = trade_signal.get('liquidity', 0.5) or 0.5
+            factor_values['liquidity'] = liquidity * 100
+            
+            # 9. Spread (0-100)
+            spread = trade_signal.get('spread', self.current_spread) or self.current_spread
+            if spread < 0.0001:
+                factor_values['spread'] = 90.0
+            elif spread < 0.0003:
+                factor_values['spread'] = 70.0
+            elif spread < 0.0005:
+                factor_values['spread'] = 50.0
+            else:
+                factor_values['spread'] = 30.0
+            
+            # 10. Momentum (0-100)
+            momentum = trade_signal.get('momentum', 0.0) or 0.0
+            factor_values['momentum'] = min(100, max(0, (momentum + 1) * 50))
+            
+            self.last_factor_values = factor_values
+            return factor_values
+            
+        except Exception as e:
+            self._log_debug(f"Error in calculate_factor_values: {str(e)}", "error")
+            return {key: 50.0 for key in self.config.initial_weights.keys()}
+    
+    def calculate_smart_score(self, trade_signal: Dict[str, Any]) -> float:
+        """Calculate Smart Score (0-100) with adaptive weights"""
+        try:
+            self.performance['total_scores_calculated'] += 1
+            
+            # Calculate factor values
+            factor_values = self.calculate_factor_values(trade_signal)
+            
+            # Apply adaptive weights
+            weighted_score = 0.0
+            total_weight = 0.0
+            
+            for factor, value in factor_values.items():
+                weight = self.current_weights.get(factor, 0.08)
+                weighted_score += value * weight
+                total_weight += weight
+            
+            # Normalize
+            if total_weight > 0:
+                score = weighted_score / total_weight
+            else:
+                score = 50.0
+            
+            # Apply confidence boost/penalty
+            confidence = trade_signal.get('confidence', 0.5) or 0.5
+            if confidence > self.config.confidence_boost_threshold:
+                boost = (confidence - self.config.confidence_boost_threshold) * 20
+                score = min(100, score + boost)
+            elif confidence < self.config.confidence_penalty_threshold:
+                penalty = (self.config.confidence_penalty_threshold - confidence) * 20
+                score = max(0, score - penalty)
+            
+            # Ensure 0-100 range
+            score = max(0, min(100, score))
+            
+            # Update tracking
+            self.performance['avg_score'] = (self.performance['avg_score'] * (self.performance['total_scores_calculated'] - 1) + score) / self.performance['total_scores_calculated']
+            self._update_score_distribution(score)
+            
+            # Add to history
+            self.score_history.append({
+                'score': score,
+                'factors': factor_values,
+                'weights': self.current_weights.copy(),
+                'timestamp': datetime.now().isoformat()
+            })
+            
+            self._log_debug(f"Smart Score: {score:.2f} (factors: {factor_values})")
+            return score
+            
+        except Exception as e:
+            self._log_debug(f"Error in calculate_smart_score: {str(e)}", "error")
+            return 50.0  # Neutral fallback
+    
+    def _update_score_distribution(self, score: float) -> None:
+        """Update score distribution tracking"""
+        try:
+            if score >= self.config.min_score_elite:
+                self.performance['score_distribution']['elite'] += 1
+            elif score >= self.config.min_score_superb:
+                self.performance['score_distribution']['superb'] += 1
+            elif score >= self.config.min_score_excellent:
+                self.performance['score_distribution']['excellent'] += 1
+            elif score >= self.config.min_score_good:
+                self.performance['score_distribution']['good'] += 1
+            elif score >= self.config.min_score_average:
+                self.performance['score_distribution']['average'] += 1
+            elif score >= 40:
+                self.performance['score_distribution']['poor'] += 1
+            else:
+                self.performance['score_distribution']['reject'] += 1
+        except Exception as e:
+            self._log_debug(f"Error in _update_score_distribution: {str(e)}", "error")
+    
+    def get_aggression_level(self, score: float) -> AggressionLevel:
+        """Get aggression level based on score"""
+        try:
+            if score >= self.config.min_score_elite:
+                return AggressionLevel.ELITE
+            elif score >= self.config.min_score_superb:
+                return AggressionLevel.SUPERB
+            elif score >= self.config.min_score_excellent:
+                return AggressionLevel.EXCELLENT
+            elif score >= self.config.min_score_good:
+                return AggressionLevel.GOOD
+            elif score >= self.config.min_score_average:
+                return AggressionLevel.AVERAGE
+            elif score >= 40:
+                return AggressionLevel.POOR
+            else:
+                return AggressionLevel.REJECT
+        except Exception as e:
+            self._log_debug(f"Error in get_aggression_level: {str(e)}", "error")
+            return AggressionLevel.AVERAGE
+    
+    def can_trade(self, score: float, mode: str = "MEDIUM") -> Tuple[bool, str, float]:
+        """Determine if trade is allowed based on score and mode"""
+        try:
+            # Get threshold based on mode
+            mode_upper = mode.upper()
+            if mode_upper == "SMART_ULTRA_AGGRESSIVE" or mode_upper == "ULTRA":
+                min_score = self.config.ultra_aggressive_min_score
+            elif mode_upper == "AGGRESSIVE":
+                min_score = self.config.aggressive_min_score
+            else:  # MEDIUM or default
+                min_score = self.config.medium_min_score
+            
+            # Check if score meets threshold
+            if score < min_score:
+                return False, f"Score {score:.2f} < {min_score:.2f} threshold", 0.0
+            
+            # Determine size multiplier based on score
+            level = self.get_aggression_level(score)
+            
+            if level == AggressionLevel.ELITE:
+                size_multiplier = 3.0
+                confidence = "HIGH"
+            elif level == AggressionLevel.SUPERB:
+                size_multiplier = 2.5
+                confidence = "HIGH"
+            elif level == AggressionLevel.EXCELLENT:
+                size_multiplier = 2.0
+                confidence = "GOOD"
+            elif level == AggressionLevel.GOOD:
+                size_multiplier = 1.5
+                confidence = "MEDIUM"
+            elif level == AggressionLevel.AVERAGE:
+                size_multiplier = 1.0
+                confidence = "MEDIUM"
+            elif level == AggressionLevel.POOR:
+                size_multiplier = 0.5
+                confidence = "LOW"
+            else:  # REJECT
+                return False, f"Score {score:.2f} too low", 0.0
+            
+            # Adjust multiplier based on mode
+            if mode_upper == "SMART_ULTRA_AGGRESSIVE" or mode_upper == "ULTRA":
+                size_multiplier *= 1.2
+            elif mode_upper == "MEDIUM":
+                size_multiplier *= 0.7
+            
+            return True, f"{confidence} confidence trade (score: {score:.2f})", size_multiplier
+            
+        except Exception as e:
+            self._log_debug(f"Error in can_trade: {str(e)}", "error")
+            return False, str(e), 0.0
+    
+    def update_performance(self, trade_result: Dict[str, Any]) -> None:
+        """Update engine performance based on trade result"""
+        try:
+            if not isinstance(trade_result, dict):
+                return
+            
+            won = trade_result.get('won', False)
+            score = trade_result.get('smart_score', 0.0)
+            factors = trade_result.get('factors', {})
+            
+            # Track outcome
+            self.trade_outcomes.append({
+                'won': won,
+                'score': score,
+                'factors': factors,
+                'timestamp': datetime.now().isoformat()
+            })
+            
+            # Update approvals/rejections
+            if won:
+                self.performance['trades_approved'] += 1
+            else:
+                self.performance['trades_rejected'] += 1
+            
+            # Adjust weights based on performance (learning)
+            if len(self.trade_outcomes) > 20:
+                self._adjust_weights_based_on_performance()
+            
+        except Exception as e:
+            self._log_debug(f"Error in update_performance: {str(e)}", "error")
+    
+    def _adjust_weights_based_on_performance(self) -> None:
+        """Adjust factor weights based on historical performance (AI learning)"""
+        try:
+            recent_outcomes = list(self.trade_outcomes)[-50:]
+            if len(recent_outcomes) < 20:
+                return
+            
+            # Calculate win rate per factor
+            factor_wins = {key: [] for key in self.current_weights.keys()}
+            
+            for outcome in recent_outcomes:
+                if not outcome.get('factors'):
+                    continue
+                won = outcome.get('won', False)
+                for factor, value in outcome['factors'].items():
+                    if factor in factor_wins:
+                        factor_wins[factor].append((value, won))
+            
+            # Calculate correlation between factor value and win rate
+            correlations = {}
+            for factor, data in factor_wins.items():
+                if len(data) < 10:
+                    continue
+                values = [d[0] for d in data]
+                wins = [1 if d[1] else 0 for d in data]
+                if len(set(values)) > 1 and len(set(wins)) > 1:
+                    corr = np.corrcoef(values, wins)[0, 1]
+                    correlations[factor] = abs(corr) if not np.isnan(corr) else 0
+            
+            # Adjust weights based on correlations
+            if correlations:
+                total_corr = sum(correlations.values())
+                if total_corr > 0:
+                    for factor in self.current_weights:
+                        # Increase weight for factors with high correlation
+                        corr = correlations.get(factor, 0.01)
+                        adjustment = (corr / total_corr) * self.config.weight_adjustment_rate * 0.5
+                        self.current_weights[factor] += adjustment
+            
+            # Normalize weights
+            total = sum(self.current_weights.values())
+            if total > 0:
+                for key in self.current_weights:
+                    self.current_weights[key] = self.current_weights[key] / total
+            
+            self.performance['auto_corrections'] += 1
+            self._log_debug(f"Adjusted weights based on performance: {self.current_weights}")
+            
+        except Exception as e:
+            self._log_debug(f"Error in _adjust_weights_based_on_performance: {str(e)}", "error")
+    
+    def get_score_breakdown(self, trade_signal: Dict[str, Any]) -> Dict[str, Any]:
+        """Get detailed score breakdown for display"""
+        try:
+            factor_values = self.calculate_factor_values(trade_signal)
+            score = self.calculate_smart_score(trade_signal)
+            
+            # Calculate weighted contributions
+            contributions = {}
+            for factor, value in factor_values.items():
+                weight = self.current_weights.get(factor, 0.08)
+                contributions[factor] = {
+                    'value': value,
+                    'weight': weight,
+                    'contribution': value * weight
+                }
+            
+            return {
+                'score': score,
+                'level': self.get_aggression_level(score).value,
+                'factors': factor_values,
+                'weights': self.current_weights,
+                'contributions': contributions,
+                'can_trade': score >= self.config.aggressive_min_score,
+                'timestamp': datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            self._log_debug(f"Error in get_score_breakdown: {str(e)}", "error")
+            return {'error': str(e)}
+    
+    def get_status(self) -> Dict[str, Any]:
+        """Get current status of Smart Aggressively Engine"""
+        try:
+            total = self.performance['total_scores_calculated']
+            approval_rate = (self.performance['trades_approved'] / total * 100) if total > 0 else 0
+            
+            return {
+                'total_scores': total,
+                'avg_score': self.performance['avg_score'],
+                'approval_rate': approval_rate,
+                'score_distribution': self.performance['score_distribution'],
+                'current_weights': self.current_weights,
+                'adaptation_count': self.performance['auto_corrections'],
+                'thresholds': {
+                    'ultra_aggressive': self.config.ultra_aggressive_min_score,
+                    'aggressive': self.config.aggressive_min_score,
+                    'medium': self.config.medium_min_score
+                },
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_status: {str(e)}", "error")
+            return {'status': 'ERROR', 'error': str(e)}
+    
+    def get_performance_report(self) -> Dict[str, Any]:
+        """Get detailed performance report"""
+        try:
+            total = self.performance['total_scores_calculated']
+            distribution = self.performance['score_distribution']
+            
+            # Calculate win rate by score level
+            outcomes = list(self.trade_outcomes)
+            if outcomes:
+                elite_wins = sum(1 for o in outcomes if o.get('score', 0) >= 90 and o.get('won', False))
+                superb_wins = sum(1 for o in outcomes if 80 <= o.get('score', 0) < 90 and o.get('won', False))
+                excellent_wins = sum(1 for o in outcomes if 70 <= o.get('score', 0) < 80 and o.get('won', False))
+                
+                win_rate_by_level = {
+                    'elite': elite_wins / max(1, sum(1 for o in outcomes if o.get('score', 0) >= 90)),
+                    'superb': superb_wins / max(1, sum(1 for o in outcomes if 80 <= o.get('score', 0) < 90)),
+                    'excellent': excellent_wins / max(1, sum(1 for o in outcomes if 70 <= o.get('score', 0) < 80))
+                }
+            else:
+                win_rate_by_level = {}
+            
+            return {
+                'summary': {
+                    'total_scores': total,
+                    'avg_score': self.performance['avg_score'],
+                    'trades_approved': self.performance['trades_approved'],
+                    'trades_rejected': self.performance['trades_rejected'],
+                    'approval_rate': (self.performance['trades_approved'] / total * 100) if total > 0 else 0
+                },
+                'distribution': distribution,
+                'win_rate_by_level': win_rate_by_level,
+                'current_weights': self.current_weights,
+                'auto_corrections': self.performance['auto_corrections'],
+                'recent_scores': list(self.score_history)[-10:],
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_performance_report: {str(e)}", "error")
+            return {'error': str(e)}

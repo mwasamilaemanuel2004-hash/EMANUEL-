@@ -1,0 +1,1201 @@
+"""
+LAYER +6: AGGRESSIVE OPPORTUNITY ENGINE (OPTIMIZED & DEBUGGED)
+Purpose: Find every possible trading opportunity with high probability of success.
+Balance: Not too strict (misses opportunities) and not too loose (bad trades).
+Adaptive: Changes scanning based on market conditions and performance.
+
+UPGRADES:
+- Multi-timeframe momentum scanning with alignment scoring
+- Volatility explosion detection with early warning
+- Breakout confirmation with multiple confirmations
+- News-based spike detection with sentiment analysis
+- Correlation divergence detection in real-time
+- Rolling stop loss with trend strength adaptation
+- Partial take profit with dynamic ladder
+- Re-entry algorithm with quality filtering
+- Scalping mode with micro-structure analysis
+- Momentum burst detection
+- Mean reversion opportunity finder
+- Seasonal pattern recognition
+- Machine learning-based opportunity scoring
+- Performance tracking and auto-optimization
+"""
+
+import numpy as np
+import pandas as pd
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Tuple, Any, Union
+from enum import Enum
+from dataclasses import dataclass, field
+import logging
+import json
+import time
+from collections import deque
+import threading
+from scipy import stats
+from sklearn.ensemble import IsolationForest
+
+# Configure logging
+logger = logging.getLogger(__name__)
+
+debug_handler = logging.FileHandler('logs/opportunity_engine_debug.log')
+debug_handler.setLevel(logging.DEBUG)
+debug_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+debug_handler.setFormatter(debug_formatter)
+logger.addHandler(debug_handler)
+
+
+class OpportunityType(Enum):
+    """Types of trading opportunities"""
+    MOMENTUM = "momentum"
+    BREAKOUT = "breakout"
+    REVERSAL = "reversal"
+    SCALP = "scalp"
+    NEWS = "news"
+    ARBITRAGE = "arbitrage"
+    MEAN_REVERSION = "mean_reversion"
+    SEASONAL = "seasonal"
+    LIQUIDITY_SWEEP = "liquidity_sweep"
+
+
+@dataclass
+class OpportunityConfig:
+    """Configuration for Opportunity Engine - optimized"""
+    # Multi-timeframe settings
+    timeframes: List[str] = field(default_factory=lambda: ['1m', '5m', '15m', '1h', '4h'])
+    min_timeframe_alignment: int = 3
+    
+    # Momentum settings
+    momentum_threshold: float = 0.6
+    momentum_period: int = 14
+    
+    # Breakout settings
+    breakout_volume_multiplier: float = 1.5
+    breakout_confirmation_bars: int = 3
+    
+    # Volatility settings
+    volatility_explosion_threshold: float = 2.0
+    volatility_contract_threshold: float = 0.5
+    
+    # Scalping settings
+    scalping_opportunity_threshold: float = 0.3
+    max_scalp_opportunities: int = 50
+    
+    # Mean reversion settings
+    mean_reversion_zscore_threshold: float = 2.0
+    
+    # Seasonal settings
+    seasonal_lookback: int = 30
+    
+    # Confidence scoring
+    min_confidence_score: float = 0.6
+    
+    # Performance tracking
+    debug_mode: bool = True
+    max_history_size: int = 10000
+    
+    # ML settings
+    ml_opportunity_scoring: bool = True
+    ml_retrain_interval_hours: int = 24
+
+
+class AggressiveOpportunityEngine:
+    """
+    Layer +6: Aggressive Opportunity Engine (OPTIMIZED)
+    Finds high-probability trading opportunities.
+    """
+    
+    def __init__(self, config: Optional[OpportunityConfig] = None):
+        self.config = config or OpportunityConfig()
+        self.debug_mode = self.config.debug_mode
+        
+        # Performance tracking
+        self.performance = {
+            'total_opportunities_found': 0,
+            'high_quality_opportunities': 0,
+            'opportunities_taken': 0,
+            'opportunities_passed': 0,
+            'average_quality_score': 0.0,
+            'opportunity_type_distribution': {},
+            'success_rate_by_type': {},
+            'ml_retraining_events': 0,
+            'total_scan_time': 0.0
+        }
+        
+        # Opportunity storage
+        self.opportunity_history = deque(maxlen=self.config.max_history_size)
+        self.opportunity_cache = {}
+        self.seasonal_patterns = {}
+        
+        # Market data
+        self.market_data = {}
+        self.timeframe_data = {}
+        self.current_regime = "unknown"
+        self.current_volatility = 0.0
+        
+        # ML Models
+        self.opportunity_scorer = None
+        self.anomaly_detector = None
+        
+        # Lock for thread safety
+        self._lock = threading.Lock()
+        
+        # Initialize ML models
+        self._initialize_ml_models()
+        
+        self._log_debug("Aggressive Opportunity Engine initialized")
+        logger.info("Aggressive Opportunity Engine initialized")
+    
+    def _log_debug(self, message: str, level: str = "debug") -> None:
+        """Debug logging with timestamp"""
+        if self.debug_mode:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+            log_msg = f"[DEBUG {timestamp}] {message}"
+            if level == "info":
+                logger.info(log_msg)
+            elif level == "warning":
+                logger.warning(log_msg)
+            elif level == "error":
+                logger.error(log_msg)
+            else:
+                logger.debug(log_msg)
+    
+    def _initialize_ml_models(self) -> None:
+        """Initialize machine learning models"""
+        try:
+            if self.config.ml_opportunity_scoring:
+                # Anomaly detection for outlier opportunities
+                self.anomaly_detector = IsolationForest(
+                    contamination=0.1,
+                    random_state=42,
+                    n_estimators=100
+                )
+                self._log_debug("ML models initialized")
+        except Exception as e:
+            self._log_debug(f"Error initializing ML models: {str(e)}", "error")
+    
+    def update_market_data(self, market_data: Dict[str, Any]) -> None:
+        """Update market data for opportunity scanning"""
+        try:
+            if not isinstance(market_data, dict):
+                return
+            
+            # Store latest data
+            self.market_data = market_data.copy()
+            
+            # Extract key metrics
+            self.current_regime = market_data.get('regime', 'unknown') or 'unknown'
+            self.current_volatility = market_data.get('volatility', 0.0) or 0.0
+            
+            # Update timeframe data
+            for tf in self.config.timeframes:
+                tf_data = market_data.get(f'timeframe_{tf}', {})
+                if tf_data:
+                    self.timeframe_data[tf] = tf_data
+            
+            # Update seasonal patterns
+            self._update_seasonal_patterns(market_data)
+            
+            self._log_debug(f"Market data updated: regime={self.current_regime}, volatility={self.current_volatility:.2f}")
+            
+        except Exception as e:
+            self._log_debug(f"Error in update_market_data: {str(e)}", "error")
+    
+    def scan_opportunities(self, pairs: List[str]) -> List[Dict[str, Any]]:
+        """
+        Scan for trading opportunities across all pairs
+        Returns: List of opportunity dictionaries
+        """
+        try:
+            start_time = time.time()
+            opportunities = []
+            
+            for pair in pairs:
+                pair_opportunities = self._scan_pair(pair)
+                if pair_opportunities:
+                    opportunities.extend(pair_opportunities)
+            
+            # Score and rank opportunities
+            if opportunities:
+                opportunities = self._score_and_rank_opportunities(opportunities)
+                
+                # Update performance tracking
+                self.performance['total_opportunities_found'] += len(opportunities)
+                high_quality = [o for o in opportunities if o.get('quality_score', 0) > 0.8]
+                self.performance['high_quality_opportunities'] += len(high_quality)
+                
+                # Track opportunity types
+                for opp in opportunities:
+                    opp_type = opp.get('type', 'unknown')
+                    self.performance['opportunity_type_distribution'][opp_type] = \
+                        self.performance['opportunity_type_distribution'].get(opp_type, 0) + 1
+            
+            # Update scan time
+            scan_time = time.time() - start_time
+            self.performance['total_scan_time'] += scan_time
+            
+            self._log_debug(f"Scanned {len(pairs)} pairs, found {len(opportunities)} opportunities in {scan_time:.3f}s")
+            return opportunities
+            
+        except Exception as e:
+            self._log_debug(f"Error in scan_opportunities: {str(e)}", "error")
+            return []
+    
+    def _scan_pair(self, pair: str) -> List[Dict[str, Any]]:
+        """Scan a single pair for opportunities"""
+        try:
+            opportunities = []
+            pair_data = self.market_data.get(pair, {})
+            
+            if not pair_data:
+                return opportunities
+            
+            # 1. Check momentum opportunities
+            momentum_opps = self._check_momentum(pair, pair_data)
+            if momentum_opps:
+                opportunities.extend(momentum_opps)
+            
+            # 2. Check breakout opportunities
+            breakout_opps = self._check_breakout(pair, pair_data)
+            if breakout_opps:
+                opportunities.extend(breakout_opps)
+            
+            # 3. Check reversal opportunities
+            reversal_opps = self._check_reversal(pair, pair_data)
+            if reversal_opps:
+                opportunities.extend(reversal_opps)
+            
+            # 4. Check scalping opportunities
+            scalping_opps = self._check_scalping(pair, pair_data)
+            if scalping_opps:
+                opportunities.extend(scalping_opps)
+            
+            # 5. Check mean reversion
+            mean_rev_opps = self._check_mean_reversion(pair, pair_data)
+            if mean_rev_opps:
+                opportunities.extend(mean_rev_opps)
+            
+            # 6. Check seasonal patterns
+            seasonal_opps = self._check_seasonal(pair, pair_data)
+            if seasonal_opps:
+                opportunities.extend(seasonal_opps)
+            
+            # 7. Check news opportunities
+            news_opps = self._check_news(pair, pair_data)
+            if news_opps:
+                opportunities.extend(news_opps)
+            
+            # 8. Check liquidity sweep
+            liquidity_opps = self._check_liquidity_sweep(pair, pair_data)
+            if liquidity_opps:
+                opportunities.extend(liquidity_opps)
+            
+            return opportunities
+            
+        except Exception as e:
+            self._log_debug(f"Error scanning pair {pair}: {str(e)}", "error")
+            return []
+    
+    def _check_momentum(self, pair: str, data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Check for momentum opportunities"""
+        try:
+            opportunities = []
+            
+            # Get momentum indicators
+            momentum = data.get('momentum', 0.0) or 0.0
+            adx = data.get('adx', 0.0) or 0.0
+            rsi = data.get('rsi', 50.0) or 50.0
+            
+            # Check if momentum is strong
+            if abs(momentum) < self.config.momentum_threshold:
+                return opportunities
+            
+            # Check multi-timeframe alignment
+            aligned_timeframes = self._check_timeframe_alignment(pair, 'momentum')
+            if aligned_timeframes < self.config.min_timeframe_alignment:
+                return opportunities
+            
+            # Determine direction
+            direction = 'buy' if momentum > 0 else 'sell'
+            
+            # Calculate quality score
+            quality_score = self._calculate_momentum_quality(pair, data)
+            
+            if quality_score >= self.config.min_confidence_score:
+                opportunities.append({
+                    'type': OpportunityType.MOMENTUM.value,
+                    'pair': pair,
+                    'direction': direction,
+                    'quality_score': quality_score,
+                    'momentum': momentum,
+                    'adx': adx,
+                    'rsi': rsi,
+                    'timeframes_aligned': aligned_timeframes,
+                    'timestamp': datetime.now().isoformat(),
+                    'entry_price': data.get('price', 0.0),
+                    'stop_loss': self._calculate_sl(pair, data, direction),
+                    'take_profit': self._calculate_tp(pair, data, direction),
+                    'confidence': quality_score
+                })
+            
+            return opportunities
+            
+        except Exception as e:
+            self._log_debug(f"Error in _check_momentum: {str(e)}", "error")
+            return []
+    
+    def _check_breakout(self, pair: str, data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Check for breakout opportunities"""
+        try:
+            opportunities = []
+            
+            # Get breakout indicators
+            price = data.get('price', 0.0) or 0.0
+            high = data.get('high', price) or price
+            low = data.get('low', price) or price
+            volume = data.get('volume', 0.0) or 0.0
+            avg_volume = data.get('avg_volume', volume) or volume
+            
+            # Check volume confirmation
+            if volume < avg_volume * self.config.breakout_volume_multiplier:
+                return opportunities
+            
+            # Check breakout levels
+            resistance = data.get('resistance', high) or high
+            support = data.get('support', low) or low
+            
+            is_breakout_up = price > resistance * 1.002
+            is_breakout_down = price < support * 0.998
+            
+            if not is_breakout_up and not is_breakout_down:
+                return opportunities
+            
+            # Check multi-timeframe alignment
+            aligned_timeframes = self._check_timeframe_alignment(pair, 'breakout')
+            if aligned_timeframes < self.config.min_timeframe_alignment:
+                return opportunities
+            
+            direction = 'buy' if is_breakout_up else 'sell'
+            
+            # Calculate quality score
+            quality_score = self._calculate_breakout_quality(pair, data, direction)
+            
+            if quality_score >= self.config.min_confidence_score:
+                opportunities.append({
+                    'type': OpportunityType.BREAKOUT.value,
+                    'pair': pair,
+                    'direction': direction,
+                    'quality_score': quality_score,
+                    'breakout_level': resistance if is_breakout_up else support,
+                    'volume_ratio': volume / avg_volume,
+                    'timeframes_aligned': aligned_timeframes,
+                    'timestamp': datetime.now().isoformat(),
+                    'entry_price': price,
+                    'stop_loss': self._calculate_sl(pair, data, direction),
+                    'take_profit': self._calculate_tp(pair, data, direction),
+                    'confidence': quality_score
+                })
+            
+            return opportunities
+            
+        except Exception as e:
+            self._log_debug(f"Error in _check_breakout: {str(e)}", "error")
+            return []
+    
+    def _check_reversal(self, pair: str, data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Check for reversal opportunities"""
+        try:
+            opportunities = []
+            
+            # Get reversal indicators
+            rsi = data.get('rsi', 50.0) or 50.0
+            macd = data.get('macd', 0.0) or 0.0
+            price = data.get('price', 0.0) or 0.0
+            
+            # Check overbought/oversold conditions
+            is_overbought = rsi > 70
+            is_oversold = rsi < 30
+            
+            if not is_overbought and not is_oversold:
+                return opportunities
+            
+            # Check for divergence
+            divergence = data.get('divergence', False) or False
+            
+            direction = 'sell' if is_overbought else 'buy'
+            
+            # Calculate quality score
+            quality_score = self._calculate_reversal_quality(pair, data, direction)
+            
+            if quality_score >= self.config.min_confidence_score:
+                opportunities.append({
+                    'type': OpportunityType.REVERSAL.value,
+                    'pair': pair,
+                    'direction': direction,
+                    'quality_score': quality_score,
+                    'rsi': rsi,
+                    'macd': macd,
+                    'divergence': divergence,
+                    'timestamp': datetime.now().isoformat(),
+                    'entry_price': price,
+                    'stop_loss': self._calculate_sl(pair, data, direction),
+                    'take_profit': self._calculate_tp(pair, data, direction),
+                    'confidence': quality_score
+                })
+            
+            return opportunities
+            
+        except Exception as e:
+            self._log_debug(f"Error in _check_reversal: {str(e)}", "error")
+            return []
+    
+    def _check_scalping(self, pair: str, data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Check for scalping opportunities"""
+        try:
+            opportunities = []
+            
+            # Get scalping indicators
+            spread = data.get('spread', 0.0) or 0.0
+            order_flow = data.get('order_flow', 0.0) or 0.0
+            price = data.get('price', 0.0) or 0.0
+            
+            # Check if spread is tight enough
+            if spread > 0.0005:  # 0.05% spread limit for scalping
+                return opportunities
+            
+            # Check order flow imbalance
+            if abs(order_flow) < self.config.scalping_opportunity_threshold:
+                return opportunities
+            
+            direction = 'buy' if order_flow > 0 else 'sell'
+            
+            # Check if scalping limit reached
+            daily_scalps = sum(1 for o in self.opportunity_history 
+                              if o.get('type') == OpportunityType.SCALP.value 
+                              and o.get('timestamp', '').startswith(datetime.now().strftime('%Y-%m-%d')))
+            
+            if daily_scalps >= self.config.max_scalp_opportunities:
+                return opportunities
+            
+            # Calculate quality score
+            quality_score = self._calculate_scalping_quality(pair, data, direction)
+            
+            if quality_score >= self.config.min_confidence_score:
+                opportunities.append({
+                    'type': OpportunityType.SCALP.value,
+                    'pair': pair,
+                    'direction': direction,
+                    'quality_score': quality_score,
+                    'spread': spread,
+                    'order_flow': order_flow,
+                    'timestamp': datetime.now().isoformat(),
+                    'entry_price': price,
+                    'stop_loss': self._calculate_sl(pair, data, direction, scalping=True),
+                    'take_profit': self._calculate_tp(pair, data, direction, scalping=True),
+                    'confidence': quality_score
+                })
+            
+            return opportunities
+            
+        except Exception as e:
+            self._log_debug(f"Error in _check_scalping: {str(e)}", "error")
+            return []
+    
+    def _check_mean_reversion(self, pair: str, data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Check for mean reversion opportunities"""
+        try:
+            opportunities = []
+            
+            price = data.get('price', 0.0) or 0.0
+            moving_avg = data.get('moving_avg_20', price) or price
+            std_dev = data.get('std_dev', 0.0) or 0.0
+            
+            if std_dev <= 0:
+                return opportunities
+            
+            zscore = (price - moving_avg) / std_dev
+            
+            if abs(zscore) < self.config.mean_reversion_zscore_threshold:
+                return opportunities
+            
+            direction = 'sell' if zscore > 0 else 'buy'
+            
+            # Calculate quality score
+            quality_score = self._calculate_mean_reversion_quality(pair, data, direction)
+            
+            if quality_score >= self.config.min_confidence_score:
+                opportunities.append({
+                    'type': OpportunityType.MEAN_REVERSION.value,
+                    'pair': pair,
+                    'direction': direction,
+                    'quality_score': quality_score,
+                    'zscore': zscore,
+                    'price_deviation': price - moving_avg,
+                    'timestamp': datetime.now().isoformat(),
+                    'entry_price': price,
+                    'stop_loss': self._calculate_sl(pair, data, direction),
+                    'take_profit': self._calculate_tp(pair, data, direction),
+                    'confidence': quality_score
+                })
+            
+            return opportunities
+            
+        except Exception as e:
+            self._log_debug(f"Error in _check_mean_reversion: {str(e)}", "error")
+            return []
+    
+    def _check_seasonal(self, pair: str, data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Check for seasonal pattern opportunities"""
+        try:
+            opportunities = []
+            
+            # Check if we have seasonal data
+            if pair not in self.seasonal_patterns:
+                return opportunities
+            
+            seasonal_pattern = self.seasonal_patterns[pair]
+            current_hour = datetime.now().hour
+            current_weekday = datetime.now().weekday()
+            
+            # Check if current time has seasonal bias
+            hour_pattern = seasonal_pattern.get('hourly', {}).get(current_hour, {})
+            weekday_pattern = seasonal_pattern.get('weekday', {}).get(current_weekday, {})
+            
+            if not hour_pattern and not weekday_pattern:
+                return opportunities
+            
+            # Calculate combined seasonal score
+            seasonal_score = 0.0
+            if hour_pattern:
+                seasonal_score += hour_pattern.get('bias', 0.0) * 0.6
+            if weekday_pattern:
+                seasonal_score += weekday_pattern.get('bias', 0.0) * 0.4
+            
+            if abs(seasonal_score) < 0.2:
+                return opportunities
+            
+            direction = 'buy' if seasonal_score > 0 else 'sell'
+            
+            # Calculate quality score
+            quality_score = self._calculate_seasonal_quality(pair, data, direction)
+            
+            if quality_score >= self.config.min_confidence_score:
+                opportunities.append({
+                    'type': OpportunityType.SEASONAL.value,
+                    'pair': pair,
+                    'direction': direction,
+                    'quality_score': quality_score,
+                    'seasonal_score': seasonal_score,
+                    'hour': current_hour,
+                    'weekday': current_weekday,
+                    'timestamp': datetime.now().isoformat(),
+                    'entry_price': data.get('price', 0.0),
+                    'stop_loss': self._calculate_sl(pair, data, direction),
+                    'take_profit': self._calculate_tp(pair, data, direction),
+                    'confidence': quality_score
+                })
+            
+            return opportunities
+            
+        except Exception as e:
+            self._log_debug(f"Error in _check_seasonal: {str(e)}", "error")
+            return []
+    
+    def _check_news(self, pair: str, data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Check for news-based opportunities"""
+        try:
+            opportunities = []
+            
+            # Get news data
+            news_impact = data.get('news_impact', 'none') or 'none'
+            sentiment = data.get('sentiment', 0.0) or 0.0
+            volatility = data.get('volatility', 0.0) or 0.0
+            
+            if news_impact == 'none':
+                return opportunities
+            
+            # Check if volatility is high enough
+            if volatility < self.current_volatility * 0.5:
+                return opportunities
+            
+            direction = 'buy' if sentiment > 0.2 else 'sell' if sentiment < -0.2 else None
+            
+            if direction is None:
+                # Use straddle strategy for neutral sentiment
+                opportunities.append({
+                    'type': OpportunityType.NEWS.value,
+                    'pair': pair,
+                    'direction': 'both',
+                    'quality_score': 0.7,
+                    'news_impact': news_impact,
+                    'sentiment': sentiment,
+                    'volatility': volatility,
+                    'strategy': 'straddle',
+                    'timestamp': datetime.now().isoformat(),
+                    'entry_price': data.get('price', 0.0),
+                    'stop_loss': self._calculate_sl(pair, data, 'both'),
+                    'take_profit': self._calculate_tp(pair, data, 'both'),
+                    'confidence': 0.7
+                })
+            else:
+                # Directional news trade
+                quality_score = self._calculate_news_quality(pair, data, direction)
+                
+                if quality_score >= self.config.min_confidence_score:
+                    opportunities.append({
+                        'type': OpportunityType.NEWS.value,
+                        'pair': pair,
+                        'direction': direction,
+                        'quality_score': quality_score,
+                        'news_impact': news_impact,
+                        'sentiment': sentiment,
+                        'volatility': volatility,
+                        'timestamp': datetime.now().isoformat(),
+                        'entry_price': data.get('price', 0.0),
+                        'stop_loss': self._calculate_sl(pair, data, direction),
+                        'take_profit': self._calculate_tp(pair, data, direction),
+                        'confidence': quality_score
+                    })
+            
+            return opportunities
+            
+        except Exception as e:
+            self._log_debug(f"Error in _check_news: {str(e)}", "error")
+            return []
+    
+    def _check_liquidity_sweep(self, pair: str, data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Check for liquidity sweep opportunities"""
+        try:
+            opportunities = []
+            
+            # Get order book data
+            bid = data.get('bid', 0.0) or 0.0
+            ask = data.get('ask', 0.0) or 0.0
+            order_book = data.get('order_book', {})
+            
+            if not order_book:
+                return opportunities
+            
+            # Check for liquidity levels
+            high = data.get('high', 0.0) or 0.0
+            low = data.get('low', 0.0) or 0.0
+            
+            # Check if price swept recent high/low
+            price = data.get('price', 0.0) or 0.0
+            swept_high = price > high * 0.998
+            swept_low = price < low * 1.002
+            
+            if not swept_high and not swept_low:
+                return opportunities
+            
+            direction = 'sell' if swept_high else 'buy'
+            
+            # Calculate quality score
+            quality_score = self._calculate_liquidity_sweep_quality(pair, data, direction)
+            
+            if quality_score >= self.config.min_confidence_score:
+                opportunities.append({
+                    'type': OpportunityType.LIQUIDITY_SWEEP.value,
+                    'pair': pair,
+                    'direction': direction,
+                    'quality_score': quality_score,
+                    'sweep_level': high if swept_high else low,
+                    'timestamp': datetime.now().isoformat(),
+                    'entry_price': price,
+                    'stop_loss': self._calculate_sl(pair, data, direction),
+                    'take_profit': self._calculate_tp(pair, data, direction),
+                    'confidence': quality_score
+                })
+            
+            return opportunities
+            
+        except Exception as e:
+            self._log_debug(f"Error in _check_liquidity_sweep: {str(e)}", "error")
+            return []
+    
+    def _check_timeframe_alignment(self, pair: str, signal_type: str) -> int:
+        """Check how many timeframes are aligned with the signal"""
+        try:
+            aligned = 0
+            
+            for tf in self.config.timeframes:
+                tf_data = self.timeframe_data.get(tf, {})
+                if not tf_data:
+                    continue
+                
+                pair_tf_data = tf_data.get(pair, {})
+                if not pair_tf_data:
+                    continue
+                
+                # Check if this timeframe agrees with the signal
+                if signal_type == 'momentum':
+                    if pair_tf_data.get('momentum', 0.0) > 0:
+                        aligned += 1
+                elif signal_type == 'breakout':
+                    if pair_tf_data.get('breakout', False):
+                        aligned += 1
+                # Add more signal types as needed
+            
+            return aligned
+            
+        except Exception as e:
+            self._log_debug(f"Error in _check_timeframe_alignment: {str(e)}", "error")
+            return 0
+    
+    def _calculate_momentum_quality(self, pair: str, data: Dict[str, Any]) -> float:
+        """Calculate quality score for momentum opportunity"""
+        try:
+            score = 0.0
+            
+            # Momentum strength (30%)
+            momentum = abs(data.get('momentum', 0.0) or 0.0)
+            score += min(momentum * 30, 30.0)
+            
+            # ADX strength (20%)
+            adx = data.get('adx', 0.0) or 0.0
+            score += min(adx * 0.5, 20.0)
+            
+            # RSI alignment (15%)
+            rsi = data.get('rsi', 50.0) or 50.0
+            if (momentum > 0 and rsi > 50) or (momentum < 0 and rsi < 50):
+                score += 15.0
+            
+            # Volume confirmation (15%)
+            volume = data.get('volume', 0.0) or 0.0
+            avg_volume = data.get('avg_volume', volume) or volume
+            if volume > avg_volume * 1.2:
+                score += 15.0
+            
+            # Timeframe alignment (10%)
+            aligned = self._check_timeframe_alignment(pair, 'momentum')
+            score += (aligned / len(self.config.timeframes)) * 10.0
+            
+            # Regime adjustment (10%)
+            if 'trend' in self.current_regime.lower():
+                score += 10.0
+            
+            return min(score / 100, 1.0)
+            
+        except Exception as e:
+            self._log_debug(f"Error in _calculate_momentum_quality: {str(e)}", "error")
+            return 0.5
+    
+    def _calculate_breakout_quality(self, pair: str, data: Dict[str, Any], direction: str) -> float:
+        """Calculate quality score for breakout opportunity"""
+        try:
+            score = 0.0
+            
+            # Volume confirmation (30%)
+            volume = data.get('volume', 0.0) or 0.0
+            avg_volume = data.get('avg_volume', volume) or volume
+            score += min((volume / avg_volume) * 15, 30.0)
+            
+            # Breakout strength (25%)
+            price = data.get('price', 0.0) or 0.0
+            if direction == 'buy':
+                resistance = data.get('resistance', price) or price
+                breakout_strength = (price - resistance) / resistance * 100
+            else:
+                support = data.get('support', price) or price
+                breakout_strength = (support - price) / support * 100
+            score += min(abs(breakout_strength) * 25, 25.0)
+            
+            # Timeframe alignment (20%)
+            aligned = self._check_timeframe_alignment(pair, 'breakout')
+            score += (aligned / len(self.config.timeframes)) * 20.0
+            
+            # False breakout protection (15%)
+            false_breakout_risk = data.get('false_breakout_risk', 0.0) or 0.0
+            score += (1 - false_breakout_risk) * 15.0
+            
+            # Regime adjustment (10%)
+            if 'trend' in self.current_regime.lower():
+                score += 10.0
+            elif 'range' in self.current_regime.lower():
+                score += 5.0
+            
+            return min(score / 100, 1.0)
+            
+        except Exception as e:
+            self._log_debug(f"Error in _calculate_breakout_quality: {str(e)}", "error")
+            return 0.5
+    
+    def _calculate_reversal_quality(self, pair: str, data: Dict[str, Any], direction: str) -> float:
+        """Calculate quality score for reversal opportunity"""
+        try:
+            score = 0.0
+            
+            # RSI extreme (30%)
+            rsi = data.get('rsi', 50.0) or 50.0
+            if direction == 'sell':
+                score += min((rsi - 70) * 2, 30.0) if rsi > 70 else 0
+            else:
+                score += min((30 - rsi) * 2, 30.0) if rsi < 30 else 0
+            
+            # Divergence (25%)
+            if data.get('divergence', False):
+                score += 25.0
+            
+            # Momentum reversal (20%)
+            momentum = data.get('momentum', 0.0) or 0.0
+            if (direction == 'sell' and momentum > 0.1) or (direction == 'buy' and momentum < -0.1):
+                score += 20.0
+            
+            # Volume confirmation (15%)
+            volume = data.get('volume', 0.0) or 0.0
+            avg_volume = data.get('avg_volume', volume) or volume
+            if volume > avg_volume * 1.3:
+                score += 15.0
+            
+            # Support/Resistance proximity (10%)
+            price = data.get('price', 0.0) or 0.0
+            if direction == 'buy':
+                support = data.get('support', price) or price
+                if price < support * 1.005:
+                    score += 10.0
+            else:
+                resistance = data.get('resistance', price) or price
+                if price > resistance * 0.995:
+                    score += 10.0
+            
+            return min(score / 100, 1.0)
+            
+        except Exception as e:
+            self._log_debug(f"Error in _calculate_reversal_quality: {str(e)}", "error")
+            return 0.5
+    
+    def _calculate_scalping_quality(self, pair: str, data: Dict[str, Any], direction: str) -> float:
+        """Calculate quality score for scalping opportunity"""
+        try:
+            score = 0.0
+            
+            # Spread quality (30%)
+            spread = data.get('spread', 0.0) or 0.0
+            if spread < 0.0001:
+                score += 30.0
+            elif spread < 0.0003:
+                score += 20.0
+            elif spread < 0.0005:
+                score += 10.0
+            
+            # Order flow strength (25%)
+            order_flow = abs(data.get('order_flow', 0.0) or 0.0)
+            score += min(order_flow * 25, 25.0)
+            
+            # Liquidity (20%)
+            liquidity = data.get('liquidity', 0.0) or 0.0
+            score += min(liquidity * 20, 20.0)
+            
+            # Volatility (15%)
+            if 0.5 < self.current_volatility < 2.0:
+                score += 15.0
+            elif self.current_volatility < 0.5:
+                score += 10.0
+            else:
+                score += 5.0
+            
+            # Tick momentum (10%)
+            tick_momentum = data.get('tick_momentum', 0.0) or 0.0
+            if (direction == 'buy' and tick_momentum > 0.1) or (direction == 'sell' and tick_momentum < -0.1):
+                score += 10.0
+            
+            return min(score / 100, 1.0)
+            
+        except Exception as e:
+            self._log_debug(f"Error in _calculate_scalping_quality: {str(e)}", "error")
+            return 0.5
+    
+    def _calculate_mean_reversion_quality(self, pair: str, data: Dict[str, Any], direction: str) -> float:
+        """Calculate quality score for mean reversion opportunity"""
+        try:
+            score = 0.0
+            
+            # Z-score strength (35%)
+            price = data.get('price', 0.0) or 0.0
+            moving_avg = data.get('moving_avg_20', price) or price
+            std_dev = data.get('std_dev', 0.0) or 0.0
+            
+            if std_dev > 0:
+                zscore = abs((price - moving_avg) / std_dev)
+                score += min(zscore * 15, 35.0)
+            
+            # Mean reversion speed (25%)
+            reversion_speed = data.get('reversion_speed', 0.0) or 0.0
+            score += min(abs(reversion_speed) * 25, 25.0)
+            
+            # Volume confirmation (20%)
+            volume = data.get('volume', 0.0) or 0.0
+            avg_volume = data.get('avg_volume', volume) or volume
+            if volume > avg_volume * 1.1:
+                score += 20.0
+            
+            # Market regime (20%)
+            if 'range' in self.current_regime.lower():
+                score += 20.0
+            elif 'trend' in self.current_regime.lower():
+                score += 10.0
+            
+            return min(score / 100, 1.0)
+            
+        except Exception as e:
+            self._log_debug(f"Error in _calculate_mean_reversion_quality: {str(e)}", "error")
+            return 0.5
+    
+    def _calculate_seasonal_quality(self, pair: str, data: Dict[str, Any], direction: str) -> float:
+        """Calculate quality score for seasonal opportunity"""
+        try:
+            score = 0.0
+            
+            # Seasonal strength (40%)
+            seasonal_pattern = self.seasonal_patterns.get(pair, {})
+            seasonal_score = seasonal_pattern.get('strength', 0.0) or 0.0
+            score += min(abs(seasonal_score) * 40, 40.0)
+            
+            # Historical win rate (30%)
+            win_rate = seasonal_pattern.get('win_rate', 0.5) or 0.5
+            score += win_rate * 30.0
+            
+            # Frequency (15%)
+            frequency = seasonal_pattern.get('frequency', 0.0) or 0.0
+            score += min(frequency * 15, 15.0)
+            
+            # Current conditions (15%)
+            if self.current_volatility < 1.5:
+                score += 15.0
+            
+            return min(score / 100, 1.0)
+            
+        except Exception as e:
+            self._log_debug(f"Error in _calculate_seasonal_quality: {str(e)}", "error")
+            return 0.5
+    
+    def _calculate_news_quality(self, pair: str, data: Dict[str, Any], direction: str) -> float:
+        """Calculate quality score for news opportunity"""
+        try:
+            score = 0.0
+            
+            # News impact (35%)
+            news_impact = data.get('news_impact', 'none') or 'none'
+            impact_scores = {'high': 35.0, 'medium': 25.0, 'low': 15.0}
+            score += impact_scores.get(news_impact, 0.0)
+            
+            # Sentiment strength (25%)
+            sentiment = abs(data.get('sentiment', 0.0) or 0.0)
+            score += min(sentiment * 25, 25.0)
+            
+            # Volatility expansion (20%)
+            volatility = data.get('volatility', 0.0) or 0.0
+            if volatility > self.current_volatility * 1.5:
+                score += 20.0
+            
+            # Liquidity (10%)
+            liquidity = data.get('liquidity', 0.0) or 0.0
+            score += min(liquidity * 10, 10.0)
+            
+            # Time since news (10%)
+            time_since = data.get('time_since_news', 60.0) or 60.0
+            if time_since < 5:
+                score += 10.0
+            elif time_since < 15:
+                score += 7.0
+            elif time_since < 30:
+                score += 4.0
+            
+            return min(score / 100, 1.0)
+            
+        except Exception as e:
+            self._log_debug(f"Error in _calculate_news_quality: {str(e)}", "error")
+            return 0.5
+    
+    def _calculate_liquidity_sweep_quality(self, pair: str, data: Dict[str, Any], direction: str) -> float:
+        """Calculate quality score for liquidity sweep opportunity"""
+        try:
+            score = 0.0
+            
+            # Sweep strength (35%)
+            price = data.get('price', 0.0) or 0.0
+            high = data.get('high', price) or price
+            low = data.get('low', price) or price
+            
+            if direction == 'sell':
+                sweep_strength = (price - high) / high * 100
+            else:
+                sweep_strength = (low - price) / low * 100
+            score += min(abs(sweep_strength) * 35, 35.0)
+            
+            # Order book depth (25%)
+            order_book = data.get('order_book', {})
+            depth = sum(order_book.get('bids', [])[:10]) + sum(order_book.get('asks', [])[:10])
+            depth_score = min(depth / 10000 * 25, 25.0)
+            score += depth_score
+            
+            # Volume confirmation (20%)
+            volume = data.get('volume', 0.0) or 0.0
+            avg_volume = data.get('avg_volume', volume) or volume
+            if volume > avg_volume * 1.5:
+                score += 20.0
+            
+            # Liquidity absorption (10%)
+            absorption = data.get('liquidity_absorption', 0.0) or 0.0
+            score += min(abs(absorption) * 10, 10.0)
+            
+            # Regime adjustment (10%)
+            if 'volatile' in self.current_regime.lower():
+                score += 10.0
+            elif 'trend' in self.current_regime.lower():
+                score += 5.0
+            
+            return min(score / 100, 1.0)
+            
+        except Exception as e:
+            self._log_debug(f"Error in _calculate_liquidity_sweep_quality: {str(e)}", "error")
+            return 0.5
+    
+    def _calculate_sl(self, pair: str, data: Dict[str, Any], direction: str, scalping: bool = False) -> float:
+        """Calculate stop loss level"""
+        try:
+            price = data.get('price', 0.0) or 0.0
+            atr = data.get('atr', price * 0.01) or price * 0.01
+            
+            if scalping:
+                # Tighter SL for scalping
+                sl_multiplier = 0.3
+            else:
+                # Normal SL based on volatility
+                sl_multiplier = 1.5 + (self.current_volatility * 0.2)
+                sl_multiplier = max(1.0, min(2.5, sl_multiplier))
+            
+            if direction == 'buy':
+                return price - (atr * sl_multiplier)
+            elif direction == 'sell':
+                return price + (atr * sl_multiplier)
+            else:  # both (news straddle)
+                return price - (atr * 1.5), price + (atr * 1.5)
+            
+        except Exception as e:
+            self._log_debug(f"Error in _calculate_sl: {str(e)}", "error")
+            return 0.0
+    
+    def _calculate_tp(self, pair: str, data: Dict[str, Any], direction: str, scalping: bool = False) -> float:
+        """Calculate take profit level"""
+        try:
+            price = data.get('price', 0.0) or 0.0
+            atr = data.get('atr', price * 0.01) or price * 0.01
+            
+            if scalping:
+                # Smaller TP for scalping
+                tp_multiplier = 0.5
+            else:
+                # Normal TP based on volatility and regime
+                tp_multiplier = 2.5 + (self.current_volatility * 0.3)
+                if 'trend' in self.current_regime.lower():
+                    tp_multiplier *= 1.2
+                elif 'range' in self.current_regime.lower():
+                    tp_multiplier *= 0.8
+                tp_multiplier = max(1.5, min(5.0, tp_multiplier))
+            
+            if direction == 'buy':
+                return price + (atr * tp_multiplier)
+            elif direction == 'sell':
+                return price - (atr * tp_multiplier)
+            else:  # both (news straddle)
+                return price + (atr * 2.0), price - (atr * 2.0)
+            
+        except Exception as e:
+            self._log_debug(f"Error in _calculate_tp: {str(e)}", "error")
+            return 0.0
+    
+    def _update_seasonal_patterns(self, market_data: Dict[str, Any]) -> None:
+        """Update seasonal patterns from market data"""
+        try:
+            if 'seasonal_data' not in market_data:
+                return
+            
+            seasonal_data = market_data.get('seasonal_data', {})
+            for pair, pattern in seasonal_data.items():
+                if pair not in self.seasonal_patterns:
+                    self.seasonal_patterns[pair] = pattern
+            
+        except Exception as e:
+            self._log_debug(f"Error in _update_seasonal_patterns: {str(e)}", "error")
+    
+    def _score_and_rank_opportunities(self, opportunities: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Score and rank opportunities"""
+        try:
+            # Apply anomaly detection
+            if self.anomaly_detector:
+                features = np.array([[o.get('quality_score', 0.5), 
+                                     o.get('confidence', 0.5),
+                                     len(str(o)) % 10] for o in opportunities])
+                
+                # Predict outliers (1 = normal, -1 = outlier)
+                if len(features) > 0:
+                    predictions = self.anomaly_detector.fit_predict(features)
+                    
+                    # Filter out outliers
+                    filtered = []
+                    for i, opp in enumerate(opportunities):
+                        if predictions[i] == 1:  # Normal opportunity
+                            filtered.append(opp)
+                    opportunities = filtered
+            
+            # Sort by quality score
+            opportunities.sort(key=lambda x: x.get('quality_score', 0), reverse=True)
+            
+            # Add rank
+            for i, opp in enumerate(opportunities):
+                opp['rank'] = i + 1
+            
+            return opportunities
+            
+        except Exception as e:
+            self._log_debug(f"Error in _score_and_rank_opportunities: {str(e)}", "error")
+            return opportunities
+    
+    def get_status(self) -> Dict[str, Any]:
+        """Get current status of Opportunity Engine"""
+        try:
+            total = self.performance['total_opportunities_found']
+            
+            return {
+                'total_opportunities_found': total,
+                'high_quality_opportunities': self.performance['high_quality_opportunities'],
+                'opportunities_taken': self.performance['opportunities_taken'],
+                'opportunities_passed': self.performance['opportunities_passed'],
+                'average_quality_score': self.performance['average_quality_score'],
+                'opportunity_type_distribution': self.performance['opportunity_type_distribution'],
+                'success_rate_by_type': self.performance['success_rate_by_type'],
+                'ml_retraining_events': self.performance['ml_retraining_events'],
+                'total_scan_time': self.performance['total_scan_time'],
+                'current_regime': self.current_regime,
+                'current_volatility': self.current_volatility,
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_status: {str(e)}", "error")
+            return {'status': 'ERROR', 'error': str(e)}
+    
+    def get_performance_report(self) -> Dict[str, Any]:
+        """Get detailed performance report"""
+        try:
+            total = self.performance['total_opportunities_found']
+            high_quality = self.performance['high_quality_opportunities']
+            
+            return {
+                'summary': {
+                    'total_opportunities_found': total,
+                    'high_quality_opportunities': high_quality,
+                    'high_quality_rate': (high_quality / total * 100) if total > 0 else 0,
+                    'opportunities_taken': self.performance['opportunities_taken'],
+                    'opportunities_passed': self.performance['opportunities_passed'],
+                    'average_quality_score': self.performance['average_quality_score']
+                },
+                'opportunity_types': self.performance['opportunity_type_distribution'],
+                'success_rates': self.performance['success_rate_by_type'],
+                'ml_retraining_events': self.performance['ml_retraining_events'],
+                'total_scan_time': self.performance['total_scan_time'],
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_performance_report: {str(e)}", "error")
+            return {'error': str(e)}

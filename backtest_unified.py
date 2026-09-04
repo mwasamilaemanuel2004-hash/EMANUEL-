@@ -85,6 +85,9 @@ def run():
                                 'thresholds': {'no_trade': 64, 'watch': 65, 'normal': 75, 'high': 85}}})
     mtf = make_mtf()
     df, signals = generate_signals(mtf)
+    max_signals = int(sys.argv[1]) if len(sys.argv) > 1 else int(os.environ.get('BACKTEST_MAX_SIGNALS', '0'))
+    if max_signals > 0:
+        signals = signals[:max_signals]
     print(f"Generated {len(signals)} candidate signals")
 
     wins = losses = 0
@@ -92,33 +95,42 @@ def run():
     rejects = {}
     sym = "TREND"
     cooldown = 0
-    for idx, side, price in signals:
-        if cooldown > 0:
-            cooldown -= 1
-            if cooldown == 0:
-                bm.filter.consecutive_losses = 0
-                bm.filter.daily_loss_pct = 0.0
-            rejects['cooldown-wait'] = rejects.get('cooldown-wait', 0) + 1
-            continue
-        # use available history only (no look-ahead)
-        hist = {k: mtf[k].loc[:df.index[idx]].iloc[-300:] for k in mtf if len(mtf[k].loc[:df.index[idx]]) > 50}
-        res = bm.prepare_trade('TrendFollowerBot', side, price, hist, symbol=sym,
-                               risk_pct=1.0, spread_pct=0.02, liquidity_ok=True)
-        if res is None or res.get('decision') != 'EXECUTE':
-            reason = res.get('reason', 'none') if res else 'none'
-            rejects[reason] = rejects.get(reason, 0) + 1
-            if 'consecutive-loss' in reason:
-                cooldown = 30
-            continue
-        plan = res['plan']
-        future = df.iloc[idx+1: idx+1+200]
-        out = bm.entry.simulate(plan, future)
-        bm.record_outcome(sym, out.pnl_pct)
-        if out.won:
-            wins += 1
-        else:
-            losses += 1
-        pnls.append(out.pnl_pct)
+    errors = 0
+    for processed, (idx, side, price) in enumerate(signals, 1):
+        if processed % 25 == 0:
+            print(f"  Processed {processed}/{len(signals)} candidates", flush=True)
+        try:
+            if cooldown > 0:
+                cooldown -= 1
+                if cooldown == 0:
+                    bm.filter.consecutive_losses = 0
+                    bm.filter.daily_loss_pct = 0.0
+                rejects['cooldown-wait'] = rejects.get('cooldown-wait', 0) + 1
+                continue
+            # Use available history only (no look-ahead).
+            hist = {k: mtf[k].loc[:df.index[idx]].iloc[-300:] for k in mtf if len(mtf[k].loc[:df.index[idx]]) > 50}
+            res = bm.prepare_trade('TrendFollowerBot', side, price, hist, symbol=sym,
+                                   risk_pct=1.0, spread_pct=0.02, liquidity_ok=True)
+            if res is None or res.get('decision') != 'EXECUTE':
+                reason = res.get('reason', 'none') if res else 'none'
+                rejects[reason] = rejects.get(reason, 0) + 1
+                if 'consecutive-loss' in reason:
+                    cooldown = 30
+                continue
+            future = df.iloc[idx + 1: idx + 1 + 200]
+            if future.empty:
+                rejects['no-future-data'] = rejects.get('no-future-data', 0) + 1
+                continue
+            out = bm.entry.simulate(res['plan'], future)
+            bm.record_outcome(sym, out.pnl_pct)
+            if out.won:
+                wins += 1
+            else:
+                losses += 1
+            pnls.append(float(out.pnl_pct))
+        except (KeyError, IndexError, TypeError, ValueError, AssertionError) as exc:
+            errors += 1
+            rejects[f'error:{type(exc).__name__}'] = rejects.get(f'error:{type(exc).__name__}', 0) + 1
 
     total = wins + losses
     wr = wins / total * 100 if total else 0
@@ -126,14 +138,22 @@ def run():
     gross_l = abs(sum(p for p in pnls if p < 0))
     pf = gross_w / gross_l if gross_l else 0
     exp = np.mean(pnls) if pnls else 0
+    avg_win = np.mean([p for p in pnls if p > 0]) if any(p > 0 for p in pnls) else 0
+    avg_loss = np.mean([p for p in pnls if p < 0]) if any(p < 0 for p in pnls) else 0
+    curve = np.cumsum(pnls) if pnls else np.array([0.0])
+    drawdown = float(np.max(np.maximum.accumulate(curve) - curve))
     print("=" * 60)
     print("  UNIFIED BACKTEST (live-identical execution)")
     print("=" * 60)
     print(f"  Executed trades : {total}")
+    print(f"  Processing errors: {errors}")
     print(f"  Win Rate        : {wr:.1f}%")
     print(f"  Profit Factor   : {pf:.2f}")
     print(f"  Expectancy      : {exp*100:.2f}% per trade")
-    print(f"  Avg Win / Loss  : {np.mean([p for p in pnls if p>0])*100:.2f}% / {np.mean([p for p in pnls if p<0])*100:.2f}%")
+    print(f"  Avg Win / Loss  : {avg_win*100:.2f}% / {avg_loss*100:.2f}%")
+    print(f"  Max Drawdown    : {drawdown*100:.2f}%")
+    if max_signals > 0:
+        print(f"  Trade outcomes  : {[round(p * 100, 3) for p in pnls]}")
     print("  Top rejection reasons:")
     for r, c in sorted(rejects.items(), key=lambda x: -x[1])[:6]:
         print(f"    - {r}: {c}")

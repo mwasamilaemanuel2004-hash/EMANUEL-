@@ -1,0 +1,639 @@
+"""
+LAYER +32: REGIME-SPECIFIC STRATEGY ROUTER (ULTIMATE OPTIMIZED)
+Purpose: Route to the best strategy for current market regime with ADAPTIVE intelligence.
+Balance: GOLDILOCKS - NOT too strict (misses profit) and NOT too loose (takes losses).
+
+KEY FEATURES:
+- Detects 7 market regimes automatically
+- Routes to specific strategies per regime
+- ADAPTIVE: Changes based on real-time conditions
+- PROFIT-FOCUSED: Prioritizes profitable opportunities
+- LOSS PREVENTION: Built-in protection per regime
+- SMOOTH TRANSITIONS: No sudden strategy changes
+- PERFORMANCE FEEDBACK: Learns from past results
+- REGIME CONFIDENCE: Only switches with high confidence
+"""
+
+import numpy as np
+import pandas as pd
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Tuple, Any, Union
+from enum import Enum
+from dataclasses import dataclass, field
+import logging
+import json
+import time
+from collections import deque
+import threading
+
+# Configure logging
+logger = logging.getLogger(__name__)
+
+debug_handler = logging.FileHandler('logs/regime_router_debug.log')
+debug_handler.setLevel(logging.DEBUG)
+debug_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+debug_handler.setFormatter(debug_formatter)
+logger.addHandler(debug_handler)
+
+
+class MarketRegime(Enum):
+    """Market regimes detected"""
+    STRONG_TREND = "strong_trend"      # ADX > 40
+    WEAK_TREND = "weak_trend"          # ADX 25-40
+    RANGING = "ranging"                # ADX < 25
+    HIGH_VOLATILITY = "high_volatility" # ATR > 2x average
+    LOW_VOLATILITY = "low_volatility"  # ATR < 0.5x average
+    NEWS_IMPACT = "news_impact"        # Major news
+    LOW_LIQUIDITY = "low_liquidity"    # Wide spreads
+
+
+class StrategyType(Enum):
+    """Strategies to use based on regime"""
+    TREND_FOLLOWING = "trend_following"    # Strong trends
+    MEAN_REVERSION = "mean_reversion"      # Ranging markets
+    GRID_SCALPING = "grid_scalping"        # Sideways with volatility
+    DEFENSIVE = "defensive"                # High volatility
+    AGGRESSIVE = "aggressive"              # Low volatility
+    NEWS_PROTOCOL = "news_protocol"        # News events
+    PAUSED = "paused"                      # Low liquidity
+    ADAPTIVE = "adaptive"                  # Hybrid approach
+
+
+@dataclass
+class RegimeRouterConfig:
+    """Configuration for Regime Router - BALANCED & PROFIT-FOCUSED"""
+    
+    # REGIME DETECTION THRESHOLDS
+    strong_trend_adx: float = 40.0
+    weak_trend_adx_min: float = 25.0
+    weak_trend_adx_max: float = 40.0
+    ranging_adx: float = 25.0
+    high_volatility_atr: float = 2.0
+    low_volatility_atr: float = 0.5
+    
+    # REGIME CONFIDENCE
+    min_confidence_to_switch: float = 0.60  # 60% confidence needed
+    consecutive_confirmations: int = 3      # 3 consecutive confirmations
+    
+    # STRATEGY PARAMETERS (BALANCED)
+    strategy_params: Dict[str, Dict[str, Any]] = field(default_factory=lambda: {
+        'trend_following': {
+            'position_size': 2.0,
+            'sl_multiplier': 1.5,
+            'tp_multiplier': 4.0,
+            'max_trades': 12,
+            'rr_target': '1:3-1:5',
+            'confirmations': 2
+        },
+        'mean_reversion': {
+            'position_size': 1.0,
+            'sl_multiplier': 1.2,
+            'tp_multiplier': 2.5,
+            'max_trades': 8,
+            'rr_target': '1:1.5-1:2.5',
+            'confirmations': 3
+        },
+        'grid_scalping': {
+            'position_size': 0.8,
+            'sl_multiplier': 0.8,
+            'tp_multiplier': 1.5,
+            'max_trades': 15,
+            'rr_target': '1:1.5-1:2',
+            'confirmations': 2
+        },
+        'defensive': {
+            'position_size': 0.5,
+            'sl_multiplier': 1.0,
+            'tp_multiplier': 3.0,
+            'max_trades': 5,
+            'rr_target': '1:2-1:4',
+            'confirmations': 2
+        },
+        'aggressive': {
+            'position_size': 2.5,
+            'sl_multiplier': 2.0,
+            'tp_multiplier': 3.0,
+            'max_trades': 20,
+            'rr_target': '1:1.5-1:2.5',
+            'confirmations': 1
+        },
+        'news_protocol': {
+            'position_size': 0.3,
+            'sl_multiplier': 0.5,
+            'tp_multiplier': 5.0,
+            'max_trades': 2,
+            'rr_target': '1:5-1:8',
+            'confirmations': 1
+        },
+        'paused': {
+            'position_size': 0.0,
+            'sl_multiplier': 0.0,
+            'tp_multiplier': 0.0,
+            'max_trades': 0,
+            'rr_target': '0',
+            'confirmations': 0
+        },
+        'adaptive': {
+            'position_size': 1.5,
+            'sl_multiplier': 1.3,
+            'tp_multiplier': 3.0,
+            'max_trades': 10,
+            'rr_target': '1:2-1:4',
+            'confirmations': 2
+        }
+    })
+    
+    # STRATEGY MAPPING (Regime -> Strategy)
+    strategy_mapping: Dict[str, str] = field(default_factory=lambda: {
+        'strong_trend': 'trend_following',
+        'weak_trend': 'mean_reversion',
+        'ranging': 'grid_scalping',
+        'high_volatility': 'defensive',
+        'low_volatility': 'aggressive',
+        'news_impact': 'news_protocol',
+        'low_liquidity': 'paused'
+    })
+    
+    # TRANSITION RULES
+    transition_cooldown_minutes: int = 5
+    max_strategy_changes_per_hour: int = 3
+    
+    # DEBUG
+    debug_mode: bool = True
+    max_history_size: int = 10000
+
+
+class RegimeRouter:
+    """
+    Regime Router - Routes to best strategy for current regime
+    ADAPTIVE, PROFIT-FOCUSED, NOT TOO STRICT
+    """
+    
+    def __init__(self, config: Optional[RegimeRouterConfig] = None):
+        self.config = config or RegimeRouterConfig()
+        self.debug_mode = self.config.debug_mode
+        
+        # PERFORMANCE TRACKING
+        self.performance = {
+            'total_regime_checks': 0,
+            'regime_changes': 0,
+            'strategy_changes': 0,
+            'regime_history': [],
+            'strategy_performance': {},
+            'false_positives': 0,
+            'avg_regime_confidence': 0.0,
+            'successful_strategies': {}
+        }
+        
+        # CURRENT STATE
+        self.current_regime = MarketRegime.RANGING
+        self.current_strategy = StrategyType.GRID_SCALPING
+        self.current_params = self.config.strategy_params['grid_scalping']
+        self.current_confidence = 0.0
+        self.regime_scores = {}
+        
+        # TRANSITION TRACKING
+        self.last_transition_time = datetime.now()
+        self.transition_count = 0
+        self.last_hour_start = datetime.now()
+        self.consecutive_regime_count = 0
+        self.previous_regime = None
+        
+        # HISTORY
+        self.regime_history = deque(maxlen=self.config.max_history_size)
+        self.strategy_history = deque(maxlen=1000)
+        self.performance_history = deque(maxlen=1000)
+        
+        # MARKET DATA
+        self.market_data = {}
+        self.regime_cache = {}
+        self.confidence_buffer = deque(maxlen=10)
+        
+        # PROFIT TRACKING
+        self.profit_by_regime = {}
+        self.loss_by_regime = {}
+        
+        # LOCK
+        self._lock = threading.Lock()
+        
+        self._log_debug("Regime Router initialized - ADAPTIVE & PROFIT-FOCUSED")
+        logger.info("Regime Router initialized - ADAPTIVE & PROFIT-FOCUSED")
+    
+    def _log_debug(self, message: str, level: str = "debug") -> None:
+        """Debug logging with timestamp"""
+        if self.debug_mode:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+            log_msg = f"[DEBUG {timestamp}] {message}"
+            if level == "info":
+                logger.info(log_msg)
+            elif level == "warning":
+                logger.warning(log_msg)
+            elif level == "error":
+                logger.error(log_msg)
+            else:
+                logger.debug(log_msg)
+    
+    def update_market_data(self, market_data: Dict[str, Any]) -> None:
+        """Update market data and detect regime"""
+        try:
+            if not isinstance(market_data, dict):
+                return
+            
+            self.market_data = market_data.copy()
+            
+            # Extract key metrics
+            adx = market_data.get('adx', 0.0) or 0.0
+            atr = market_data.get('atr', 0.0) or 0.0
+            volatility = market_data.get('volatility', 0.0) or 0.0
+            spread = market_data.get('spread', 0.0) or 0.0
+            news_impact = market_data.get('news_impact', 'none') or 'none'
+            
+            # Detect regime
+            new_regime, confidence, scores = self._detect_regime(
+                adx, atr, volatility, spread, news_impact
+            )
+            
+            self.regime_scores = scores
+            self.current_confidence = confidence
+            
+            # Check if regime should change
+            if self._should_change_regime(new_regime):
+                self._change_regime(new_regime)
+            
+            # Track performance
+            self._track_performance(market_data)
+            
+            # Update history
+            self.regime_history.append({
+                'regime': self.current_regime.value,
+                'confidence': confidence,
+                'timestamp': datetime.now().isoformat()
+            })
+            
+            self.performance['total_regime_checks'] += 1
+            
+            self._log_debug(f"Regime: {self.current_regime.value}, Confidence: {confidence:.2f}, Strategy: {self.current_strategy.value}")
+            
+        except Exception as e:
+            self._log_debug(f"Error in update_market_data: {str(e)}", "error")
+    
+    def _detect_regime(self, adx: float, atr: float, volatility: float, 
+                      spread: float, news_impact: str) -> Tuple[MarketRegime, float, Dict]:
+        """Detect current market regime with confidence scoring"""
+        try:
+            scores = {}
+            
+            # 1. Trend detection
+            if adx > self.config.strong_trend_adx:
+                scores['strong_trend'] = min(1.0, (adx - 40) / 30 + 0.5)
+            elif adx > self.config.weak_trend_adx_min:
+                scores['weak_trend'] = min(1.0, (adx - 25) / 15 + 0.4)
+            else:
+                scores['ranging'] = min(1.0, (25 - adx) / 25 + 0.3)
+            
+            # 2. Volatility detection
+            if volatility > self.config.high_volatility_atr:
+                scores['high_volatility'] = min(1.0, (volatility - 2) / 4 + 0.5)
+            elif volatility < self.config.low_volatility_atr:
+                scores['low_volatility'] = min(1.0, (0.5 - volatility) / 0.5 + 0.3)
+            
+            # 3. News impact
+            if news_impact != 'none':
+                if news_impact == 'high':
+                    scores['news_impact'] = 0.9
+                elif news_impact == 'medium':
+                    scores['news_impact'] = 0.7
+                else:
+                    scores['news_impact'] = 0.5
+            
+            # 4. Liquidity
+            if spread > 0.001:
+                scores['low_liquidity'] = min(1.0, (spread - 0.001) / 0.01 + 0.3)
+            
+            # 5. Confidence smoothing
+            for regime in scores:
+                # Adjust confidence based on consecutive detections
+                if regime in self.regime_cache:
+                    cached = self.regime_cache[regime]
+                    scores[regime] = (scores[regime] + cached * 0.5) / 1.5
+            
+            # Select best regime
+            best_regime = max(scores, key=scores.get, default='ranging')
+            best_score = scores.get(best_regime, 0.5)
+            
+            # Minimum confidence threshold
+            if best_score < 0.3:
+                best_regime = 'ranging'
+                best_score = 0.3
+            
+            # Update cache
+            self.regime_cache[best_regime] = best_score
+            
+            # Map to enum
+            regime_map = {
+                'strong_trend': MarketRegime.STRONG_TREND,
+                'weak_trend': MarketRegime.WEAK_TREND,
+                'ranging': MarketRegime.RANGING,
+                'high_volatility': MarketRegime.HIGH_VOLATILITY,
+                'low_volatility': MarketRegime.LOW_VOLATILITY,
+                'news_impact': MarketRegime.NEWS_IMPACT,
+                'low_liquidity': MarketRegime.LOW_LIQUIDITY
+            }
+            
+            return regime_map.get(best_regime, MarketRegime.RANGING), best_score, scores
+            
+        except Exception as e:
+            self._log_debug(f"Error in _detect_regime: {str(e)}", "error")
+            return MarketRegime.RANGING, 0.5, {}
+    
+    def _should_change_regime(self, new_regime: MarketRegime) -> bool:
+        """Determine if regime should change - ADAPTIVE LOGIC"""
+        try:
+            # Check if same regime
+            if new_regime == self.current_regime:
+                self.consecutive_regime_count += 1
+                return False
+            
+            # Check confidence
+            if self.current_confidence < self.config.min_confidence_to_switch:
+                return False
+            
+            # Check cooldown
+            time_since_transition = (datetime.now() - self.last_transition_time).total_seconds() / 60
+            if time_since_transition < self.config.transition_cooldown_minutes:
+                return False
+            
+            # Check transition limit
+            if self.transition_count >= self.config.max_strategy_changes_per_hour:
+                return False
+            
+            # Check profit impact (don't switch if current strategy is profitable)
+            if self.current_strategy in self.performance['successful_strategies']:
+                success_rate = self.performance['successful_strategies'].get(self.current_strategy.value, 0.5)
+                if success_rate > 0.6:
+                    # Current strategy is working well, don't switch prematurely
+                    if self.current_confidence < 0.7:
+                        return False
+            
+            # Check if new regime would be more profitable
+            new_strategy_name = self.config.strategy_mapping.get(new_regime.value, 'adaptive')
+            new_success_rate = self.performance['successful_strategies'].get(new_strategy_name, 0.5)
+            current_success_rate = self.performance['successful_strategies'].get(self.current_strategy.value, 0.5)
+            
+            # Only switch if new strategy has better success rate OR confidence is very high
+            if new_success_rate > current_success_rate * 0.9 or self.current_confidence > 0.8:
+                return True
+            
+            return False
+            
+        except Exception as e:
+            self._log_debug(f"Error in _should_change_regime: {str(e)}", "error")
+            return False
+    
+    def _change_regime(self, new_regime: MarketRegime) -> None:
+        """Change regime and update strategy"""
+        try:
+            old_regime = self.current_regime
+            old_strategy = self.current_strategy
+            
+            # Update regime
+            self.current_regime = new_regime
+            
+            # Update strategy
+            strategy_name = self.config.strategy_mapping.get(new_regime.value, 'adaptive')
+            self.current_strategy = StrategyType(strategy_name)
+            self.current_params = self.config.strategy_params.get(strategy_name, self.config.strategy_params['adaptive'])
+            
+            # Update tracking
+            self.performance['regime_changes'] += 1
+            self.performance['strategy_changes'] += 1
+            self.last_transition_time = datetime.now()
+            self.transition_count += 1
+            self.consecutive_regime_count = 0
+            
+            # Reset hourly counter
+            if (datetime.now() - self.last_hour_start).total_seconds() > 3600:
+                self.transition_count = 0
+                self.last_hour_start = datetime.now()
+            
+            self.regime_history.append({
+                'from': old_regime.value,
+                'to': new_regime.value,
+                'timestamp': datetime.now().isoformat()
+            })
+            
+            self._log_debug(f"REGIME CHANGE: {old_regime.value} -> {new_regime.value} (Strategy: {self.current_strategy.value})", "info")
+            logger.info(f"REGIME CHANGE: {old_regime.value} -> {new_regime.value} (Strategy: {self.current_strategy.value})")
+            
+        except Exception as e:
+            self._log_debug(f"Error in _change_regime: {str(e)}", "error")
+    
+    def _track_performance(self, market_data: Dict[str, Any]) -> None:
+        """Track performance by regime and strategy"""
+        try:
+            pnl = market_data.get('pnl', 0.0) or 0.0
+            trades = market_data.get('trades', 0) or 0
+            
+            # Track by regime
+            regime_key = self.current_regime.value
+            if regime_key not in self.profit_by_regime:
+                self.profit_by_regime[regime_key] = 0.0
+                self.loss_by_regime[regime_key] = 0.0
+            
+            if pnl > 0:
+                self.profit_by_regime[regime_key] += pnl
+            else:
+                self.loss_by_regime[regime_key] += abs(pnl)
+            
+            # Track by strategy
+            strategy_key = self.current_strategy.value
+            if strategy_key not in self.performance['strategy_performance']:
+                self.performance['strategy_performance'][strategy_key] = {
+                    'wins': 0, 'losses': 0, 'pnl': 0.0
+                }
+            
+            if pnl > 0:
+                self.performance['strategy_performance'][strategy_key]['wins'] += 1
+            else:
+                self.performance['strategy_performance'][strategy_key]['losses'] += 1
+            
+            self.performance['strategy_performance'][strategy_key]['pnl'] += pnl
+            
+            # Calculate success rate
+            perf = self.performance['strategy_performance'][strategy_key]
+            total = perf['wins'] + perf['losses']
+            if total > 0:
+                success_rate = perf['wins'] / total
+                self.performance['successful_strategies'][strategy_key] = success_rate
+            
+            # Store history
+            self.performance_history.append({
+                'pnl': pnl,
+                'trades': trades,
+                'regime': self.current_regime.value,
+                'strategy': self.current_strategy.value,
+                'timestamp': datetime.now().isoformat()
+            })
+            
+        except Exception as e:
+            self._log_debug(f"Error in _track_performance: {str(e)}", "error")
+    
+    def get_current_strategy(self) -> Dict[str, Any]:
+        """Get current strategy parameters"""
+        try:
+            return {
+                'regime': self.current_regime.value,
+                'strategy': self.current_strategy.value,
+                'params': self.current_params,
+                'confidence': self.current_confidence,
+                'regime_scores': self.regime_scores
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_current_strategy: {str(e)}", "error")
+            return {'error': str(e)}
+    
+    def get_strategy_for_trade(self, trade_signal: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Get optimized strategy parameters for a trade
+        Returns: Strategy parameters with adaptive adjustments
+        """
+        try:
+            # Base parameters from current regime
+            params = self.current_params.copy()
+            
+            # Adjust based on trade signal confidence
+            confidence = trade_signal.get('confidence', 0.5)
+            if confidence > 0.8:
+                params['position_size'] *= 1.2
+            elif confidence < 0.5:
+                params['position_size'] *= 0.7
+            
+            # Adjust based on market volatility
+            if self.current_regime == MarketRegime.HIGH_VOLATILITY:
+                params['position_size'] *= 0.6
+                params['sl_multiplier'] *= 1.2
+            elif self.current_regime == MarketRegime.LOW_VOLATILITY:
+                params['position_size'] *= 1.3
+                params['sl_multiplier'] *= 0.8
+            
+            # Ensure limits
+            params['position_size'] = max(0.1, min(3.0, params['position_size']))
+            
+            return {
+                'strategy': self.current_strategy.value,
+                'regime': self.current_regime.value,
+                'params': params,
+                'confidence': self.current_confidence
+            }
+            
+        except Exception as e:
+            self._log_debug(f"Error in get_strategy_for_trade: {str(e)}", "error")
+            return {
+                'strategy': 'adaptive',
+                'regime': 'ranging',
+                'params': self.config.strategy_params['adaptive'],
+                'confidence': 0.5
+            }
+    
+    def can_trade(self) -> Tuple[bool, str, float]:
+        """
+        Check if trading is allowed in current regime
+        Returns: (can_trade, reason, position_multiplier)
+        """
+        try:
+            # Check if paused
+            if self.current_strategy == StrategyType.PAUSED:
+                return False, "Paused - Low liquidity", 0.0
+            
+            # Check emergency
+            if self.current_regime == MarketRegime.NEWS_IMPACT:
+                return False, "News impact - Pausing", 0.0
+            
+            # Check confidence
+            if self.current_confidence < 0.3:
+                return False, f"Low confidence: {self.current_confidence:.2f}", 0.0
+            
+            # Check strategy-specific limits
+            if self.current_params.get('max_trades', 0) <= 0:
+                return False, "Strategy has zero trades", 0.0
+            
+            # Get position multiplier based on regime
+            multiplier = 1.0
+            if self.current_regime == MarketRegime.HIGH_VOLATILITY:
+                multiplier = 0.5
+            elif self.current_regime == MarketRegime.WEAK_TREND:
+                multiplier = 0.7
+            elif self.current_regime == MarketRegime.STRONG_TREND:
+                multiplier = 1.2
+            elif self.current_regime == MarketRegime.LOW_VOLATILITY:
+                multiplier = 1.3
+            
+            return True, "Trading allowed", multiplier
+            
+        except Exception as e:
+            self._log_debug(f"Error in can_trade: {str(e)}", "error")
+            return False, f"Error: {str(e)}", 0.0
+    
+    def get_regime_summary(self) -> Dict[str, Any]:
+        """Get current regime summary"""
+        try:
+            return {
+                'current_regime': self.current_regime.value,
+                'current_strategy': self.current_strategy.value,
+                'confidence': self.current_confidence,
+                'regime_scores': self.regime_scores,
+                'params': self.current_params,
+                'transitions': self.performance['regime_changes'],
+                'last_transition': self.last_transition_time.isoformat(),
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_regime_summary: {str(e)}", "error")
+            return {'error': str(e)}
+    
+    def get_performance_report(self) -> Dict[str, Any]:
+        """Get detailed performance report"""
+        try:
+            return {
+                'summary': {
+                    'regime_changes': self.performance['regime_changes'],
+                    'strategy_changes': self.performance['strategy_changes'],
+                    'avg_confidence': self.performance['avg_regime_confidence'],
+                    'false_positives': self.performance['false_positives']
+                },
+                'strategy_performance': self.performance['strategy_performance'],
+                'successful_strategies': self.performance['successful_strategies'],
+                'profit_by_regime': self.profit_by_regime,
+                'loss_by_regime': self.loss_by_regime,
+                'current_regime': self.current_regime.value,
+                'current_strategy': self.current_strategy.value,
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_performance_report: {str(e)}", "error")
+            return {'error': str(e)}
+    
+    def manual_override(self, regime: str) -> bool:
+        """Manually override regime selection"""
+        try:
+            regime_map = {
+                'strong_trend': MarketRegime.STRONG_TREND,
+                'weak_trend': MarketRegime.WEAK_TREND,
+                'ranging': MarketRegime.RANGING,
+                'high_volatility': MarketRegime.HIGH_VOLATILITY,
+                'low_volatility': MarketRegime.LOW_VOLATILITY,
+                'news_impact': MarketRegime.NEWS_IMPACT,
+                'low_liquidity': MarketRegime.LOW_LIQUIDITY
+            }
+            
+            if regime not in regime_map:
+                return False
+            
+            new_regime = regime_map[regime]
+            self._change_regime(new_regime)
+            self._log_debug(f"MANUAL OVERRIDE: Set regime to {regime}", "info")
+            return True
+            
+        except Exception as e:
+            self._log_debug(f"Error in manual_override: {str(e)}", "error")
+            return False

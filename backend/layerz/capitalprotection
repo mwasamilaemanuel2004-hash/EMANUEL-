@@ -1,0 +1,893 @@
+"""
+LAYER -4: CAPITAL PROTECTION (UPGRADED & DEBUGGED)
+Purpose: Protect capital from large losses with adaptive and balanced approach.
+Balance: Not too strict (no trades) and not too loose (large losses).
+Adaptive: Changes based on market conditions and account performance.
+
+UPGRADES:
+- Real-time capital monitoring with alerts
+- Smart drawdown recovery
+- Auto-correction mechanisms
+- Performance analytics
+- Detailed logging
+- Multi-tier protection
+- Adaptive risk adjustment
+"""
+
+import numpy as np
+import pandas as pd
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Tuple, Any, Union
+from enum import Enum
+from dataclasses import dataclass, field
+import logging
+import json
+import time
+from collections import deque
+import threading
+
+# Configure logging
+logger = logging.getLogger(__name__)
+
+# Add file handler for debugging
+debug_handler = logging.FileHandler('logs/capital_protection_debug.log')
+debug_handler.setLevel(logging.DEBUG)
+debug_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+debug_handler.setFormatter(debug_formatter)
+logger.addHandler(debug_handler)
+
+
+class ProtectionMode(Enum):
+    """Capital Protection modes - adaptive based on conditions"""
+    NORMAL = "normal"              # Standard protection
+    CAUTIOUS = "cautious"          # Increased protection
+    AGGRESSIVE = "aggressive"      # Lower protection, more trades
+    EMERGENCY = "emergency"        # Stop all trading
+    RECOVERY = "recovery"          # Recovering from drawdown
+
+
+@dataclass
+class CapitalProtectionConfig:
+    """Configuration for Capital Protection - adaptive with debug support"""
+    # Maximum drawdown limits
+    max_daily_drawdown: float = 2.0        # 2% daily
+    max_weekly_drawdown: float = 4.0       # 4% weekly
+    max_monthly_drawdown: float = 5.0      # 5% monthly
+    max_total_drawdown: float = 10.0       # 10% total
+    
+    # Circuit breaker thresholds
+    circuit_breaker_daily: float = 3.0     # 3% triggers circuit breaker
+    circuit_breaker_monthly: float = 8.0   # 8% triggers circuit breaker
+    
+    # Position sizing limits
+    max_position_size: float = 2.0         # 2% max position
+    min_position_size: float = 0.1         # 0.1% min position
+    
+    # Leverage limits
+    max_leverage: float = 10.0             # 10x max leverage
+    min_leverage: float = 1.0              # 1x min leverage
+    
+    # Risk of ruin
+    risk_of_ruin_threshold: float = 0.01   # 1% risk of ruin
+    
+    # Recovery
+    recovery_days: int = 7                 # 7 days recovery period
+    recovery_step: float = 0.5             # 0.5% recovery per day
+    
+    # Alert thresholds
+    alert_drawdown_warning: float = 3.0    # 3% triggers warning
+    alert_drawdown_critical: float = 5.0   # 5% triggers critical
+    
+    # Debug mode
+    debug_mode: bool = True
+    
+    # History limits
+    max_history_size: int = 1000
+
+
+class CapitalProtectionEngine:
+    """
+    Layer -4: Capital Protection Engine (UPGRADED)
+    Protects capital with adaptive, balanced approach.
+    """
+    
+    def __init__(self, config: Optional[CapitalProtectionConfig] = None):
+        self.config = config or CapitalProtectionConfig()
+        self.mode = ProtectionMode.NORMAL
+        self.debug_mode = self.config.debug_mode
+        
+        # Performance tracking
+        self.performance = {
+            'total_checks': 0,
+            'protection_triggers': 0,
+            'capital_preserved': 0.0,
+            'circuit_breakers_triggered': 0,
+            'last_check_time': None,
+            'recovery_attempts': 0,
+            'alerts_sent': 0,
+            'auto_corrections': 0
+        }
+        
+        # Capital tracking
+        self.initial_capital = 0.0
+        self.current_capital = 0.0
+        self.peak_capital = 0.0
+        self.capital_history = deque(maxlen=self.config.max_history_size)
+        
+        # Drawdown tracking
+        self.daily_drawdown = 0.0
+        self.weekly_drawdown = 0.0
+        self.monthly_drawdown = 0.0
+        self.total_drawdown = 0.0
+        
+        # Daily, weekly, monthly tracking
+        self.daily_start_capital = 0.0
+        self.weekly_start_capital = 0.0
+        self.monthly_start_capital = 0.0
+        
+        self.daily_loss = 0.0
+        self.weekly_loss = 0.0
+        self.monthly_loss = 0.0
+        
+        # Circuit breaker
+        self.circuit_breaker_active = False
+        self.circuit_breaker_until = None
+        self.circuit_breaker_reason = None
+        
+        # Time tracking
+        self.last_reset_daily = datetime.now().date()
+        self.last_reset_weekly = datetime.now().date()
+        self.last_reset_monthly = datetime.now().date()
+        self.week_start = datetime.now().date()
+        
+        # Risk of ruin
+        self.risk_of_ruin = 0.0
+        self.risk_of_ruin_history = deque(maxlen=100)
+        
+        # Recovery
+        self.is_recovering = False
+        self.recovery_start = None
+        self.recovery_target = 0.0
+        self.recovery_progress = 0.0
+        self.recovery_step_size = self.config.recovery_step
+        
+        # Auto-correction
+        self.auto_correction_count = 0
+        self.last_auto_correction = None
+        
+        # Alert tracking
+        self.alerts = deque(maxlen=100)
+        self.alert_levels = {
+            'warning': False,
+            'critical': False,
+            'emergency': False
+        }
+        
+        # Lock for thread safety
+        self._lock = threading.Lock()
+        
+        # Startup log
+        self._log_debug("Capital Protection Engine initialized in NORMAL mode")
+        logger.info("Capital Protection Engine initialized in NORMAL mode")
+    
+    def _log_debug(self, message: str, level: str = "debug") -> None:
+        """Debug logging with timestamp"""
+        if self.debug_mode:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+            log_msg = f"[DEBUG {timestamp}] {message}"
+            if level == "info":
+                logger.info(log_msg)
+            elif level == "warning":
+                logger.warning(log_msg)
+            elif level == "error":
+                logger.error(log_msg)
+            else:
+                logger.debug(log_msg)
+    
+    def _send_alert(self, level: str, message: str) -> None:
+        """Send alert with level tracking"""
+        try:
+            self.performance['alerts_sent'] += 1
+            self.alerts.append({
+                'level': level,
+                'message': message,
+                'timestamp': datetime.now().isoformat()
+            })
+            
+            # Update alert levels
+            self.alert_levels['warning'] = level in ['warning', 'critical', 'emergency']
+            self.alert_levels['critical'] = level in ['critical', 'emergency']
+            self.alert_levels['emergency'] = level == 'emergency'
+            
+            self._log_debug(f"ALERT [{level.upper()}]: {message}", level)
+            
+        except Exception as e:
+            self._log_debug(f"Error in _send_alert: {str(e)}", "error")
+    
+    def set_capital(self, capital: float) -> None:
+        """Set initial capital and reset tracking"""
+        try:
+            if capital <= 0:
+                self._log_debug(f"Invalid capital: {capital}", "warning")
+                return
+            
+            with self._lock:
+                self.initial_capital = capital
+                self.current_capital = capital
+                self.peak_capital = capital
+                self.daily_start_capital = capital
+                self.weekly_start_capital = capital
+                self.monthly_start_capital = capital
+                
+                self.capital_history.append({
+                    'timestamp': datetime.now().isoformat(),
+                    'capital': capital,
+                    'event': 'initialization',
+                    'change': 0,
+                    'peak': capital,
+                    'drawdown': 0.0
+                })
+                
+                self._log_debug(f"Capital set to ${capital:.2f}", "info")
+                logger.info(f"Capital set to ${capital:.2f}")
+            
+        except Exception as e:
+            self._log_debug(f"Error in set_capital: {str(e)}", "error")
+    
+    def update_capital(self, new_capital: float, reason: str = "update") -> None:
+        """Update current capital and track drawdowns with safety"""
+        try:
+            if new_capital <= 0:
+                self._log_debug(f"Invalid capital update: {new_capital}", "warning")
+                return
+            
+            with self._lock:
+                old_capital = self.current_capital
+                change = new_capital - old_capital
+                self.current_capital = new_capital
+                
+                # Update peak capital
+                if new_capital > self.peak_capital:
+                    self.peak_capital = new_capital
+                
+                # Calculate drawdowns
+                self._calculate_drawdowns()
+                
+                # Update risk of ruin
+                self._calculate_risk_of_ruin()
+                
+                # Add to history
+                self.capital_history.append({
+                    'timestamp': datetime.now().isoformat(),
+                    'capital': new_capital,
+                    'event': reason,
+                    'change': change,
+                    'peak': self.peak_capital,
+                    'drawdown': self.total_drawdown
+                })
+                
+                # Check protection triggers
+                self._check_protection_triggers()
+                
+                # Auto-correction check
+                self._check_auto_correction()
+                
+                self._log_debug(f"Capital updated: ${new_capital:.2f} (change: {change:.2f})", "info")
+                
+        except Exception as e:
+            self._log_debug(f"Error in update_capital: {str(e)}", "error")
+    
+    def _calculate_drawdowns(self) -> None:
+        """Calculate all drawdown metrics with safety"""
+        try:
+            if self.peak_capital <= 0:
+                return
+            
+            # Total drawdown
+            self.total_drawdown = max(0, ((self.peak_capital - self.current_capital) / self.peak_capital) * 100)
+            
+            # Daily drawdown
+            if self.daily_start_capital > 0:
+                self.daily_drawdown = max(0, ((self.daily_start_capital - self.current_capital) / self.daily_start_capital) * 100)
+            
+            # Weekly drawdown
+            if self.weekly_start_capital > 0:
+                self.weekly_drawdown = max(0, ((self.weekly_start_capital - self.current_capital) / self.weekly_start_capital) * 100)
+            
+            # Monthly drawdown
+            if self.monthly_start_capital > 0:
+                self.monthly_drawdown = max(0, ((self.monthly_start_capital - self.current_capital) / self.monthly_start_capital) * 100)
+            
+        except Exception as e:
+            self._log_debug(f"Error in _calculate_drawdowns: {str(e)}", "error")
+    
+    def _calculate_risk_of_ruin(self) -> None:
+        """Calculate risk of ruin with historical data"""
+        try:
+            if self.initial_capital <= 0:
+                return
+            
+            # Use historical capital changes to calculate risk
+            if len(self.capital_history) > 10:
+                changes = []
+                for entry in list(self.capital_history)[-50:]:
+                    if entry.get('change', 0) != 0:
+                        changes.append(entry['change'])
+                
+                if changes:
+                    # Calculate win/loss ratio
+                    wins = sum(1 for c in changes if c > 0)
+                    losses = sum(1 for c in changes if c < 0)
+                    win_rate = wins / len(changes) if changes else 0.5
+                    
+                    # Calculate average win/loss
+                    avg_win = abs(sum(c for c in changes if c > 0)) / max(wins, 1)
+                    avg_loss = abs(sum(c for c in changes if c < 0)) / max(losses, 1)
+                    
+                    # Risk of ruin formula (simplified)
+                    if avg_loss > 0:
+                        risk_per_trade = avg_loss / self.current_capital
+                    else:
+                        risk_per_trade = 0.01
+                    
+                    self.risk_of_ruin = (1 - win_rate) / (win_rate + (1 - win_rate) * risk_per_trade)
+                    self.risk_of_ruin = max(0, min(1, self.risk_of_ruin))
+                    
+                    self.risk_of_ruin_history.append(self.risk_of_ruin)
+            
+            self._log_debug(f"Risk of ruin: {self.risk_of_ruin:.4f}")
+            
+        except Exception as e:
+            self._log_debug(f"Error in _calculate_risk_of_ruin: {str(e)}", "error")
+    
+    def _check_protection_triggers(self) -> None:
+        """Check if protection triggers should activate with auto-correction"""
+        try:
+            self.performance['total_checks'] += 1
+            self.performance['last_check_time'] = datetime.now().isoformat()
+            
+            # Check daily reset
+            today = datetime.now().date()
+            if today > self.last_reset_daily:
+                self.daily_drawdown = 0.0
+                self.daily_loss = 0.0
+                self.daily_start_capital = self.current_capital
+                self.last_reset_daily = today
+                self._log_debug("Daily drawdown reset")
+            
+            # Check weekly reset
+            if today > self.week_start + timedelta(days=7):
+                self.weekly_drawdown = 0.0
+                self.weekly_loss = 0.0
+                self.weekly_start_capital = self.current_capital
+                self.week_start = today
+                self._log_debug("Weekly drawdown reset")
+            
+            # Check monthly reset
+            if today.month != self.last_reset_monthly.month:
+                self.monthly_drawdown = 0.0
+                self.monthly_loss = 0.0
+                self.monthly_start_capital = self.current_capital
+                self.last_reset_monthly = today
+                self._log_debug("Monthly drawdown reset")
+            
+            # Check drawdown limits with alerts
+            if self.daily_drawdown >= self.config.alert_drawdown_warning:
+                self._send_alert("warning", f"Daily drawdown warning: {self.daily_drawdown:.2f}%")
+            
+            if self.daily_drawdown >= self.config.alert_drawdown_critical:
+                self._send_alert("critical", f"Daily drawdown critical: {self.daily_drawdown:.2f}%")
+            
+            # Check drawdown limits with protection
+            if self.daily_drawdown >= self.config.max_daily_drawdown:
+                self._trigger_protection("daily_drawdown", self.daily_drawdown)
+            
+            if self.weekly_drawdown >= self.config.max_weekly_drawdown:
+                self._trigger_protection("weekly_drawdown", self.weekly_drawdown)
+            
+            if self.monthly_drawdown >= self.config.max_monthly_drawdown:
+                self._trigger_protection("monthly_drawdown", self.monthly_drawdown)
+            
+            if self.total_drawdown >= self.config.max_total_drawdown:
+                self._trigger_protection("total_drawdown", self.total_drawdown)
+            
+            # Check circuit breaker
+            if self.daily_drawdown >= self.config.circuit_breaker_daily:
+                self._trigger_circuit_breaker("daily", self.daily_drawdown)
+            
+            if self.monthly_drawdown >= self.config.circuit_breaker_monthly:
+                self._trigger_circuit_breaker("monthly", self.monthly_drawdown)
+            
+            # Check risk of ruin
+            if self.risk_of_ruin >= self.config.risk_of_ruin_threshold:
+                self._trigger_protection("risk_of_ruin", self.risk_of_ruin)
+            
+        except Exception as e:
+            self._log_debug(f"Error in _check_protection_triggers: {str(e)}", "error")
+    
+    def _check_auto_correction(self) -> None:
+        """Auto-correction to prevent over-protection"""
+        try:
+            # Check if protection is too aggressive (too many triggers with small drawdown)
+            if len(self.capital_history) > 20:
+                recent_entries = list(self.capital_history)[-20:]
+                triggers = sum(1 for e in recent_entries if e.get('event') == 'protection_trigger')
+                avg_drawdown = sum(e.get('drawdown', 0) for e in recent_entries) / len(recent_entries)
+                
+                # If many triggers with small drawdown, reduce protection
+                if triggers > 5 and avg_drawdown < 1.0:
+                    self.auto_correction_count += 1
+                    self.performance['auto_corrections'] += 1
+                    self._reduce_protection()
+                    self._log_debug(f"Auto-correction: Reduced protection due to too many triggers ({triggers} triggers with {avg_drawdown:.2f}% drawdown)", "info")
+            
+            # Check if recovery is stuck
+            if self.is_recovering and self.recovery_start:
+                recovery_days = (datetime.now() - self.recovery_start).days
+                if recovery_days > 7 and self.current_capital < self.recovery_target * 0.9:
+                    self._recovery_stuck_handling()
+            
+        except Exception as e:
+            self._log_debug(f"Error in _check_auto_correction: {str(e)}", "error")
+    
+    def _reduce_protection(self) -> None:
+        """Reduce protection level gradually"""
+        try:
+            # Increase limits slightly
+            self.config.max_daily_drawdown = min(3.0, self.config.max_daily_drawdown + 0.25)
+            self.config.max_weekly_drawdown = min(5.0, self.config.max_weekly_drawdown + 0.5)
+            self.config.max_monthly_drawdown = min(7.0, self.config.max_monthly_drawdown + 0.5)
+            self.config.max_total_drawdown = min(12.0, self.config.max_total_drawdown + 0.5)
+            self.config.max_position_size = min(2.5, self.config.max_position_size + 0.25)
+            
+            # Log the change
+            self._log_debug(f"Protection reduced: Daily DD limit now {self.config.max_daily_drawdown:.2f}%", "info")
+            
+        except Exception as e:
+            self._log_debug(f"Error in _reduce_protection: {str(e)}", "error")
+    
+    def _recovery_stuck_handling(self) -> None:
+        """Handle stuck recovery"""
+        try:
+            self._send_alert("warning", "Recovery is stuck. Adjusting strategy.")
+            
+            # Increase recovery step
+            self.recovery_step_size = min(1.0, self.recovery_step_size * 1.5)
+            
+            # Reduce position size temporarily
+            self.config.max_position_size = max(0.3, self.config.max_position_size * 0.5)
+            
+            # Log the change
+            self._log_debug(f"Recovery stuck handling: Step size now {self.recovery_step_size:.2f}%", "info")
+            
+        except Exception as e:
+            self._log_debug(f"Error in _recovery_stuck_handling: {str(e)}", "error")
+    
+    def _trigger_protection(self, trigger_type: str, value: float) -> None:
+        """Trigger protection mechanism with adaptive response"""
+        try:
+            self.performance['protection_triggers'] += 1
+            self.performance['capital_preserved'] += value
+            
+            # Add to history
+            self.capital_history.append({
+                'timestamp': datetime.now().isoformat(),
+                'capital': self.current_capital,
+                'event': 'protection_trigger',
+                'trigger_type': trigger_type,
+                'value': value
+            })
+            
+            self._log_debug(f"PROTECTION TRIGGERED: {trigger_type} at {value:.2f}%", "warning")
+            
+            # Adaptive response based on severity with auto-correction
+            if trigger_type in ["daily_drawdown", "weekly_drawdown"]:
+                # Moderate protection
+                if self.mode != ProtectionMode.EMERGENCY:
+                    if value > self.config.alert_drawdown_critical:
+                        self.mode = ProtectionMode.CAUTIOUS
+                        self.config.max_position_size = max(0.3, min(self.config.max_position_size, 0.5))
+                        self.config.max_leverage = max(2.0, min(self.config.max_leverage, 5.0))
+                        self._send_alert("warning", f"Mode changed to CAUTIOUS due to {trigger_type}: {value:.2f}%")
+                    else:
+                        # Light reduction
+                        self.config.max_position_size = max(0.5, min(self.config.max_position_size, 0.8))
+            
+            elif trigger_type in ["monthly_drawdown", "total_drawdown"]:
+                # Strong protection
+                if self.mode != ProtectionMode.EMERGENCY:
+                    self.mode = ProtectionMode.RECOVERY
+                    self.config.max_position_size = max(0.2, min(self.config.max_position_size, 0.3))
+                    self.config.max_leverage = max(1.0, min(self.config.max_leverage, 2.0))
+                    self._send_alert("critical", f"Mode changed to RECOVERY due to {trigger_type}: {value:.2f}%")
+            
+            elif trigger_type == "risk_of_ruin":
+                # Emergency protection
+                self.mode = ProtectionMode.EMERGENCY
+                self.config.max_position_size = 0.0
+                self.config.max_leverage = 0.0
+                self._send_alert("emergency", f"EMERGENCY mode activated due to risk of ruin: {value:.4f}")
+            
+        except Exception as e:
+            self._log_debug(f"Error in _trigger_protection: {str(e)}", "error")
+    
+    def _trigger_circuit_breaker(self, breaker_type: str, value: float) -> None:
+        """Trigger circuit breaker with emergency handling"""
+        try:
+            self.performance['circuit_breakers_triggered'] += 1
+            
+            self.circuit_breaker_active = True
+            self.circuit_breaker_until = datetime.now() + timedelta(hours=24)
+            self.circuit_breaker_reason = f"{breaker_type} drawdown at {value:.2f}%"
+            
+            # Force emergency mode
+            self.mode = ProtectionMode.EMERGENCY
+            self.config.max_position_size = 0.0
+            self.config.max_leverage = 0.0
+            
+            self._send_alert("emergency", f"CIRCUIT BREAKER TRIGGERED: {self.circuit_breaker_reason}")
+            self._log_debug(f"CIRCUIT BREAKER TRIGGERED: {self.circuit_breaker_reason}", "error")
+            logger.error(f"CIRCUIT BREAKER TRIGGERED: {self.circuit_breaker_reason}")
+            
+        except Exception as e:
+            self._log_debug(f"Error in _trigger_circuit_breaker: {str(e)}", "error")
+    
+    def can_trade(self, trade_request: Dict[str, Any]) -> Tuple[bool, str, float]:
+        """
+        Check if trading is allowed based on capital protection rules.
+        Returns: (can_trade, reason, adjusted_position_size)
+        """
+        try:
+            # Validate input
+            if not isinstance(trade_request, dict):
+                return False, "Invalid trade request", 0.0
+            
+            # Check circuit breaker
+            if self.circuit_breaker_active:
+                if datetime.now() < self.circuit_breaker_until:
+                    remaining = (self.circuit_breaker_until - datetime.now()).total_seconds() / 3600
+                    return False, f"Circuit breaker active: {remaining:.1f} hours remaining", 0.0
+                else:
+                    # Reset circuit breaker
+                    self.circuit_breaker_active = False
+                    self.circuit_breaker_until = None
+                    self.circuit_breaker_reason = None
+                    self._log_debug("Circuit breaker lifted")
+            
+            # Emergency mode check
+            if self.mode == ProtectionMode.EMERGENCY:
+                return False, "Emergency mode - no trading allowed", 0.0
+            
+            # Recovery mode check
+            if self.mode == ProtectionMode.RECOVERY:
+                if not self.is_recovering:
+                    self._start_recovery()
+                if not self._can_trade_during_recovery():
+                    return False, "Recovery mode - reduced trading", 0.0
+            
+            # Check drawdown limits with adaptive thresholds
+            if self.daily_drawdown >= self.config.max_daily_drawdown:
+                return False, f"Daily drawdown limit reached: {self.daily_drawdown:.2f}%", 0.0
+            
+            if self.weekly_drawdown >= self.config.max_weekly_drawdown:
+                return False, f"Weekly drawdown limit reached: {self.weekly_drawdown:.2f}%", 0.0
+            
+            if self.monthly_drawdown >= self.config.max_monthly_drawdown:
+                return False, f"Monthly drawdown limit reached: {self.monthly_drawdown:.2f}%", 0.0
+            
+            if self.total_drawdown >= self.config.max_total_drawdown:
+                return False, f"Total drawdown limit reached: {self.total_drawdown:.2f}%", 0.0
+            
+            # Check risk of ruin
+            if self.risk_of_ruin >= self.config.risk_of_ruin_threshold:
+                return False, f"Risk of ruin threshold reached: {self.risk_of_ruin:.4f}", 0.0
+            
+            # Calculate adjusted position size
+            position_size = self._calculate_position_size(trade_request)
+            
+            if position_size <= 0:
+                return False, "Position size too small", 0.0
+            
+            # All checks passed
+            return True, "All checks passed", position_size
+            
+        except Exception as e:
+            self._log_debug(f"Error in can_trade: {str(e)}", "error")
+            return False, f"Error in capital protection: {str(e)}", 0.0
+    
+    def _calculate_position_size(self, trade_request: Dict[str, Any]) -> float:
+        """Calculate adaptive position size based on protection rules"""
+        try:
+            requested_size = trade_request.get('position_size', 1.0)
+            
+            # Start with requested size
+            position_size = requested_size
+            
+            # Apply max position limit
+            position_size = min(position_size, self.config.max_position_size)
+            
+            # Apply min position limit
+            position_size = max(position_size, self.config.min_position_size)
+            
+            # Adjust based on drawdown (adaptive)
+            if self.total_drawdown > 5.0:
+                reduction_factor = max(0.1, 1.0 - (self.total_drawdown - 5.0) * 0.02)
+                position_size *= min(0.8, reduction_factor)
+            elif self.total_drawdown < 2.0:
+                # Can be slightly more aggressive
+                position_size *= min(1.2, 1.0 + (2.0 - self.total_drawdown) * 0.05)
+            
+            # Adjust based on mode
+            if self.mode == ProtectionMode.CAUTIOUS:
+                position_size *= 0.5
+            elif self.mode == ProtectionMode.RECOVERY:
+                position_size *= 0.3
+            elif self.mode == ProtectionMode.AGGRESSIVE:
+                position_size *= 1.2
+            
+            # Adjust based on risk of ruin
+            if self.risk_of_ruin > 0.005:
+                position_size *= max(0.3, 1.0 - self.risk_of_ruin * 10)
+            
+            # Ensure limits
+            position_size = max(self.config.min_position_size, min(position_size, self.config.max_position_size))
+            
+            return position_size
+            
+        except Exception as e:
+            self._log_debug(f"Error in _calculate_position_size: {str(e)}", "error")
+            return self.config.min_position_size
+    
+    def _start_recovery(self) -> None:
+        """Start recovery process with enhanced tracking"""
+        try:
+            self.is_recovering = True
+            self.recovery_start = datetime.now()
+            self.recovery_target = self.peak_capital
+            self.recovery_progress = 0.0
+            self.recovery_step_size = self.config.recovery_step
+            
+            self.performance['recovery_attempts'] += 1
+            
+            self._send_alert("info", f"Recovery started. Target: ${self.recovery_target:.2f}")
+            self._log_debug(f"Recovery started. Target: ${self.recovery_target:.2f}", "info")
+            logger.info(f"Recovery started. Target: ${self.recovery_target:.2f}")
+            
+        except Exception as e:
+            self._log_debug(f"Error in _start_recovery: {str(e)}", "error")
+    
+    def _can_trade_during_recovery(self) -> bool:
+        """Check if trading is allowed during recovery with adaptive logic"""
+        try:
+            if not self.is_recovering:
+                return True
+            
+            # Recovery period logic
+            days_in_recovery = (datetime.now() - self.recovery_start).days
+            
+            # Calculate recovery progress
+            if self.recovery_target > 0:
+                current_progress = (self.current_capital / self.recovery_target) * 100
+                self.recovery_progress = max(0, min(100, current_progress))
+            
+            # First 2 days: No trading (capital preservation)
+            if days_in_recovery < 2:
+                return False
+            
+            # Days 2-4: Reduced trading (50% of normal)
+            if days_in_recovery < 4:
+                self.config.max_position_size = max(0.5, min(self.config.max_position_size, 0.5))
+                return True
+            
+            # Days 4+: Normal trading with monitoring
+            if days_in_recovery < self.config.recovery_days:
+                # Increase position size gradually
+                progress_factor = min(1.0, (days_in_recovery - 4) / 3)
+                self.config.max_position_size = min(1.5, 0.5 + progress_factor * 0.5)
+                return True
+            
+            # After recovery period, check if recovered
+            if self.current_capital >= self.recovery_target * 0.95:
+                # Recovery complete
+                self.is_recovering = False
+                self.mode = ProtectionMode.NORMAL
+                self.config.max_position_size = 2.0
+                self._send_alert("info", "Recovery complete. Resuming NORMAL mode.")
+                self._log_debug("Recovery complete. Resuming NORMAL mode.", "info")
+                return True
+            
+            # Extended recovery with adaptive handling
+            self._recovery_stuck_handling()
+            return True
+            
+        except Exception as e:
+            self._log_debug(f"Error in _can_trade_during_recovery: {str(e)}", "error")
+            return False
+    
+    def update_after_trade(self, trade_result: Dict[str, Any]) -> None:
+        """Update capital after trade with enhanced tracking"""
+        try:
+            if not isinstance(trade_result, dict):
+                return
+            
+            pnl = trade_result.get('pnl', 0.0)
+            if pnl == 0:
+                return
+            
+            with self._lock:
+                # Update capital
+                new_capital = self.current_capital + pnl
+                self.update_capital(new_capital, f"trade_{trade_result.get('id', 'unknown')}")
+                
+                # Update losses
+                if pnl < 0:
+                    self.daily_loss += abs(pnl)
+                    self.weekly_loss += abs(pnl)
+                    self.monthly_loss += abs(pnl)
+                
+                self._log_debug(f"Capital updated after trade: ${new_capital:.2f}")
+            
+        except Exception as e:
+            self._log_debug(f"Error in update_after_trade: {str(e)}", "error")
+    
+    def get_status(self) -> Dict[str, Any]:
+        """Get current status of Capital Protection Engine"""
+        try:
+            return {
+                'mode': self.mode.value,
+                'capital': {
+                    'initial': self.initial_capital,
+                    'current': self.current_capital,
+                    'peak': self.peak_capital,
+                    'change': self.current_capital - self.initial_capital,
+                    'change_percentage': ((self.current_capital - self.initial_capital) / self.initial_capital) * 100 if self.initial_capital > 0 else 0
+                },
+                'drawdown': {
+                    'total': self.total_drawdown,
+                    'daily': self.daily_drawdown,
+                    'weekly': self.weekly_drawdown,
+                    'monthly': self.monthly_drawdown
+                },
+                'risk': {
+                    'risk_of_ruin': self.risk_of_ruin,
+                    'current_leverage': self.config.max_leverage,
+                    'position_size': self.config.max_position_size
+                },
+                'circuit_breaker': {
+                    'active': self.circuit_breaker_active,
+                    'until': self.circuit_breaker_until.isoformat() if self.circuit_breaker_until else None,
+                    'reason': self.circuit_breaker_reason
+                },
+                'recovery': {
+                    'active': self.is_recovering,
+                    'start': self.recovery_start.isoformat() if self.recovery_start else None,
+                    'target': self.recovery_target,
+                    'progress': self.recovery_progress,
+                    'step_size': self.recovery_step_size
+                },
+                'limits': {
+                    'max_position_size': self.config.max_position_size,
+                    'max_leverage': self.config.max_leverage,
+                    'max_daily_drawdown': self.config.max_daily_drawdown,
+                    'max_monthly_drawdown': self.config.max_monthly_drawdown,
+                    'max_total_drawdown': self.config.max_total_drawdown
+                },
+                'alerts': {
+                    'warning': self.alert_levels['warning'],
+                    'critical': self.alert_levels['critical'],
+                    'emergency': self.alert_levels['emergency'],
+                    'count': len(self.alerts)
+                },
+                'performance': {
+                    'protection_triggers': self.performance['protection_triggers'],
+                    'capital_preserved': self.performance['capital_preserved'],
+                    'circuit_breakers_triggered': self.performance['circuit_breakers_triggered'],
+                    'recovery_attempts': self.performance['recovery_attempts'],
+                    'auto_corrections': self.performance['auto_corrections'],
+                    'alerts_sent': self.performance['alerts_sent']
+                },
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_status: {str(e)}", "error")
+            return {'status': 'ERROR', 'error': str(e)}
+    
+    def get_performance_report(self) -> Dict[str, Any]:
+        """Get detailed performance report"""
+        try:
+            return {
+                'capital': {
+                    'initial': self.initial_capital,
+                    'current': self.current_capital,
+                    'peak': self.peak_capital,
+                    'change': self.current_capital - self.initial_capital,
+                    'change_percentage': ((self.current_capital - self.initial_capital) / self.initial_capital) * 100 if self.initial_capital > 0 else 0
+                },
+                'drawdown': {
+                    'total': self.total_drawdown,
+                    'daily': self.daily_drawdown,
+                    'weekly': self.weekly_drawdown,
+                    'monthly': self.monthly_drawdown
+                },
+                'risk': {
+                    'risk_of_ruin': self.risk_of_ruin,
+                    'risk_of_ruin_history': list(self.risk_of_ruin_history),
+                    'current_leverage': self.config.max_leverage,
+                    'position_size': self.config.max_position_size
+                },
+                'protection': {
+                    'triggers': self.performance['protection_triggers'],
+                    'capital_preserved': self.performance['capital_preserved'],
+                    'circuit_breakers': self.performance['circuit_breakers_triggered'],
+                    'recovery_attempts': self.performance['recovery_attempts'],
+                    'auto_corrections': self.performance['auto_corrections'],
+                    'alerts_sent': self.performance['alerts_sent']
+                },
+                'alerts': list(self.alerts),
+                'status': self.mode.value,
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_performance_report: {str(e)}", "error")
+            return {'error': str(e)}
+    
+    def reset_circuit_breaker(self) -> None:
+        """Manually reset circuit breaker"""
+        try:
+            self.circuit_breaker_active = False
+            self.circuit_breaker_until = None
+            self.circuit_breaker_reason = None
+            self.mode = ProtectionMode.NORMAL
+            self._log_debug("Circuit breaker manually reset", "info")
+            logger.info("Circuit breaker manually reset")
+        except Exception as e:
+            self._log_debug(f"Error in reset_circuit_breaker: {str(e)}", "error")
+    
+    def reset_drawdowns(self) -> None:
+        """Manually reset drawdown tracking"""
+        try:
+            self.daily_drawdown = 0.0
+            self.weekly_drawdown = 0.0
+            self.monthly_drawdown = 0.0
+            self.total_drawdown = 0.0
+            self.daily_start_capital = self.current_capital
+            self.weekly_start_capital = self.current_capital
+            self.monthly_start_capital = self.current_capital
+            self.peak_capital = self.current_capital
+            self._log_debug("Drawdowns manually reset", "info")
+            logger.info("Drawdowns manually reset")
+        except Exception as e:
+            self._log_debug(f"Error in reset_drawdowns: {str(e)}", "error")
+    
+    def emergency_stop(self) -> None:
+        """Emergency stop - stop all trading"""
+        try:
+            self.mode = ProtectionMode.EMERGENCY
+            self.config.max_position_size = 0.0
+            self.config.max_leverage = 0.0
+            self.circuit_breaker_active = True
+            self.circuit_breaker_until = datetime.now() + timedelta(hours=24)
+            self.circuit_breaker_reason = "Manual emergency stop"
+            self._send_alert("emergency", "EMERGENCY STOP ACTIVATED")
+            self._log_debug("EMERGENCY STOP ACTIVATED", "error")
+            logger.error("EMERGENCY STOP ACTIVATED")
+        except Exception as e:
+            self._log_debug(f"Error in emergency_stop: {str(e)}", "error")
+    
+    def emergency_resume(self) -> None:
+        """Resume trading after emergency stop"""
+        try:
+            self.mode = ProtectionMode.RECOVERY
+            self.config.max_position_size = 0.5
+            self.config.max_leverage = 2.0
+            self.circuit_breaker_active = False
+            self.circuit_breaker_until = None
+            self.circuit_breaker_reason = None
+            self.is_recovering = True
+            self.recovery_start = datetime.now()
+            self.recovery_target = self.peak_capital
+            self._send_alert("info", "Emergency stop lifted. Resuming in RECOVERY mode")
+            self._log_debug("Emergency stop lifted. Resuming in RECOVERY mode", "info")
+            logger.info("Emergency stop lifted. Resuming in RECOVERY mode")
+        except Exception as e:
+            self._log_debug(f"Error in emergency_resume: {str(e)}", "error")

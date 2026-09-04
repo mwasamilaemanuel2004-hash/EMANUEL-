@@ -1,0 +1,664 @@
+"""
+LAYERS +10 & +28: TRADE QUALITY ENGINE (COMBINED)
+Purpose: Filter and rank trades based on quality, ensuring only high-probability trades are executed.
+Layers Combined:
+- +10: Combined Logic and Filters
+- +28: Trade Quality Ranking Engine
+
+Balance: Not too strict (misses good trades) and not too loose (executes bad trades).
+Adaptive: Changes thresholds based on market conditions and performance.
+
+KEY FEATURES:
+- 12 Quality Filters with adaptive thresholds
+- Trade Quality Ranking (ELITE to REJECT)
+- Multi-factor scoring with dynamic weights
+- Real-time quality validation
+- Self-correcting thresholds
+- Performance tracking per quality level
+"""
+
+import numpy as np
+import pandas as pd
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Tuple, Any, Union
+from enum import Enum
+from dataclasses import dataclass, field
+import logging
+import json
+import time
+from collections import deque
+import threading
+
+# Configure logging
+logger = logging.getLogger(__name__)
+
+debug_handler = logging.FileHandler('logs/trade_quality_debug.log')
+debug_handler.setLevel(logging.DEBUG)
+debug_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+debug_handler.setFormatter(debug_formatter)
+logger.addHandler(debug_handler)
+
+
+class QualityLevel(Enum):
+    """Trade quality levels"""
+    ELITE = "elite"          # 95-100 - Must execute
+    HIGH = "high"            # 85-94 - Strong quality
+    VALID = "valid"          # 75-84 - Good quality
+    WATCH = "watch"          # 65-74 - Reduced size
+    LOW = "low"              # 50-64 - Caution
+    REJECT = "reject"        # <50 - Do not execute
+
+
+class FilterType(Enum):
+    """Available quality filters"""
+    MARKET_REGIME = "market_regime"
+    VOLATILITY = "volatility"
+    CORRELATION = "correlation"
+    NEWS = "news"
+    TIME = "time"
+    INSTITUTIONAL = "institutional"
+    RISK = "risk"
+    PROBABILITY = "probability"
+    LIQUIDITY = "liquidity"
+    SPREAD = "spread"
+    VOLUME = "volume"
+    QUALITY = "quality"
+
+
+@dataclass
+class TradeQualityConfig:
+    """Configuration for Trade Quality Engine - BALANCED"""
+    
+    # Quality thresholds
+    elite_threshold: float = 95.0
+    high_threshold: float = 85.0
+    valid_threshold: float = 75.0
+    watch_threshold: float = 65.0
+    low_threshold: float = 50.0
+    
+    # Filter weights (adaptive)
+    filter_weights: Dict[str, float] = field(default_factory=lambda: {
+        'market_regime': 0.12,
+        'volatility': 0.10,
+        'correlation': 0.08,
+        'news': 0.08,
+        'time': 0.06,
+        'institutional': 0.10,
+        'risk': 0.12,
+        'probability': 0.12,
+        'liquidity': 0.08,
+        'spread': 0.06,
+        'volume': 0.04,
+        'quality': 0.04
+    })
+    
+    # Minimum requirements
+    min_market_regime_score: float = 40.0
+    min_volatility_score: float = 30.0
+    min_correlation_score: float = 50.0
+    min_news_score: float = 30.0
+    min_time_score: float = 30.0
+    min_institutional_score: float = 40.0
+    min_risk_score: float = 50.0
+    min_probability_score: float = 50.0
+    min_liquidity_score: float = 40.0
+    min_spread_score: float = 30.0
+    min_volume_score: float = 30.0
+    min_quality_score: float = 40.0
+    
+    # Adaptive parameters
+    adaptive_thresholds: bool = True
+    adaptation_interval_minutes: int = 30
+    max_threshold_adjustment: float = 15.0  # Max ±15% adjustment
+    
+    # Debug mode
+    debug_mode: bool = True
+    max_history_size: int = 10000
+
+
+class TradeQualityEngine:
+    """
+    Trade Quality Engine - Filters and ranks trades
+    """
+    
+    def __init__(self, config: Optional[TradeQualityConfig] = None):
+        self.config = config or TradeQualityConfig()
+        self.debug_mode = self.config.debug_mode
+        
+        # Performance tracking
+        self.performance = {
+            'total_trades_checked': 0,
+            'trades_passed': 0,
+            'trades_rejected': 0,
+            'quality_distribution': {
+                'elite': 0, 'high': 0, 'valid': 0,
+                'watch': 0, 'low': 0, 'reject': 0
+            },
+            'filter_rejections': {},
+            'avg_quality_score': 0.0,
+            'filter_performance': {},
+            'threshold_adjustments': 0
+        }
+        
+        # Trade history
+        self.trade_history = deque(maxlen=self.config.max_history_size)
+        self.quality_history = deque(maxlen=self.config.max_history_size)
+        self.filter_history = deque(maxlen=1000)
+        
+        # Current quality scores
+        self.current_scores = {}
+        self.current_level = QualityLevel.WATCH
+        
+        # Market data
+        self.current_regime = "unknown"
+        self.current_volatility = 0.0
+        
+        # Dynamic thresholds
+        self.current_thresholds = self._get_base_thresholds()
+        
+        # Lock for thread safety
+        self._lock = threading.Lock()
+        
+        self._log_debug("Trade Quality Engine initialized")
+        logger.info("Trade Quality Engine initialized")
+    
+    def _log_debug(self, message: str, level: str = "debug") -> None:
+        """Debug logging with timestamp"""
+        if self.debug_mode:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+            log_msg = f"[DEBUG {timestamp}] {message}"
+            if level == "info":
+                logger.info(log_msg)
+            elif level == "warning":
+                logger.warning(log_msg)
+            elif level == "error":
+                logger.error(log_msg)
+            else:
+                logger.debug(log_msg)
+    
+    def _get_base_thresholds(self) -> Dict[str, float]:
+        """Get base thresholds from config"""
+        return {
+            'market_regime': self.config.min_market_regime_score,
+            'volatility': self.config.min_volatility_score,
+            'correlation': self.config.min_correlation_score,
+            'news': self.config.min_news_score,
+            'time': self.config.min_time_score,
+            'institutional': self.config.min_institutional_score,
+            'risk': self.config.min_risk_score,
+            'probability': self.config.min_probability_score,
+            'liquidity': self.config.min_liquidity_score,
+            'spread': self.config.min_spread_score,
+            'volume': self.config.min_volume_score,
+            'quality': self.config.min_quality_score
+        }
+    
+    def update_market_data(self, market_data: Dict[str, Any]) -> None:
+        """Update market data and adapt thresholds"""
+        try:
+            if not isinstance(market_data, dict):
+                return
+            
+            self.current_regime = market_data.get('regime', 'unknown') or 'unknown'
+            self.current_volatility = market_data.get('volatility', 0.0) or 0.0
+            
+            if self.config.adaptive_thresholds:
+                self._adapt_thresholds()
+            
+            self._log_debug(f"Market data updated: regime={self.current_regime}, volatility={self.current_volatility:.2f}")
+            
+        except Exception as e:
+            self._log_debug(f"Error in update_market_data: {str(e)}", "error")
+    
+    def _adapt_thresholds(self) -> None:
+        """Adapt thresholds based on market conditions"""
+        try:
+            adjustment = 0.0
+            
+            # Adjust based on volatility
+            if self.current_volatility > 2.0:
+                adjustment = 5.0  # Stricter in high volatility
+            elif self.current_volatility < 0.5:
+                adjustment = -5.0  # Looser in low volatility
+            
+            # Adjust based on regime
+            if "trend" in self.current_regime.lower():
+                adjustment -= 3.0  # Looser in trends
+            elif "range" in self.current_regime.lower():
+                adjustment += 5.0  # Stricter in ranges
+            elif "news" in self.current_regime.lower():
+                adjustment += 10.0  # Much stricter in news
+            
+            # Apply adjustment with limits
+            max_adj = self.config.max_threshold_adjustment
+            adjustment = max(-max_adj, min(max_adj, adjustment))
+            
+            # Update thresholds
+            for key in self.current_thresholds:
+                new_val = self.current_thresholds[key] + adjustment
+                self.current_thresholds[key] = max(20, min(80, new_val))
+            
+            if abs(adjustment) > 1.0:
+                self.performance['threshold_adjustments'] += 1
+                self._log_debug(f"Thresholds adjusted by {adjustment:.1f} points")
+            
+        except Exception as e:
+            self._log_debug(f"Error in _adapt_thresholds: {str(e)}", "error")
+    
+    def calculate_quality_score(self, trade_signal: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Calculate quality score for a trade
+        Returns: Quality scores, level, and filter results
+        """
+        try:
+            self.performance['total_trades_checked'] += 1
+            
+            # Calculate individual filter scores
+            filter_scores = self._calculate_filter_scores(trade_signal)
+            
+            # Apply thresholds
+            filter_results = self._apply_thresholds(filter_scores)
+            
+            # Calculate weighted total
+            total_score = 0.0
+            total_weight = 0.0
+            
+            for filter_name, score in filter_scores.items():
+                weight = self.config.filter_weights.get(filter_name, 0.08)
+                total_score += score * weight
+                total_weight += weight
+            
+            quality_score = total_score / total_weight if total_weight > 0 else 50.0
+            
+            # Ensure range
+            quality_score = max(0, min(100, quality_score))
+            
+            # Determine quality level
+            quality_level = self._get_quality_level(quality_score)
+            
+            # Store results
+            result = {
+                'quality_score': quality_score,
+                'quality_level': quality_level.value,
+                'filter_scores': filter_scores,
+                'filter_results': filter_results,
+                'passed': quality_level != QualityLevel.REJECT,
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            # Update tracking
+            self.performance['quality_distribution'][quality_level.value] += 1
+            self.performance['avg_quality_score'] = (self.performance['avg_quality_score'] * (self.performance['total_trades_checked'] - 1) + quality_score) / self.performance['total_trades_checked']
+            
+            if quality_level != QualityLevel.REJECT:
+                self.performance['trades_passed'] += 1
+            else:
+                self.performance['trades_rejected'] += 1
+            
+            # Track filter rejections
+            for filter_name, passed in filter_results.items():
+                if not passed:
+                    self.performance['filter_rejections'][filter_name] = self.performance['filter_rejections'].get(filter_name, 0) + 1
+            
+            # Store history
+            self.quality_history.append(result)
+            
+            self.current_scores = filter_scores
+            self.current_level = quality_level
+            
+            self._log_debug(f"Quality Score: {quality_score:.1f} ({quality_level.value})")
+            return result
+            
+        except Exception as e:
+            self._log_debug(f"Error in calculate_quality_score: {str(e)}", "error")
+            return {
+                'quality_score': 50.0,
+                'quality_level': 'reject',
+                'filter_scores': {},
+                'filter_results': {},
+                'passed': False,
+                'error': str(e)
+            }
+    
+    def _calculate_filter_scores(self, trade_signal: Dict[str, Any]) -> Dict[str, float]:
+        """Calculate individual filter scores (0-100)"""
+        try:
+            scores = {}
+            
+            # 1. Market Regime Filter
+            regime = str(self.current_regime).lower()
+            if "strong_trend" in regime:
+                scores['market_regime'] = 90.0
+            elif "weak_trend" in regime:
+                scores['market_regime'] = 70.0
+            elif "ranging" in regime:
+                scores['market_regime'] = 50.0
+            elif "volatile" in regime:
+                scores['market_regime'] = 40.0
+            elif "news" in regime:
+                scores['market_regime'] = 30.0
+            else:
+                scores['market_regime'] = 60.0
+            
+            # 2. Volatility Filter
+            vol = self.current_volatility
+            if vol < 0.5:
+                scores['volatility'] = 80.0
+            elif vol < 1.0:
+                scores['volatility'] = 70.0
+            elif vol < 2.0:
+                scores['volatility'] = 60.0
+            elif vol < 3.0:
+                scores['volatility'] = 40.0
+            else:
+                scores['volatility'] = 20.0
+            
+            # 3. Correlation Filter
+            correlation_conflict = trade_signal.get('correlation_conflict', False)
+            scores['correlation'] = 20.0 if correlation_conflict else 85.0
+            
+            # 4. News Filter
+            news_impact = trade_signal.get('news_impact', 'none') or 'none'
+            if news_impact == 'none':
+                scores['news'] = 90.0
+            elif news_impact == 'low':
+                scores['news'] = 60.0
+            elif news_impact == 'medium':
+                scores['news'] = 40.0
+            else:
+                scores['news'] = 20.0
+            
+            # 5. Time Filter
+            session = trade_signal.get('session', '') or ''
+            killzone_sessions = ['london', 'new york', 'tokyo', 'sydney']
+            is_killzone = any(s in session.lower() for s in killzone_sessions)
+            scores['time'] = 85.0 if is_killzone else 50.0
+            
+            # 6. Institutional Alignment
+            alignment = trade_signal.get('institutional_alignment', 0.5) or 0.5
+            scores['institutional'] = alignment * 100
+            
+            # 7. Risk Filter
+            risk_score = trade_signal.get('risk_score', 0.5) or 0.5
+            scores['risk'] = (1 - risk_score) * 100
+            
+            # 8. Probability Filter
+            probability = trade_signal.get('probability', 0.5) or 0.5
+            scores['probability'] = probability * 100
+            
+            # 9. Liquidity Filter
+            liquidity = trade_signal.get('liquidity', 0.5) or 0.5
+            scores['liquidity'] = liquidity * 100
+            
+            # 10. Spread Filter
+            spread = trade_signal.get('spread', 0.0) or 0.0
+            if spread < 0.0001:
+                scores['spread'] = 90.0
+            elif spread < 0.0003:
+                scores['spread'] = 70.0
+            elif spread < 0.0005:
+                scores['spread'] = 50.0
+            else:
+                scores['spread'] = 30.0
+            
+            # 11. Volume Filter
+            volume = trade_signal.get('volume', 0.0) or 0.0
+            avg_volume = trade_signal.get('avg_volume', volume) or volume
+            if avg_volume > 0:
+                vol_ratio = volume / avg_volume
+                if vol_ratio > 2.0:
+                    scores['volume'] = 90.0
+                elif vol_ratio > 1.5:
+                    scores['volume'] = 75.0
+                elif vol_ratio > 1.0:
+                    scores['volume'] = 60.0
+                elif vol_ratio > 0.5:
+                    scores['volume'] = 40.0
+                else:
+                    scores['volume'] = 20.0
+            else:
+                scores['volume'] = 50.0
+            
+            # 12. Quality Filter
+            quality = trade_signal.get('quality', 0.5) or 0.5
+            scores['quality'] = quality * 100
+            
+            return scores
+            
+        except Exception as e:
+            self._log_debug(f"Error in _calculate_filter_scores: {str(e)}", "error")
+            return {k: 50.0 for k in self.config.filter_weights.keys()}
+    
+    def _apply_thresholds(self, scores: Dict[str, float]) -> Dict[str, bool]:
+        """Apply thresholds to filter scores"""
+        try:
+            results = {}
+            
+            for filter_name, score in scores.items():
+                threshold = self.current_thresholds.get(filter_name, 40.0)
+                # Adjust threshold based on market conditions
+                if self.current_volatility > 2.0:
+                    threshold += 5.0
+                elif self.current_volatility < 0.5:
+                    threshold -= 5.0
+                results[filter_name] = score >= threshold
+            
+            return results
+            
+        except Exception as e:
+            self._log_debug(f"Error in _apply_thresholds: {str(e)}", "error")
+            return {k: True for k in scores.keys()}
+    
+    def _get_quality_level(self, score: float) -> QualityLevel:
+        """Get quality level from score"""
+        if score >= self.config.elite_threshold:
+            return QualityLevel.ELITE
+        elif score >= self.config.high_threshold:
+            return QualityLevel.HIGH
+        elif score >= self.config.valid_threshold:
+            return QualityLevel.VALID
+        elif score >= self.config.watch_threshold:
+            return QualityLevel.WATCH
+        elif score >= self.config.low_threshold:
+            return QualityLevel.LOW
+        else:
+            return QualityLevel.REJECT
+    
+    def get_position_multiplier(self, quality_level: str) -> float:
+        """Get position size multiplier based on quality level"""
+        multipliers = {
+            'elite': 1.5,
+            'high': 1.2,
+            'valid': 1.0,
+            'watch': 0.7,
+            'low': 0.4,
+            'reject': 0.0
+        }
+        return multipliers.get(quality_level, 0.0)
+    
+    def should_execute(self, quality_level: str) -> bool:
+        """Determine if trade should be executed based on quality level"""
+        execute_levels = ['elite', 'high', 'valid', 'watch']
+        return quality_level in execute_levels
+    
+    def get_quality_recommendation(self, quality_level: str) -> str:
+        """Get recommendation based on quality level"""
+        recommendations = {
+            'elite': "EXECUTE FULL SIZE - Excellent opportunity",
+            'high': "EXECUTE - Strong quality opportunity",
+            'valid': "EXECUTE - Good quality opportunity",
+            'watch': "REDUCED SIZE - Monitor closely",
+            'low': "SKIP - Low quality opportunity",
+            'reject': "REJECT - Do not execute"
+        }
+        return recommendations.get(quality_level, "Unknown quality level")
+    
+    def update_filter_performance(self, trade_result: Dict[str, Any]) -> None:
+        """Update filter performance based on trade result"""
+        try:
+            if not isinstance(trade_result, dict):
+                return
+            
+            quality_level = trade_result.get('quality_level', 'unknown')
+            won = trade_result.get('won', False)
+            
+            # Update filter performance
+            filter_scores = trade_result.get('filter_scores', {})
+            for filter_name, score in filter_scores.items():
+                if filter_name not in self.performance['filter_performance']:
+                    self.performance['filter_performance'][filter_name] = {'wins': 0, 'losses': 0}
+                
+                if won:
+                    self.performance['filter_performance'][filter_name]['wins'] += 1
+                else:
+                    self.performance['filter_performance'][filter_name]['losses'] += 1
+            
+            self._log_debug(f"Filter performance updated for {quality_level}")
+            
+        except Exception as e:
+            self._log_debug(f"Error in update_filter_performance: {str(e)}", "error")
+    
+    def get_filter_effectiveness(self) -> Dict[str, float]:
+        """Get effectiveness score for each filter"""
+        try:
+            effectiveness = {}
+            
+            for filter_name, data in self.performance['filter_performance'].items():
+                wins = data.get('wins', 0)
+                losses = data.get('losses', 0)
+                total = wins + losses
+                
+                if total > 0:
+                    effectiveness[filter_name] = wins / total
+                else:
+                    effectiveness[filter_name] = 0.5  # Neutral
+            
+            return effectiveness
+            
+        except Exception as e:
+            self._log_debug(f"Error in get_filter_effectiveness: {str(e)}", "error")
+            return {}
+    
+    def get_status(self) -> Dict[str, Any]:
+        """Get current status"""
+        try:
+            total = self.performance['total_trades_checked']
+            pass_rate = (self.performance['trades_passed'] / total * 100) if total > 0 else 0
+            
+            return {
+                'total_trades_checked': total,
+                'trades_passed': self.performance['trades_passed'],
+                'trades_rejected': self.performance['trades_rejected'],
+                'pass_rate': pass_rate,
+                'avg_quality_score': self.performance['avg_quality_score'],
+                'quality_distribution': self.performance['quality_distribution'],
+                'filter_rejections': self.performance['filter_rejections'],
+                'threshold_adjustments': self.performance['threshold_adjustments'],
+                'current_level': self.current_level.value,
+                'current_thresholds': self.current_thresholds,
+                'filter_effectiveness': self.get_filter_effectiveness(),
+                'current_regime': self.current_regime,
+                'current_volatility': self.current_volatility,
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_status: {str(e)}", "error")
+            return {'status': 'ERROR', 'error': str(e)}
+    
+    def get_performance_report(self) -> Dict[str, Any]:
+        """Get detailed performance report"""
+        try:
+            total = self.performance['total_trades_checked']
+            pass_rate = (self.performance['trades_passed'] / total * 100) if total > 0 else 0
+            
+            distribution = self.performance['quality_distribution']
+            total_dist = sum(distribution.values()) if distribution else 1
+            
+            return {
+                'summary': {
+                    'total_trades_checked': total,
+                    'trades_passed': self.performance['trades_passed'],
+                    'trades_rejected': self.performance['trades_rejected'],
+                    'pass_rate': pass_rate,
+                    'avg_quality_score': self.performance['avg_quality_score']
+                },
+                'quality_distribution': {
+                    'elite': distribution.get('elite', 0),
+                    'high': distribution.get('high', 0),
+                    'valid': distribution.get('valid', 0),
+                    'watch': distribution.get('watch', 0),
+                    'low': distribution.get('low', 0),
+                    'reject': distribution.get('reject', 0),
+                    'elite_percentage': (distribution.get('elite', 0) / total_dist * 100),
+                    'high_percentage': (distribution.get('high', 0) / total_dist * 100)
+                },
+                'filter_rejections': self.performance['filter_rejections'],
+                'filter_effectiveness': self.get_filter_effectiveness(),
+                'threshold_adjustments': self.performance['threshold_adjustments'],
+                'current_thresholds': self.current_thresholds,
+                'recent_quality': list(self.quality_history)[-10:],
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_performance_report: {str(e)}", "error")
+            return {'error': str(e)}
+    
+    def reset_thresholds(self) -> None:
+        """Reset thresholds to base values"""
+        try:
+            self.current_thresholds = self._get_base_thresholds()
+            self._log_debug("Thresholds reset to base values")
+        except Exception as e:
+            self._log_debug(f"Error in reset_thresholds: {str(e)}", "error")
+    
+    def get_quality_level_info(self, quality_level: str) -> Dict[str, Any]:
+        """Get information about a quality level"""
+        try:
+            level_info = {
+                'elite': {
+                    'score_range': '95-100',
+                    'recommendation': 'EXECUTE FULL SIZE',
+                    'size_multiplier': 1.5,
+                    'color': '#00FF00',
+                    'description': 'Excellent opportunity - Highest quality'
+                },
+                'high': {
+                    'score_range': '85-94',
+                    'recommendation': 'EXECUTE',
+                    'size_multiplier': 1.2,
+                    'color': '#00CC00',
+                    'description': 'Strong quality opportunity'
+                },
+                'valid': {
+                    'score_range': '75-84',
+                    'recommendation': 'EXECUTE',
+                    'size_multiplier': 1.0,
+                    'color': '#FFCC00',
+                    'description': 'Good quality opportunity'
+                },
+                'watch': {
+                    'score_range': '65-74',
+                    'recommendation': 'REDUCED SIZE',
+                    'size_multiplier': 0.7,
+                    'color': '#FF8800',
+                    'description': 'Monitor closely - Reduced size'
+                },
+                'low': {
+                    'score_range': '50-64',
+                    'recommendation': 'SKIP',
+                    'size_multiplier': 0.4,
+                    'color': '#FF4400',
+                    'description': 'Low quality - Skip recommended'
+                },
+                'reject': {
+                    'score_range': '0-49',
+                    'recommendation': 'REJECT',
+                    'size_multiplier': 0.0,
+                    'color': '#FF0000',
+                    'description': 'Do not execute'
+                }
+            }
+            return level_info.get(quality_level, level_info['reject'])
+        except Exception as e:
+            self._log_debug(f"Error in get_quality_level_info: {str(e)}", "error")
+            return {}

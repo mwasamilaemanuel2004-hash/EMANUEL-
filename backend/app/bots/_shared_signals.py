@@ -36,12 +36,16 @@ class AiSignalGate:
             return np.array([])
 
     def score_signal(self, df, direction: str = "NEUTRAL"):
-        prices = self.price_array(df)
-        volumes = self.volume_array(df)
-        return self.filter.ai.score_trade(df, direction,
-                                          df['close'].iloc[-1] if len(df) else 0,
-                                          df['close'].iloc[-1] if len(df) else 0,
-                                          df['close'].iloc[-1] if len(df) else 0)
+        if df is None or len(df) < 15:
+            return None
+        entry = float(df['close'].iloc[-1])
+        atr_series = self.filter.ai._calc_atr(df)
+        atr = float(atr_series.iloc[-1]) if not pd.isna(atr_series.iloc[-1]) else entry * 0.01
+        atr = max(atr, entry * 0.0001)
+        side = direction if direction in {"BUY", "SELL"} else ("BUY" if df['close'].iloc[-1] >= df['close'].iloc[-2] else "SELL")
+        stop_loss = entry - atr * 1.5 if side == "BUY" else entry + atr * 1.5
+        take_profit = entry + atr * 3.0 if side == "BUY" else entry - atr * 3.0
+        return self.filter.ai.score_trade(df, side, entry, stop_loss, take_profit)
 
     def regime_of(self, mtf_data: Dict[str, pd.DataFrame]):
         return self.filter.classify_regime(mtf_data)

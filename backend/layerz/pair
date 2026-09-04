@@ -1,0 +1,689 @@
+"""
+LAYERS +17, +29: PAIR SELECTION ENGINE (ULTIMATE OPTIMIZED)
+Purpose: Select the best pairs to trade and compete opportunities across pairs with INTELLIGENCE.
+Balance: GOLDILOCKS - Not too selective (misses opportunities) and not too loose (bad pairs).
+
+KEY IMPROVEMENTS:
+- MULTI-FACTOR SCORING: 8 factors for comprehensive pair evaluation
+- REAL-TIME CORRELATION UPDATES: Dynamic correlation tracking
+- PERFORMANCE-BASED PAIR RANKING: Historical performance weighted
+- OPPORTUNITY COMPETITION: Rank opportunities across all pairs
+- PAIR FILTERING: Remove correlated pairs to diversify
+- ADAPTIVE RECOMMENDATIONS: Changes based on market conditions
+- REJECTION TRACKING: Clear rejection reasons
+- AUTO-OPTIMIZATION: Self-adjusting thresholds
+"""
+
+import numpy as np
+import pandas as pd
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Tuple, Any, Union
+from enum import Enum
+from dataclasses import dataclass, field
+import logging
+import json
+import time
+from collections import deque
+import threading
+
+# Configure logging
+logger = logging.getLogger(__name__)
+
+debug_handler = logging.FileHandler('logs/pair_selection_debug.log')
+debug_handler.setLevel(logging.DEBUG)
+debug_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+debug_handler.setFormatter(debug_formatter)
+logger.addHandler(debug_handler)
+
+
+class PairRecommendationLevel(Enum):
+    """Pair recommendation levels"""
+    ELITE = "elite"       # Score >= 90 - MUST TRADE
+    HIGH = "high"         # Score >= 80 - STRONG
+    GOOD = "good"         # Score >= 70 - VALID
+    AVERAGE = "average"   # Score >= 60 - WATCH
+    LOW = "low"           # Score >= 50 - CAUTION
+    REJECT = "reject"     # Score < 50 - SKIP
+
+
+@dataclass
+class PairSelectionConfig:
+    """Configuration for Pair Selection Engine - OPTIMIZED"""
+    
+    # RECOMMENDATION THRESHOLDS (STRICT BUT FAIR)
+    elite_threshold: float = 90.0
+    high_threshold: float = 80.0
+    good_threshold: float = 70.0
+    average_threshold: float = 60.0
+    
+    # MINIMUM REQUIREMENTS (REALISTIC)
+    min_win_rate: float = 0.45      # 45% minimum
+    min_profit_factor: float = 1.2   # 1.2 minimum
+    min_trades: int = 15             # 15 trades minimum
+    max_correlation: float = 0.65    # 65% max correlation
+    
+    # PAIR LIMITS
+    max_pairs: int = 5
+    min_pairs: int = 1
+    default_pairs: int = 3
+    
+    # COMPETITION
+    max_opportunities_per_pair: int = 3
+    competition_window_minutes: int = 5
+    
+    # SCORING WEIGHTS (BALANCED)
+    score_weights: Dict[str, float] = field(default_factory=lambda: {
+        'win_rate': 0.20,
+        'profit_factor': 0.20,
+        'avg_trade': 0.15,
+        'trades_count': 0.10,
+        'volatility': 0.10,
+        'momentum': 0.10,
+        'liquidity': 0.08,
+        'correlation': 0.07
+    })
+    
+    # PERFORMANCE TRACKING
+    performance_lookback: int = 200
+    update_interval_seconds: int = 60
+    
+    # AUTO-CORRECTION
+    auto_correction: bool = True
+    min_pairs_to_auto_correct: int = 5
+    
+    # DEBUG
+    debug_mode: bool = True
+    max_history_size: int = 10000
+
+
+class PairSelectionEngine:
+    """
+    Pair Selection Engine - ULTIMATE OPTIMIZED
+    Selects best pairs and competes opportunities with intelligence.
+    """
+    
+    def __init__(self, config: Optional[PairSelectionConfig] = None):
+        self.config = config or PairSelectionConfig()
+        self.debug_mode = self.config.debug_mode
+        
+        # PERFORMANCE TRACKING
+        self.performance = {
+            'total_recommendations': 0,
+            'pairs_analyzed': 0,
+            'high_quality_pairs': 0,
+            'opportunities_competed': 0,
+            'avg_pair_score': 0.0,
+            'pair_scores': {},
+            'recommendation_distribution': {},
+            'competition_wins': {},
+            'rejected_pairs': 0,
+            'rejection_reasons': {},
+            'auto_corrections': 0
+        }
+        
+        # PAIR DATA STORAGE
+        self.pair_data = {}
+        self.pair_performance = {}
+        self.pair_history = deque(maxlen=self.config.max_history_size)
+        self.recommendation_history = deque(maxlen=1000)
+        self.rejection_history = deque(maxlen=500)
+        
+        # CURRENT STATE
+        self.current_pairs = []
+        self.current_recommendations = []
+        self.current_opportunities = []
+        self.current_pair_scores = {}
+        
+        # CORRELATION MATRIX
+        self.correlation_matrix = {}
+        
+        # MARKET CONTEXT
+        self.current_regime = "unknown"
+        self.current_volatility = 0.0
+        
+        # AUTO-CORRECTION
+        self.correction_count = 0
+        self.last_correction = None
+        
+        # LOCK
+        self._lock = threading.Lock()
+        
+        self._log_debug("Pair Selection Engine initialized - OPTIMIZED")
+        logger.info("Pair Selection Engine initialized - OPTIMIZED")
+    
+    def _log_debug(self, message: str, level: str = "debug") -> None:
+        """Debug logging with timestamp"""
+        if self.debug_mode:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+            log_msg = f"[DEBUG {timestamp}] {message}"
+            if level == "info":
+                logger.info(log_msg)
+            elif level == "warning":
+                logger.warning(log_msg)
+            elif level == "error":
+                logger.error(log_msg)
+            else:
+                logger.debug(log_msg)
+    
+    def update_market_data(self, market_data: Dict[str, Any]) -> None:
+        """Update market context for pair selection"""
+        try:
+            if not isinstance(market_data, dict):
+                return
+            
+            self.current_regime = market_data.get('regime', 'unknown') or 'unknown'
+            self.current_volatility = market_data.get('volatility', 0.0) or 0.0
+            
+            # Auto-correction based on market conditions
+            if self.config.auto_correction:
+                self._check_auto_correction()
+            
+            self._log_debug(f"Market context: regime={self.current_regime}, volatility={self.current_volatility:.2f}")
+            
+        except Exception as e:
+            self._log_debug(f"Error in update_market_data: {str(e)}", "error")
+    
+    def _check_auto_correction(self) -> None:
+        """Auto-correction to optimize pair selection"""
+        try:
+            # Check if we have enough data
+            if len(self.pair_data) < self.config.min_pairs_to_auto_correct:
+                return
+            
+            # Check if recommendation quality is low
+            if len(self.recommendation_history) > 20:
+                recent_recs = list(self.recommendation_history)[-20:]
+                avg_score = sum(r.get('avg_score', 0) for r in recent_recs) / len(recent_recs)
+                
+                if avg_score < 60:
+                    self.correction_count += 1
+                    self.performance['auto_corrections'] += 1
+                    
+                    # Adjust thresholds slightly
+                    self.config.min_win_rate = max(0.35, self.config.min_win_rate - 0.02)
+                    self.config.min_profit_factor = max(1.0, self.config.min_profit_factor - 0.05)
+                    
+                    self._log_debug(f"AUTO-CORRECTION: Lowered thresholds - WR={self.config.min_win_rate:.2f}, PF={self.config.min_profit_factor:.2f}", "info")
+                    
+        except Exception as e:
+            self._log_debug(f"Error in _check_auto_correction: {str(e)}", "error")
+    
+    def update_pair_data(self, pair_data: Dict[str, Any]) -> None:
+        """Update pair data for analysis"""
+        try:
+            if not isinstance(pair_data, dict):
+                return
+            
+            for pair, data in pair_data.items():
+                if pair not in self.pair_data:
+                    self.pair_data[pair] = {
+                        'first_seen': datetime.now(),
+                        'history': deque(maxlen=self.config.max_history_size)
+                    }
+                
+                self.pair_data[pair]['history'].append({
+                    'timestamp': datetime.now(),
+                    'data': data
+                })
+            
+            # Update performance
+            self._update_pair_performance()
+            
+            # Update correlation matrix
+            self._update_correlation_matrix()
+            
+            # Update pair scores
+            self._update_pair_scores()
+            
+            self._log_debug(f"Pair data updated: {len(pair_data)} pairs")
+            
+        except Exception as e:
+            self._log_debug(f"Error in update_pair_data: {str(e)}", "error")
+    
+    def _update_pair_performance(self) -> None:
+        """Update pair performance metrics with 8 factors"""
+        try:
+            for pair, data in self.pair_data.items():
+                history = list(data['history'])
+                if len(history) < self.config.min_trades:
+                    continue
+                
+                trades = [h['data'] for h in history[-self.config.performance_lookback:]]
+                
+                # 1. Win Rate
+                wins = sum(1 for t in trades if t.get('won', False))
+                win_rate = wins / len(trades) if trades else 0
+                
+                # 2. Profit Factor
+                total_profit = sum(t.get('pnl', 0) for t in trades if t.get('pnl', 0) > 0)
+                total_loss = abs(sum(t.get('pnl', 0) for t in trades if t.get('pnl', 0) < 0))
+                profit_factor = total_profit / total_loss if total_loss > 0 else 10.0
+                
+                # 3. Average Trade
+                avg_trade = sum(t.get('pnl', 0) for t in trades) / len(trades) if trades else 0
+                
+                # 4. Trade Count
+                trades_count = len(trades)
+                
+                # 5. Volatility
+                returns = [t.get('return', 0) for t in trades if t.get('return', 0) != 0]
+                volatility = np.std(returns) if returns else 0
+                
+                # 6. Momentum (recent performance)
+                recent_wins = sum(1 for t in trades[-20:] if t.get('won', False)) if len(trades) >= 20 else wins
+                recent_win_rate = recent_wins / min(20, len(trades)) if trades else 0
+                momentum = recent_win_rate - win_rate
+                
+                # 7. Liquidity (volume)
+                volume = sum(t.get('volume', 0) for t in trades) / len(trades) if trades else 0
+                
+                # 8. Correlation (updated separately)
+                
+                self.pair_performance[pair] = {
+                    'win_rate': win_rate,
+                    'profit_factor': profit_factor,
+                    'avg_trade': avg_trade,
+                    'trades_count': trades_count,
+                    'volatility': volatility,
+                    'momentum': momentum,
+                    'liquidity': volume,
+                    'last_updated': datetime.now()
+                }
+            
+        except Exception as e:
+            self._log_debug(f"Error in _update_pair_performance: {str(e)}", "error")
+    
+    def _update_correlation_matrix(self) -> None:
+        """Update pair correlation matrix"""
+        try:
+            pairs = list(self.pair_data.keys())
+            if len(pairs) < 2:
+                return
+            
+            for i, pair1 in enumerate(pairs):
+                for pair2 in pairs[i+1:]:
+                    # Get price history
+                    hist1 = [h['data'].get('price', 0) for h in list(self.pair_data[pair1]['history'])[-50:]]
+                    hist2 = [h['data'].get('price', 0) for h in list(self.pair_data[pair2]['history'])[-50:]]
+                    
+                    if len(hist1) < 10 or len(hist2) < 10:
+                        continue
+                    
+                    try:
+                        corr = np.corrcoef(hist1, hist2)[0, 1]
+                        if not np.isnan(corr):
+                            self.correlation_matrix[f"{pair1}|{pair2}"] = corr
+                            self.correlation_matrix[f"{pair2}|{pair1}"] = corr
+                    except:
+                        pass
+            
+        except Exception as e:
+            self._log_debug(f"Error in _update_correlation_matrix: {str(e)}", "error")
+    
+    def _update_pair_scores(self) -> None:
+        """Update scores for all pairs"""
+        try:
+            for pair in self.pair_data:
+                score = self.get_pair_score(pair)
+                self.current_pair_scores[pair] = score
+                self.performance['pair_scores'][pair] = score
+            
+            # Update average
+            if self.current_pair_scores:
+                self.performance['avg_pair_score'] = sum(self.current_pair_scores.values()) / len(self.current_pair_scores)
+            
+        except Exception as e:
+            self._log_debug(f"Error in _update_pair_scores: {str(e)}", "error")
+    
+    def get_pair_score(self, pair: str) -> float:
+        """Calculate score for a pair (0-100) with 8 factors"""
+        try:
+            perf = self.pair_performance.get(pair, {})
+            weights = self.config.score_weights
+            
+            score = 0.0
+            
+            # 1. Win Rate (20%)
+            win_rate = perf.get('win_rate', 0.5)
+            if win_rate >= 0.65:
+                score += weights['win_rate'] * 100
+            elif win_rate >= 0.55:
+                score += weights['win_rate'] * 80
+            elif win_rate >= 0.45:
+                score += weights['win_rate'] * 50
+            else:
+                score += weights['win_rate'] * 20
+            
+            # 2. Profit Factor (20%)
+            profit_factor = perf.get('profit_factor', 1.0)
+            if profit_factor >= 2.5:
+                score += weights['profit_factor'] * 100
+            elif profit_factor >= 1.8:
+                score += weights['profit_factor'] * 80
+            elif profit_factor >= 1.2:
+                score += weights['profit_factor'] * 50
+            else:
+                score += weights['profit_factor'] * 20
+            
+            # 3. Average Trade (15%)
+            avg_trade = perf.get('avg_trade', 0)
+            if avg_trade > 0:
+                score += min(weights['avg_trade'] * 100, avg_trade * 50)
+            else:
+                score += weights['avg_trade'] * 20
+            
+            # 4. Trade Count (10%)
+            trades_count = perf.get('trades_count', 0)
+            if trades_count >= 100:
+                score += weights['trades_count'] * 100
+            elif trades_count >= 50:
+                score += weights['trades_count'] * 75
+            elif trades_count >= 20:
+                score += weights['trades_count'] * 50
+            else:
+                score += weights['trades_count'] * 25
+            
+            # 5. Volatility (10%)
+            volatility = perf.get('volatility', 0)
+            if 0.005 < volatility < 0.025:
+                score += weights['volatility'] * 100  # Good volatility
+            elif volatility <= 0.005:
+                score += weights['volatility'] * 60   # Low volatility
+            else:
+                score += weights['volatility'] * 40   # High volatility
+            
+            # 6. Momentum (10%)
+            momentum = perf.get('momentum', 0)
+            if momentum > 0.1:
+                score += weights['momentum'] * 100
+            elif momentum > 0:
+                score += weights['momentum'] * 70
+            else:
+                score += weights['momentum'] * 30
+            
+            # 7. Liquidity (8%)
+            liquidity = perf.get('liquidity', 0)
+            if liquidity > 100000:
+                score += weights['liquidity'] * 100
+            elif liquidity > 50000:
+                score += weights['liquidity'] * 80
+            elif liquidity > 10000:
+                score += weights['liquidity'] * 60
+            else:
+                score += weights['liquidity'] * 30
+            
+            # 8. Correlation (7%) - checked in recommend_pairs
+            
+            # Cap at 100
+            score = min(100.0, max(0.0, score))
+            
+            return score
+            
+        except Exception as e:
+            self._log_debug(f"Error in get_pair_score: {str(e)}", "error")
+            return 50.0
+    
+    def get_pair_level(self, score: float) -> PairRecommendationLevel:
+        """Get recommendation level from score"""
+        if score >= self.config.elite_threshold:
+            return PairRecommendationLevel.ELITE
+        elif score >= self.config.high_threshold:
+            return PairRecommendationLevel.HIGH
+        elif score >= self.config.good_threshold:
+            return PairRecommendationLevel.GOOD
+        elif score >= self.config.average_threshold:
+            return PairRecommendationLevel.AVERAGE
+        elif score >= 50:
+            return PairRecommendationLevel.LOW
+        else:
+            return PairRecommendationLevel.REJECT
+    
+    def recommend_pairs(self, pairs: List[str]) -> List[Dict[str, Any]]:
+        """
+        Recommend best pairs to trade with FULL VALIDATION
+        Returns: List of recommendations with scores
+        """
+        try:
+            recommendations = []
+            rejected = []
+            
+            for pair in pairs:
+                if pair not in self.pair_data:
+                    rejected.append({'pair': pair, 'reason': 'no_data'})
+                    continue
+                
+                # Get performance
+                perf = self.pair_performance.get(pair, {})
+                
+                # CHECK 1: Win Rate
+                if perf.get('win_rate', 0) < self.config.min_win_rate:
+                    rejected.append({'pair': pair, 'reason': 'low_win_rate', 'value': perf.get('win_rate', 0)})
+                    continue
+                
+                # CHECK 2: Profit Factor
+                if perf.get('profit_factor', 0) < self.config.min_profit_factor:
+                    rejected.append({'pair': pair, 'reason': 'low_profit_factor', 'value': perf.get('profit_factor', 0)})
+                    continue
+                
+                # CHECK 3: Trade Count
+                if perf.get('trades_count', 0) < self.config.min_trades:
+                    rejected.append({'pair': pair, 'reason': 'insufficient_trades', 'value': perf.get('trades_count', 0)})
+                    continue
+                
+                # Get score
+                score = self.get_pair_score(pair)
+                level = self.get_pair_level(score)
+                
+                # CHECK 4: Level
+                if level == PairRecommendationLevel.REJECT:
+                    rejected.append({'pair': pair, 'reason': 'low_score', 'score': score})
+                    continue
+                
+                # CHECK 5: Correlation with existing recommendations
+                correlated = False
+                for rec in recommendations:
+                    corr = self.get_correlation(pair, rec['pair'])
+                    if abs(corr) > self.config.max_correlation:
+                        correlated = True
+                        rejected.append({'pair': pair, 'reason': 'high_correlation', 'with': rec['pair'], 'corr': corr})
+                        break
+                
+                if correlated:
+                    continue
+                
+                recommendations.append({
+                    'pair': pair,
+                    'score': score,
+                    'level': level.value,
+                    'win_rate': perf.get('win_rate', 0),
+                    'profit_factor': perf.get('profit_factor', 0),
+                    'avg_trade': perf.get('avg_trade', 0),
+                    'trades': perf.get('trades_count', 0),
+                    'volatility': perf.get('volatility', 0),
+                    'momentum': perf.get('momentum', 0),
+                    'liquidity': perf.get('liquidity', 0)
+                })
+            
+            # Sort by score
+            recommendations.sort(key=lambda x: x['score'], reverse=True)
+            
+            # Apply max pairs limit
+            if len(recommendations) > self.config.max_pairs:
+                recommendations = recommendations[:self.config.max_pairs]
+            
+            # Update performance
+            self.performance['total_recommendations'] += 1
+            self.performance['pairs_analyzed'] += len(pairs)
+            self.performance['high_quality_pairs'] += len([r for r in recommendations if r['score'] >= 70])
+            self.performance['rejected_pairs'] += len(rejected)
+            
+            # Track rejection reasons
+            for r in rejected:
+                reason = r.get('reason', 'unknown')
+                self.performance['rejection_reasons'][reason] = self.performance['rejection_reasons'].get(reason, 0) + 1
+                self.rejection_history.append(r)
+            
+            # Store history
+            self.current_recommendations = recommendations
+            self.recommendation_history.append({
+                'timestamp': datetime.now(),
+                'recommendations': recommendations,
+                'rejected': rejected,
+                'avg_score': sum(r['score'] for r in recommendations) / len(recommendations) if recommendations else 0
+            })
+            
+            self._log_debug(f"Recommended {len(recommendations)} pairs from {len(pairs)} (rejected: {len(rejected)})")
+            return recommendations
+            
+        except Exception as e:
+            self._log_debug(f"Error in recommend_pairs: {str(e)}", "error")
+            return []
+    
+    def compete_opportunities(self, opportunities: Dict[str, List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+        """
+        Compete opportunities across all pairs with RANKING
+        Returns: Ranked opportunities
+        """
+        try:
+            all_opportunities = []
+            
+            for pair, opps in opportunities.items():
+                # Get pair score
+                pair_score = self.get_pair_score(pair)
+                level = self.get_pair_level(pair_score)
+                
+                # Skip low quality pairs
+                if level in [PairRecommendationLevel.LOW, PairRecommendationLevel.REJECT]:
+                    continue
+                
+                for opp in opps:
+                    # Get opportunity quality
+                    quality = opp.get('quality_score', 0.5)
+                    confidence = opp.get('confidence', 0.5)
+                    
+                    # Calculate competition score (MULTI-FACTOR)
+                    competition_score = (
+                        (pair_score * 0.30) +      # Pair quality
+                        (quality * 100 * 0.25) +   # Opportunity quality
+                        (confidence * 100 * 0.20) + # Confidence
+                        (self._get_regime_bonus(pair) * 0.15) +  # Regime bonus
+                        (opp.get('momentum', 0) * 0.10)          # Momentum
+                    )
+                    
+                    all_opportunities.append({
+                        'pair': pair,
+                        'opportunity': opp,
+                        'pair_score': pair_score,
+                        'pair_level': level.value,
+                        'quality': quality,
+                        'confidence': confidence,
+                        'competition_score': competition_score,
+                        'rank': 0
+                    })
+            
+            # Sort by competition score
+            all_opportunities.sort(key=lambda x: x['competition_score'], reverse=True)
+            
+            # Assign ranks
+            for i, opp in enumerate(all_opportunities):
+                opp['rank'] = i + 1
+            
+            # Apply max opportunities limit
+            max_opps = len(all_opportunities) * self.config.max_opportunities_per_pair
+            all_opportunities = all_opportunities[:max_opps]
+            
+            # Update performance
+            self.performance['opportunities_competed'] += len(all_opportunities)
+            for opp in all_opportunities:
+                self.performance['competition_wins'][opp['pair']] = self.performance['competition_wins'].get(opp['pair'], 0) + 1
+            
+            self.current_opportunities = all_opportunities
+            
+            self._log_debug(f"Competed {len(all_opportunities)} opportunities")
+            return all_opportunities
+            
+        except Exception as e:
+            self._log_debug(f"Error in compete_opportunities: {str(e)}", "error")
+            return []
+    
+    def _get_regime_bonus(self, pair: str) -> float:
+        """Get regime bonus for a pair"""
+        try:
+            regime = str(self.current_regime).lower()
+            
+            # Different pairs perform better in different regimes
+            if "trend" in regime:
+                if "usd" in pair.lower() or "btc" in pair.lower():
+                    return 0.8
+                return 0.5
+            elif "range" in regime:
+                if "eth" in pair.lower() or "xau" in pair.lower():
+                    return 0.8
+                return 0.5
+            elif "volatile" in regime:
+                if "xau" in pair.lower() or "btc" in pair.lower():
+                    return 0.7
+                return 0.4
+            else:
+                return 0.5
+            
+        except Exception as e:
+            self._log_debug(f"Error in _get_regime_bonus: {str(e)}", "error")
+            return 0.5
+    
+    def get_correlation(self, pair1: str, pair2: str) -> float:
+        """Get correlation between two pairs"""
+        try:
+            key = f"{pair1}|{pair2}"
+            return self.correlation_matrix.get(key, 0.0)
+        except Exception as e:
+            self._log_debug(f"Error in get_correlation: {str(e)}", "error")
+            return 0.0
+    
+    def get_status(self) -> Dict[str, Any]:
+        """Get current status"""
+        try:
+            return {
+                'pairs_analyzed': self.performance['pairs_analyzed'],
+                'high_quality_pairs': self.performance['high_quality_pairs'],
+                'avg_pair_score': self.performance['avg_pair_score'],
+                'total_recommendations': self.performance['total_recommendations'],
+                'opportunities_competed': self.performance['opportunities_competed'],
+                'current_recommendations': len(self.current_recommendations),
+                'current_opportunities': len(self.current_opportunities),
+                'rejected_pairs': self.performance['rejected_pairs'],
+                'rejection_reasons': self.performance['rejection_reasons'],
+                'auto_corrections': self.performance['auto_corrections'],
+                'pair_count': len(self.pair_data),
+                'correlation_pairs': len(self.correlation_matrix),
+                'current_regime': self.current_regime,
+                'current_volatility': self.current_volatility,
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_status: {str(e)}", "error")
+            return {'status': 'ERROR', 'error': str(e)}
+    
+    def get_performance_report(self) -> Dict[str, Any]:
+        """Get detailed performance report"""
+        try:
+            return {
+                'summary': {
+                    'pairs_analyzed': self.performance['pairs_analyzed'],
+                    'high_quality_pairs': self.performance['high_quality_pairs'],
+                    'avg_pair_score': self.performance['avg_pair_score'],
+                    'total_recommendations': self.performance['total_recommendations'],
+                    'opportunities_competed': self.performance['opportunities_competed'],
+                    'rejected_pairs': self.performance['rejected_pairs']
+                },
+                'current_recommendations': self.current_recommendations,
+                'top_pairs': self.current_recommendations[:5] if self.current_recommendations else [],
+                'competition_wins': self.performance['competition_wins'],
+                'rejection_reasons': self.performance['rejection_reasons'],
+                'auto_corrections': self.performance['auto_corrections'],
+                'pair_scores': self.current_pair_scores,
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_performance_report: {str(e)}", "error")
+            return {'error': str(e)}

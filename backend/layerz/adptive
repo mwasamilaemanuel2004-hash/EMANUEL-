@@ -1,0 +1,577 @@
+"""
+LAYERS +16, +19, +36: ADAPTIVE ENGINE (COMBINED)
+Purpose: Detect market conditions and adapt ALL system parameters in real-time.
+Layers Combined:
+- +16: Smart Adaptive Dynamic Detection
+- +19: Market Condition Detection  
+- +36: Adaptive Engine
+
+Balance: Not too sensitive (false changes) and not too insensitive (missed adaptations).
+Adaptive: Continuously monitors and adjusts to market conditions.
+
+KEY FEATURES:
+- 7 Market Regime Detection (Strong Trend, Weak Trend, Ranging, High Vol, Low Vol, News, Low Liquidity)
+- Real-time parameter adaptation
+- Strategy switching based on regime
+- Performance-based adaptation
+- Self-healing and learning
+- Auto-correction mechanisms
+"""
+
+import numpy as np
+import pandas as pd
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Tuple, Any, Union
+from enum import Enum
+from dataclasses import dataclass, field
+import logging
+import json
+import time
+from collections import deque
+import threading
+
+# Configure logging
+logger = logging.getLogger(__name__)
+
+debug_handler = logging.FileHandler('logs/adaptive_engine_debug.log')
+debug_handler.setLevel(logging.DEBUG)
+debug_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+debug_handler.setFormatter(debug_formatter)
+logger.addHandler(debug_handler)
+
+
+class MarketRegime(Enum):
+    """Market regimes detected"""
+    STRONG_TREND = "strong_trend"
+    WEAK_TREND = "weak_trend"
+    RANGING = "ranging"
+    HIGH_VOLATILITY = "high_volatility"
+    LOW_VOLATILITY = "low_volatility"
+    NEWS_IMPACT = "news_impact"
+    LOW_LIQUIDITY = "low_liquidity"
+
+
+class StrategyType(Enum):
+    """Strategies to use based on regime"""
+    TREND_FOLLOWING = "trend_following"
+    MEAN_REVERSION = "mean_reversion"
+    GRID_SCALPING = "grid_scalping"
+    DEFENSIVE = "defensive"
+    AGGRESSIVE_SCALPING = "aggressive_scalping"
+    NEWS_PROTOCOL = "news_protocol"
+    PAUSED = "paused"
+
+
+@dataclass
+class AdaptiveEngineConfig:
+    """Configuration for Adaptive Engine - BALANCED"""
+    
+    # Regime detection thresholds
+    strong_trend_adx_threshold: float = 40.0
+    weak_trend_adx_min: float = 20.0
+    weak_trend_adx_max: float = 40.0
+    ranging_adx_threshold: float = 20.0
+    high_volatility_threshold: float = 2.0
+    low_volatility_threshold: float = 0.5
+    
+    # Adaptation parameters
+    adaptation_interval_seconds: int = 60  # Check every minute
+    min_adaptation_interval: int = 30  # Minimum between changes
+    confidence_threshold: float = 0.6
+    
+    # Regime-specific parameters
+    regime_params: Dict[str, Dict[str, Any]] = field(default_factory=lambda: {
+        'strong_trend': {
+            'position_size': 2.0,
+            'sl_multiplier': 1.5,
+            'tp_multiplier': 4.0,
+            'max_trades': 15,
+            'rr_target': '1:3-1:5',
+            'confirmations': 2,
+            'filters_active': 6
+        },
+        'weak_trend': {
+            'position_size': 1.5,
+            'sl_multiplier': 1.2,
+            'tp_multiplier': 3.0,
+            'max_trades': 12,
+            'rr_target': '1:2-1:4',
+            'confirmations': 2,
+            'filters_active': 8
+        },
+        'ranging': {
+            'position_size': 1.0,
+            'sl_multiplier': 1.0,
+            'tp_multiplier': 2.0,
+            'max_trades': 8,
+            'rr_target': '1:1.5-1:2',
+            'confirmations': 3,
+            'filters_active': 10
+        },
+        'high_volatility': {
+            'position_size': 0.5,
+            'sl_multiplier': 0.8,
+            'tp_multiplier': 5.0,
+            'max_trades': 5,
+            'rr_target': '1:4-1:6',
+            'confirmations': 1,
+            'filters_active': 4
+        },
+        'low_volatility': {
+            'position_size': 2.5,
+            'sl_multiplier': 2.0,
+            'tp_multiplier': 3.0,
+            'max_trades': 20,
+            'rr_target': '1:2-1:3',
+            'confirmations': 2,
+            'filters_active': 8
+        },
+        'news_impact': {
+            'position_size': 0.3,
+            'sl_multiplier': 0.5,
+            'tp_multiplier': 6.0,
+            'max_trades': 2,
+            'rr_target': '1:5-1:8',
+            'confirmations': 1,
+            'filters_active': 3
+        },
+        'low_liquidity': {
+            'position_size': 0.3,
+            'sl_multiplier': 2.0,
+            'tp_multiplier': 2.0,
+            'max_trades': 3,
+            'rr_target': '1:1-1:1.5',
+            'confirmations': 3,
+            'filters_active': 12
+        }
+    })
+    
+    # Strategy mapping
+    strategy_mapping: Dict[str, str] = field(default_factory=lambda: {
+        'strong_trend': 'trend_following',
+        'weak_trend': 'mean_reversion',
+        'ranging': 'grid_scalping',
+        'high_volatility': 'defensive',
+        'low_volatility': 'aggressive_scalping',
+        'news_impact': 'news_protocol',
+        'low_liquidity': 'paused'
+    })
+    
+    # Self-healing
+    self_healing_enabled: bool = True
+    self_healing_interval_minutes: int = 60
+    
+    # Debug mode
+    debug_mode: bool = True
+    max_history_size: int = 10000
+
+
+class AdaptiveEngine:
+    """
+    Adaptive Engine - Detects market conditions and adapts parameters
+    """
+    
+    def __init__(self, config: Optional[AdaptiveEngineConfig] = None):
+        self.config = config or AdaptiveEngineConfig()
+        self.debug_mode = self.config.debug_mode
+        
+        # Performance tracking
+        self.performance = {
+            'total_adaptations': 0,
+            'regime_changes': 0,
+            'strategy_changes': 0,
+            'self_healing_events': 0,
+            'false_positives': 0,
+            'avg_confidence': 0.0,
+            'adaptation_history': []
+        }
+        
+        # Current state
+        self.current_regime = MarketRegime.RANGING
+        self.current_strategy = StrategyType.GRID_SCALPING
+        self.current_params = self.config.regime_params['ranging']
+        self.current_confidence = 0.0
+        
+        # History
+        self.regime_history = deque(maxlen=self.config.max_history_size)
+        self.param_history = deque(maxlen=self.config.max_history_size)
+        self.performance_history = deque(maxlen=1000)
+        
+        # Market data
+        self.market_data = {}
+        self.regime_scores = {}
+        
+        # Cooldown tracking
+        self.last_adaptation_time = datetime.now()
+        self.last_regime_change = datetime.now()
+        self.consecutive_same_regime = 0
+        
+        # Self-healing
+        self.health_score = 100.0
+        self.health_history = deque(maxlen=100)
+        self.last_healing_time = datetime.now()
+        
+        # Lock for thread safety
+        self._lock = threading.Lock()
+        
+        self._log_debug("Adaptive Engine initialized - Starting in RANGING regime")
+        logger.info("Adaptive Engine initialized - Starting in RANGING regime")
+    
+    def _log_debug(self, message: str, level: str = "debug") -> None:
+        """Debug logging with timestamp"""
+        if self.debug_mode:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+            log_msg = f"[DEBUG {timestamp}] {message}"
+            if level == "info":
+                logger.info(log_msg)
+            elif level == "warning":
+                logger.warning(log_msg)
+            elif level == "error":
+                logger.error(log_msg)
+            else:
+                logger.debug(log_msg)
+    
+    def update_market_data(self, market_data: Dict[str, Any]) -> None:
+        """Update market data and detect regime"""
+        try:
+            if not isinstance(market_data, dict):
+                return
+            
+            # Update market data
+            self.market_data = market_data.copy()
+            
+            # Extract key metrics
+            adx = market_data.get('adx', 0.0) or 0.0
+            atr = market_data.get('atr', 0.0) or 0.0
+            volatility = market_data.get('volatility', 0.0) or 0.0
+            volume = market_data.get('volume', 0.0) or 0.0
+            spread = market_data.get('spread', 0.0) or 0.0
+            news_impact = market_data.get('news_impact', 'none') or 'none'
+            
+            # Detect market regime
+            new_regime = self._detect_regime(adx, atr, volatility, volume, spread, news_impact)
+            
+            # Update regime if changed
+            if new_regime != self.current_regime:
+                self._handle_regime_change(new_regime)
+            
+            # Update performance
+            self._update_performance(market_data)
+            
+            # Check self-healing
+            if self.config.self_healing_enabled:
+                self._check_self_healing()
+            
+            # Update history
+            self.regime_history.append({
+                'regime': self.current_regime.value,
+                'confidence': self.current_confidence,
+                'timestamp': datetime.now().isoformat()
+            })
+            
+            self._log_debug(f"Regime: {self.current_regime.value}, Confidence: {self.current_confidence:.2f}")
+            
+        except Exception as e:
+            self._log_debug(f"Error in update_market_data: {str(e)}", "error")
+    
+    def _detect_regime(self, adx: float, atr: float, volatility: float, 
+                      volume: float, spread: float, news_impact: str) -> MarketRegime:
+        """Detect current market regime with confidence scoring"""
+        try:
+            scores = {}
+            
+            # 1. Trend detection
+            if adx > self.config.strong_trend_adx_threshold:
+                scores['strong_trend'] = min(1.0, (adx - 40) / 20 + 0.5)
+            elif adx > self.config.weak_trend_adx_min:
+                scores['weak_trend'] = min(1.0, (adx - 20) / 20 + 0.3)
+            else:
+                scores['ranging'] = min(1.0, (20 - adx) / 20 + 0.3)
+            
+            # 2. Volatility detection
+            if volatility > self.config.high_volatility_threshold:
+                scores['high_volatility'] = min(1.0, (volatility - 2) / 3 + 0.5)
+            elif volatility < self.config.low_volatility_threshold:
+                scores['low_volatility'] = min(1.0, (0.5 - volatility) / 0.5 + 0.3)
+            
+            # 3. News impact
+            if news_impact != 'none':
+                if news_impact == 'high':
+                    scores['news_impact'] = 0.9
+                elif news_impact == 'medium':
+                    scores['news_impact'] = 0.7
+                else:
+                    scores['news_impact'] = 0.5
+            
+            # 4. Liquidity
+            if volume < 100 and spread > 0.001:
+                scores['low_liquidity'] = min(1.0, (spread - 0.001) / 0.01 + 0.3)
+            
+            # Select regime with highest score
+            best_regime = max(scores, key=scores.get, default='ranging')
+            best_score = scores.get(best_regime, 0.5)
+            
+            self.current_confidence = best_score
+            self.regime_scores = scores
+            
+            # Map to enum
+            regime_map = {
+                'strong_trend': MarketRegime.STRONG_TREND,
+                'weak_trend': MarketRegime.WEAK_TREND,
+                'ranging': MarketRegime.RANGING,
+                'high_volatility': MarketRegime.HIGH_VOLATILITY,
+                'low_volatility': MarketRegime.LOW_VOLATILITY,
+                'news_impact': MarketRegime.NEWS_IMPACT,
+                'low_liquidity': MarketRegime.LOW_LIQUIDITY
+            }
+            
+            return regime_map.get(best_regime, MarketRegime.RANGING)
+            
+        except Exception as e:
+            self._log_debug(f"Error in _detect_regime: {str(e)}", "error")
+            return MarketRegime.RANGING
+    
+    def _handle_regime_change(self, new_regime: MarketRegime) -> None:
+        """Handle regime change and adapt parameters"""
+        try:
+            # Check cooldown
+            time_since_change = (datetime.now() - self.last_regime_change).total_seconds()
+            if time_since_change < self.config.min_adaptation_interval:
+                self.consecutive_same_regime += 1
+                if self.consecutive_same_regime < 3:
+                    return
+            
+            # Reset consecutive counter
+            self.consecutive_same_regime = 0
+            
+            # Update regime
+            old_regime = self.current_regime
+            self.current_regime = new_regime
+            
+            # Get parameters for new regime
+            self.current_params = self.config.regime_params.get(new_regime.value, self.config.regime_params['ranging'])
+            
+            # Update strategy
+            strategy_name = self.config.strategy_mapping.get(new_regime.value, 'grid_scalping')
+            self.current_strategy = StrategyType(strategy_name)
+            
+            # Track changes
+            self.performance['regime_changes'] += 1
+            self.performance['strategy_changes'] += 1
+            self.last_regime_change = datetime.now()
+            
+            self._log_debug(f"REGIME CHANGE: {old_regime.value} -> {new_regime.value} (Strategy: {self.current_strategy.value})", "info")
+            
+        except Exception as e:
+            self._log_debug(f"Error in _handle_regime_change: {str(e)}", "error")
+    
+    def _update_performance(self, market_data: Dict[str, Any]) -> None:
+        """Update performance metrics"""
+        try:
+            pnl = market_data.get('pnl', 0.0) or 0.0
+            trades = market_data.get('trades', 0) or 0
+            
+            self.performance_history.append({
+                'pnl': pnl,
+                'trades': trades,
+                'regime': self.current_regime.value,
+                'timestamp': datetime.now().isoformat()
+            })
+            
+        except Exception as e:
+            self._log_debug(f"Error in _update_performance: {str(e)}", "error")
+    
+    def _check_self_healing(self) -> None:
+        """Check and perform self-healing if needed"""
+        try:
+            time_since_healing = (datetime.now() - self.last_healing_time).total_seconds() / 60
+            if time_since_healing < self.config.self_healing_interval_minutes:
+                return
+            
+            # Check performance
+            recent = list(self.performance_history)[-20:] if len(self.performance_history) >= 20 else []
+            if not recent:
+                return
+            
+            # Calculate performance metrics
+            total_pnl = sum(p.get('pnl', 0) for p in recent)
+            total_trades = sum(p.get('trades', 0) for p in recent)
+            
+            # Check for issues
+            issues = []
+            
+            if total_pnl < -100:
+                issues.append("loss_threshold")
+                self.health_score -= 10
+            
+            if total_trades > 100 and total_pnl < 0:
+                issues.append("trading_frequency")
+                self.health_score -= 5
+            
+            if self.current_confidence < 0.4:
+                issues.append("low_confidence")
+                self.health_score -= 5
+            
+            # Apply self-healing
+            if issues:
+                self.performance['self_healing_events'] += 1
+                self._heal_issues(issues)
+                self._log_debug(f"SELF-HEALING: Issues detected: {issues}", "warning")
+            
+            # Gradually recover health
+            self.health_score = min(100, self.health_score + 1)
+            
+            self.last_healing_time = datetime.now()
+            self.health_history.append(self.health_score)
+            
+        except Exception as e:
+            self._log_debug(f"Error in _check_self_healing: {str(e)}", "error")
+    
+    def _heal_issues(self, issues: List[str]) -> None:
+        """Heal identified issues"""
+        try:
+            for issue in issues:
+                if issue == "loss_threshold":
+                    # Reduce position size temporarily
+                    self.current_params['position_size'] *= 0.7
+                    self._log_debug("Healing: Reduced position size by 30%")
+                
+                elif issue == "trading_frequency":
+                    # Reduce max trades
+                    self.current_params['max_trades'] = max(3, self.current_params['max_trades'] * 0.6)
+                    self._log_debug(f"Healing: Reduced max trades to {self.current_params['max_trades']}")
+                
+                elif issue == "low_confidence":
+                    # Increase confirmation requirement
+                    self.current_params['confirmations'] = min(4, self.current_params['confirmations'] + 1)
+                    self._log_debug(f"Healing: Increased confirmations to {self.current_params['confirmations']}")
+            
+            self.performance['self_healing_events'] += 1
+            
+        except Exception as e:
+            self._log_debug(f"Error in _heal_issues: {str(e)}", "error")
+    
+    def get_current_params(self) -> Dict[str, Any]:
+        """Get current adaptive parameters"""
+        try:
+            return {
+                'regime': self.current_regime.value,
+                'strategy': self.current_strategy.value,
+                'confidence': self.current_confidence,
+                'params': self.current_params,
+                'health_score': self.health_score,
+                'regime_scores': self.regime_scores
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_current_params: {str(e)}", "error")
+            return {'error': str(e)}
+    
+    def get_adaptation_summary(self) -> Dict[str, Any]:
+        """Get summary of adaptations"""
+        try:
+            changes = self.performance['regime_changes']
+            adaptations = self.performance['total_adaptations']
+            
+            return {
+                'regime_changes': changes,
+                'strategy_changes': self.performance['strategy_changes'],
+                'self_healing_events': self.performance['self_healing_events'],
+                'false_positives': self.performance['false_positives'],
+                'avg_confidence': self.performance['avg_confidence'],
+                'current_regime': self.current_regime.value,
+                'current_strategy': self.current_strategy.value,
+                'health_score': self.health_score,
+                'last_adaptation': self.last_adaptation_time.isoformat(),
+                'last_healing': self.last_healing_time.isoformat(),
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_adaptation_summary: {str(e)}", "error")
+            return {'error': str(e)}
+    
+    def get_health_report(self) -> Dict[str, Any]:
+        """Get health report"""
+        try:
+            return {
+                'health_score': self.health_score,
+                'health_history': list(self.health_history)[-20:] if self.health_history else [],
+                'current_regime': self.current_regime.value,
+                'current_strategy': self.current_strategy.value,
+                'confidence': self.current_confidence,
+                'healing_events': self.performance['self_healing_events'],
+                'regime_changes': self.performance['regime_changes'],
+                'status': 'HEALTHY' if self.health_score > 80 else 'MONITOR' if self.health_score > 50 else 'CRITICAL',
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_health_report: {str(e)}", "error")
+            return {'error': str(e)}
+    
+    def get_status(self) -> Dict[str, Any]:
+        """Get current status"""
+        try:
+            return {
+                'current_regime': self.current_regime.value,
+                'current_strategy': self.current_strategy.value,
+                'current_params': self.current_params,
+                'confidence': self.current_confidence,
+                'health_score': self.health_score,
+                'regime_history': list(self.regime_history)[-10:] if self.regime_history else [],
+                'adaptations': self.performance['total_adaptations'],
+                'self_healing_events': self.performance['self_healing_events'],
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_status: {str(e)}", "error")
+            return {'status': 'ERROR', 'error': str(e)}
+    
+    def get_performance_report(self) -> Dict[str, Any]:
+        """Get detailed performance report"""
+        try:
+            return {
+                'summary': {
+                    'regime_changes': self.performance['regime_changes'],
+                    'strategy_changes': self.performance['strategy_changes'],
+                    'self_healing_events': self.performance['self_healing_events'],
+                    'false_positives': self.performance['false_positives'],
+                    'avg_confidence': self.performance['avg_confidence']
+                },
+                'current': {
+                    'regime': self.current_regime.value,
+                    'strategy': self.current_strategy.value,
+                    'params': self.current_params,
+                    'health': self.health_score,
+                    'confidence': self.current_confidence
+                },
+                'recent_regimes': list(self.regime_history)[-10:] if self.regime_history else [],
+                'health_history': list(self.health_history)[-10:] if self.health_history else [],
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_performance_report: {str(e)}", "error")
+            return {'error': str(e)}
+    
+    def manual_regime_override(self, regime: str) -> bool:
+        """Manually override the detected regime"""
+        try:
+            regime_map = {
+                'strong_trend': MarketRegime.STRONG_TREND,
+                'weak_trend': MarketRegime.WEAK_TREND,
+                'ranging': MarketRegime.RANGING,
+                'high_volatility': MarketRegime.HIGH_VOLATILITY,
+                'low_volatility': MarketRegime.LOW_VOLATILITY,
+                'news_impact': MarketRegime.NEWS_IMPACT,
+                'low_liquidity': MarketRegime.LOW_LIQUIDITY
+            }
+            
+            if regime not in regime_map:
+                return False
+            
+            new_regime = regime_map[regime]
+            self._handle_regime_change(new_regime)
+            self._log_debug(f"MANUAL OVERRIDE: Set regime to {regime}", "info")
+            return True
+            
+        except Exception as e:
+            self._log_debug(f"Error in manual_regime_override: {str(e)}", "error")
+            return False

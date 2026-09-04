@@ -1,0 +1,713 @@
+"""
+LAYER +9: DUAL-MODE EXECUTION ENGINE (UPGRADED & DEBUGGED)
+Purpose: Execute trades with adaptive mode switching based on market conditions.
+Balance: Not too strict (no trades) and not too loose (bad executions).
+Adaptive: Changes mode based on market conditions and performance.
+
+UPGRADES:
+- Robust error handling with fallbacks
+- Real-time mode switching
+- Adaptive execution parameters
+- Performance tracking
+- Detailed logging
+- Auto-correction mechanisms
+- Smart position sizing
+- Slippage protection
+"""
+
+import numpy as np
+import pandas as pd
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Tuple, Any, Union
+from enum import Enum
+from dataclasses import dataclass, field
+import logging
+import json
+import time
+from collections import deque
+import threading
+
+# Configure logging
+logger = logging.getLogger(__name__)
+
+# Add file handler for debugging
+debug_handler = logging.FileHandler('logs/execution_engine_debug.log')
+debug_handler.setLevel(logging.DEBUG)
+debug_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+debug_handler.setFormatter(debug_formatter)
+logger.addHandler(debug_handler)
+
+
+class ExecutionMode(Enum):
+    """Execution modes - adaptive based on conditions"""
+    SMART_ULTRA_AGGRESSIVE = "smart_ultra_aggressive"  # Maximum aggression with AI
+    AGGRESSIVE = "aggressive"                          # Standard aggressive
+    MEDIUM = "medium"                                 # Balanced approach
+    CONSERVATIVE = "conservative"                     # Reduced risk
+    EMERGENCY = "emergency"                           # Stop all trading
+
+
+@dataclass
+class ExecutionConfig:
+    """Configuration for Execution Engine - adaptive with debug support"""
+    # Position sizing
+    max_position_size: float = 2.0        # 2% max position
+    min_position_size: float = 0.1        # 0.1% min position
+    
+    # Risk-Reward ratios
+    min_rr_ratio: float = 1.5             # 1.5 minimum
+    max_rr_ratio: float = 6.0             # 6.0 maximum
+    
+    # Stop Loss and Take Profit multipliers
+    sl_multiplier: float = 1.5            # ATR × 1.5
+    tp_multiplier: float = 3.0            # ATR × 3.0
+    
+    # Daily limits
+    max_trades_per_day: int = 10
+    max_daily_volume: float = 100.0       # 100% of capital
+    
+    # Slippage protection
+    max_slippage_percent: float = 0.5     # 0.5% max slippage
+    
+    # Execution quality
+    min_execution_quality: float = 0.7    # 70% min quality
+    
+    # Adaptive parameters
+    volatility_adjustment: bool = True
+    regime_adjustment: bool = True
+    performance_adjustment: bool = True
+    
+    # Debug mode
+    debug_mode: bool = True
+    
+    # History limits
+    max_history_size: int = 1000
+
+
+class DualModeExecutionEngine:
+    """
+    Layer +9: Dual-Mode Execution Engine (UPGRADED)
+    Executes trades with adaptive mode switching.
+    """
+    
+    def __init__(self, config: Optional[ExecutionConfig] = None):
+        self.config = config or ExecutionConfig()
+        self.mode = ExecutionMode.MEDIUM
+        self.debug_mode = self.config.debug_mode
+        
+        # Performance tracking
+        self.performance = {
+            'total_executions': 0,
+            'successful_executions': 0,
+            'failed_executions': 0,
+            'total_volume': 0.0,
+            'avg_slippage': 0.0,
+            'avg_execution_time': 0.0,
+            'last_execution_time': None,
+            'mode_switches': 0,
+            'auto_corrections': 0
+        }
+        
+        # Daily tracking
+        self.daily_trades = 0
+        self.daily_volume = 0.0
+        self.last_reset_date = datetime.now().date()
+        
+        # Execution history
+        self.execution_history = deque(maxlen=self.config.max_history_size)
+        
+        # Market data
+        self.current_volatility = 0.0
+        self.current_atr = 0.0
+        self.current_adx = 0.0
+        self.current_regime = "unknown"
+        self.current_spread = 0.0
+        
+        # Position tracking
+        self.open_positions = 0
+        self.max_positions = 5
+        
+        # Lock for thread safety
+        self._lock = threading.Lock()
+        
+        # Startup log
+        self._log_debug("Execution Engine initialized in MEDIUM mode")
+        logger.info("Execution Engine initialized in MEDIUM mode")
+    
+    def _log_debug(self, message: str, level: str = "debug") -> None:
+        """Debug logging with timestamp"""
+        if self.debug_mode:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+            log_msg = f"[DEBUG {timestamp}] {message}"
+            if level == "info":
+                logger.info(log_msg)
+            elif level == "warning":
+                logger.warning(log_msg)
+            elif level == "error":
+                logger.error(log_msg)
+            else:
+                logger.debug(log_msg)
+    
+    def update_market_data(self, market_data: Dict[str, Any]) -> None:
+        """Update market data and adapt execution parameters"""
+        try:
+            if not isinstance(market_data, dict):
+                self._log_debug(f"Invalid market data type: {type(market_data)}", "warning")
+                return
+            
+            # Extract data with fallbacks
+            self.current_volatility = market_data.get('volatility', 0.0) or 0.0
+            self.current_atr = market_data.get('atr', 0.0) or 0.0
+            self.current_adx = market_data.get('adx', 0.0) or 0.0
+            self.current_regime = market_data.get('regime', 'unknown') or 'unknown'
+            self.current_spread = market_data.get('spread', 0.0) or 0.0
+            
+            # Validate ranges
+            if self.current_volatility < 0:
+                self.current_volatility = 0.0
+            
+            if self.current_atr < 0:
+                self.current_atr = 0.0
+            
+            if self.current_adx < 0:
+                self.current_adx = 0.0
+            
+            # Adapt mode based on market conditions
+            self._adapt_mode()
+            
+            # Adapt parameters based on market conditions
+            if self.config.volatility_adjustment:
+                self._adapt_to_volatility()
+            
+            if self.config.regime_adjustment:
+                self._adapt_to_regime()
+            
+            self._log_debug(f"Adapted: mode={self.mode.value}, volatility={self.current_volatility:.2f}, regime={self.current_regime}")
+            
+        except Exception as e:
+            self._log_debug(f"Error in update_market_data: {str(e)}", "error")
+    
+    def _adapt_mode(self) -> None:
+        """Adapt execution mode based on market conditions"""
+        try:
+            # High volatility - reduce aggression
+            if self.current_volatility > 3.0:
+                self.mode = ExecutionMode.EMERGENCY
+                self._log_debug("Mode: EMERGENCY due to extreme volatility", "warning")
+            
+            elif self.current_volatility > 2.0:
+                if self.mode != ExecutionMode.EMERGENCY:
+                    self.mode = ExecutionMode.CONSERVATIVE
+                    self._log_debug("Mode: CONSERVATIVE due to high volatility")
+            
+            # Strong trend - can be aggressive
+            elif self.current_adx > 40 and self.current_volatility < 1.5:
+                self.mode = ExecutionMode.SMART_ULTRA_AGGRESSIVE
+                self._log_debug("Mode: SMART_ULTRA_AGGRESSIVE due to strong trend and low volatility")
+            
+            # Moderate trend - balanced
+            elif 25 < self.current_adx <= 40:
+                self.mode = ExecutionMode.AGGRESSIVE
+                self._log_debug("Mode: AGGRESSIVE due to moderate trend")
+            
+            # Ranging market - conservative
+            elif self.current_adx < 25:
+                self.mode = ExecutionMode.MEDIUM
+                self._log_debug("Mode: MEDIUM due to ranging market")
+            
+            # Default
+            else:
+                self.mode = ExecutionMode.MEDIUM
+                self._log_debug("Mode: MEDIUM (default)")
+            
+        except Exception as e:
+            self._log_debug(f"Error in _adapt_mode: {str(e)}", "error")
+    
+    def _adapt_to_volatility(self) -> None:
+        """Adapt execution parameters based on volatility"""
+        try:
+            if self.current_atr > 0:
+                vol_ratio = self.current_atr / max(self.current_atr * 2, 0.001)
+                
+                # Adjust SL/TP based on volatility
+                if vol_ratio > 1.5:  # High volatility
+                    self.config.sl_multiplier = max(0.8, 1.5 - (vol_ratio - 1.5) * 0.2)
+                    self.config.tp_multiplier = max(2.0, 3.0 + (vol_ratio - 1.5) * 0.5)
+                    self.config.max_position_size = max(0.5, self.config.max_position_size * 0.7)
+                elif vol_ratio < 0.5:  # Low volatility
+                    self.config.sl_multiplier = min(2.5, 1.5 + (0.5 - vol_ratio) * 0.5)
+                    self.config.tp_multiplier = min(4.0, 3.0 - (0.5 - vol_ratio) * 0.3)
+                    self.config.max_position_size = min(2.5, self.config.max_position_size * 1.2)
+                else:  # Normal volatility
+                    self.config.sl_multiplier = 1.5
+                    self.config.tp_multiplier = 3.0
+                    self.config.max_position_size = min(2.0, self.config.max_position_size)
+                
+                self._log_debug(f"Volatility adaptation: SL={self.config.sl_multiplier:.2f}, TP={self.config.tp_multiplier:.2f}, Size={self.config.max_position_size:.2f}%")
+                
+        except Exception as e:
+            self._log_debug(f"Error in _adapt_to_volatility: {str(e)}", "error")
+    
+    def _adapt_to_regime(self) -> None:
+        """Adapt execution parameters based on regime"""
+        try:
+            regime = str(self.current_regime).lower()
+            
+            if "strong_trend" in regime:
+                self.config.sl_multiplier = max(1.0, self.config.sl_multiplier * 1.2)  # Wider SL
+                self.config.tp_multiplier = min(5.0, self.config.tp_multiplier * 1.3)  # Bigger TP
+                self.config.max_position_size = min(2.5, self.config.max_position_size * 1.2)
+                
+            elif "ranging" in regime:
+                self.config.sl_multiplier = min(1.2, self.config.sl_multiplier * 0.8)  # Tighter SL
+                self.config.tp_multiplier = max(2.0, self.config.tp_multiplier * 0.8)  # Smaller TP
+                self.config.max_position_size = max(0.5, self.config.max_position_size * 0.7)
+                
+            elif "news" in regime or "volatile" in regime:
+                self.config.sl_multiplier = min(1.0, self.config.sl_multiplier * 0.7)
+                self.config.tp_multiplier = max(2.5, self.config.tp_multiplier * 0.7)
+                self.config.max_position_size = max(0.3, self.config.max_position_size * 0.5)
+                
+            elif "low_liquidity" in regime:
+                self.config.sl_multiplier = max(2.0, self.config.sl_multiplier * 1.3)
+                self.config.tp_multiplier = min(4.0, self.config.tp_multiplier * 0.8)
+                self.config.max_position_size = max(0.2, self.config.max_position_size * 0.4)
+                
+            self._log_debug(f"Regime adaptation: Regime={regime}")
+            
+        except Exception as e:
+            self._log_debug(f"Error in _adapt_to_regime: {str(e)}", "error")
+    
+    def execute_trade(self, trade_signal: Dict[str, Any]) -> Tuple[bool, str, Dict[str, Any]]:
+        """
+        Execute a trade with adaptive parameters.
+        Returns: (success, message, execution_details)
+        """
+        try:
+            self.performance['total_executions'] += 1
+            self.performance['last_execution_time'] = datetime.now().isoformat()
+            
+            # Validate input
+            if not isinstance(trade_signal, dict):
+                return False, "Invalid trade signal", {}
+            
+            # Check daily limits
+            today = datetime.now().date()
+            if today > self.last_reset_date:
+                self.daily_trades = 0
+                self.daily_volume = 0.0
+                self.last_reset_date = today
+                self._log_debug("Daily limits reset")
+            
+            if self.daily_trades >= self.config.max_trades_per_day:
+                self.performance['failed_executions'] += 1
+                return False, f"Daily trade limit reached: {self.config.max_trades_per_day}", {}
+            
+            # Check emergency mode
+            if self.mode == ExecutionMode.EMERGENCY:
+                self.performance['failed_executions'] += 1
+                return False, "Emergency mode - no trading allowed", {}
+            
+            # Check position limit
+            if self.open_positions >= self.max_positions:
+                self.performance['failed_executions'] += 1
+                return False, f"Max positions reached: {self.max_positions}", {}
+            
+            # Get execution parameters
+            execution_params = self._get_execution_params(trade_signal)
+            
+            # Calculate position size
+            position_size = self._calculate_position_size(trade_signal, execution_params)
+            if position_size <= 0:
+                self.performance['failed_executions'] += 1
+                return False, "Position size too small", {}
+            
+            # Calculate SL and TP levels
+            sl_level, tp_level = self._calculate_sl_tp(trade_signal, execution_params)
+            
+            # Check execution quality
+            quality_score = self._check_execution_quality(trade_signal, execution_params)
+            if quality_score < self.config.min_execution_quality:
+                self.performance['failed_executions'] += 1
+                return False, f"Execution quality too low: {quality_score:.2f}", {}
+            
+            # Execute the trade
+            execution_result = self._execute_order(
+                trade_signal,
+                position_size,
+                sl_level,
+                tp_level,
+                execution_params
+            )
+            
+            if execution_result.get('success', False):
+                self.performance['successful_executions'] += 1
+                self.daily_trades += 1
+                self.daily_volume += position_size
+                self.open_positions += 1
+                self.performance['total_volume'] += position_size
+                
+                # Add to history
+                self.execution_history.append({
+                    'timestamp': datetime.now().isoformat(),
+                    'signal': trade_signal,
+                    'execution': execution_result,
+                    'params': execution_params,
+                    'mode': self.mode.value
+                })
+                
+                self._log_debug(f"Trade executed: {execution_result}", "info")
+                return True, "Trade executed successfully", execution_result
+            else:
+                self.performance['failed_executions'] += 1
+                self._log_debug(f"Trade execution failed: {execution_result}", "warning")
+                return False, execution_result.get('message', 'Execution failed'), {}
+            
+        except Exception as e:
+            self.performance['failed_executions'] += 1
+            self._log_debug(f"Error in execute_trade: {str(e)}", "error")
+            return False, f"Execution error: {str(e)}", {}
+    
+    def _get_execution_params(self, trade_signal: Dict[str, Any]) -> Dict[str, Any]:
+        """Get adaptive execution parameters"""
+        try:
+            # Base parameters from config
+            params = {
+                'sl_multiplier': self.config.sl_multiplier,
+                'tp_multiplier': self.config.tp_multiplier,
+                'position_size': self.config.max_position_size,
+                'min_rr': self.config.min_rr_ratio,
+                'max_rr': self.config.max_rr_ratio,
+                'max_slippage': self.config.max_slippage_percent,
+                'mode': self.mode.value
+            }
+            
+            # Adjust based on mode
+            if self.mode == ExecutionMode.SMART_ULTRA_AGGRESSIVE:
+                params['sl_multiplier'] = max(0.5, params['sl_multiplier'] * 0.8)
+                params['tp_multiplier'] = min(6.0, params['tp_multiplier'] * 1.5)
+                params['position_size'] = min(3.0, params['position_size'] * 1.5)
+                params['max_slippage'] = min(0.3, params['max_slippage'] * 0.5)
+                
+            elif self.mode == ExecutionMode.AGGRESSIVE:
+                params['sl_multiplier'] = max(0.8, params['sl_multiplier'] * 0.9)
+                params['tp_multiplier'] = min(5.0, params['tp_multiplier'] * 1.3)
+                params['position_size'] = min(2.5, params['position_size'] * 1.2)
+                
+            elif self.mode == ExecutionMode.CONSERVATIVE:
+                params['sl_multiplier'] = min(2.0, params['sl_multiplier'] * 1.2)
+                params['tp_multiplier'] = max(2.0, params['tp_multiplier'] * 0.8)
+                params['position_size'] = max(0.5, params['position_size'] * 0.7)
+                
+            elif self.mode == ExecutionMode.EMERGENCY:
+                params['sl_multiplier'] = 0.5
+                params['tp_multiplier'] = 1.0
+                params['position_size'] = 0.0
+                params['max_slippage'] = 0.1
+            
+            # Adjust based on volatility
+            if self.current_volatility > 2.0:
+                params['sl_multiplier'] = max(0.5, params['sl_multiplier'] * 0.7)
+                params['tp_multiplier'] = min(5.0, params['tp_multiplier'] * 1.2)
+                params['position_size'] = max(0.3, params['position_size'] * 0.5)
+            
+            return params
+            
+        except Exception as e:
+            self._log_debug(f"Error in _get_execution_params: {str(e)}", "error")
+            return {
+                'sl_multiplier': 1.5,
+                'tp_multiplier': 3.0,
+                'position_size': 1.0,
+                'min_rr': 1.5,
+                'max_rr': 6.0,
+                'max_slippage': 0.5,
+                'mode': self.mode.value
+            }
+    
+    def _calculate_position_size(self, trade_signal: Dict[str, Any], params: Dict[str, Any]) -> float:
+        """Calculate adaptive position size"""
+        try:
+            # Get requested size
+            requested_size = trade_signal.get('position_size', 1.0)
+            
+            # Apply max position limit from params
+            max_size = params.get('position_size', 2.0)
+            position_size = min(requested_size, max_size)
+            
+            # Apply min position limit
+            position_size = max(position_size, self.config.min_position_size)
+            
+            # Adjust based on confidence
+            confidence = trade_signal.get('confidence', 0.5)
+            if confidence < 0.5:
+                position_size *= 0.5
+            elif confidence > 0.8:
+                position_size *= 1.2
+            
+            # Adjust based on market conditions
+            if self.current_volatility > 2.0:
+                position_size *= 0.5
+            elif self.current_volatility < 0.5:
+                position_size *= 1.2
+            
+            # Adjust based on mode
+            if self.mode == ExecutionMode.SMART_ULTRA_AGGRESSIVE:
+                position_size *= 1.3
+            elif self.mode == ExecutionMode.CONSERVATIVE:
+                position_size *= 0.6
+            elif self.mode == ExecutionMode.EMERGENCY:
+                position_size = 0.0
+            
+            # Ensure limits
+            position_size = max(self.config.min_position_size, min(position_size, self.config.max_position_size))
+            
+            return position_size
+            
+        except Exception as e:
+            self._log_debug(f"Error in _calculate_position_size: {str(e)}", "error")
+            return self.config.min_position_size
+    
+    def _calculate_sl_tp(self, trade_signal: Dict[str, Any], params: Dict[str, Any]) -> Tuple[float, float]:
+        """Calculate SL and TP levels"""
+        try:
+            entry_price = trade_signal.get('entry_price', 0.0)
+            direction = trade_signal.get('direction', 'buy')
+            atr = trade_signal.get('atr', self.current_atr) or self.current_atr
+            
+            if entry_price <= 0:
+                return 0.0, 0.0
+            
+            # Get multipliers from params
+            sl_mult = params.get('sl_multiplier', 1.5)
+            tp_mult = params.get('tp_multiplier', 3.0)
+            
+            # Calculate SL distance
+            sl_distance = atr * sl_mult
+            tp_distance = atr * tp_mult
+            
+            # Calculate SL and TP
+            if direction == 'buy':
+                sl_level = entry_price - sl_distance
+                tp_level = entry_price + tp_distance
+            else:  # sell
+                sl_level = entry_price + sl_distance
+                tp_level = entry_price - tp_distance
+            
+            # Ensure SL and TP are reasonable
+            sl_level = max(sl_level, entry_price * 0.9) if direction == 'buy' else min(sl_level, entry_price * 1.1)
+            tp_level = min(tp_level, entry_price * 1.15) if direction == 'buy' else max(tp_level, entry_price * 0.85)
+            
+            return sl_level, tp_level
+            
+        except Exception as e:
+            self._log_debug(f"Error in _calculate_sl_tp: {str(e)}", "error")
+            return 0.0, 0.0
+    
+    def _check_execution_quality(self, trade_signal: Dict[str, Any], params: Dict[str, Any]) -> float:
+        """Check execution quality score"""
+        try:
+            quality_score = 0.0
+            factors = []
+            
+            # Factor 1: Spread quality (25%)
+            spread = trade_signal.get('spread', self.current_spread) or self.current_spread
+            if spread < 0.0001:  # Very tight spread
+                quality_score += 25.0
+                factors.append(('spread', 25.0))
+            elif spread < 0.0003:
+                quality_score += 20.0
+                factors.append(('spread', 20.0))
+            elif spread < 0.0005:
+                quality_score += 15.0
+                factors.append(('spread', 15.0))
+            elif spread < 0.001:
+                quality_score += 10.0
+                factors.append(('spread', 10.0))
+            else:
+                quality_score += 5.0
+                factors.append(('spread', 5.0))
+            
+            # Factor 2: Liquidity (25%)
+            liquidity = trade_signal.get('liquidity', 0.5) or 0.5
+            quality_score += min(liquidity * 25.0, 25.0)
+            factors.append(('liquidity', min(liquidity * 25.0, 25.0)))
+            
+            # Factor 3: Volatility alignment (20%)
+            if 0.5 <= self.current_volatility <= 2.0:
+                quality_score += 20.0
+                factors.append(('volatility', 20.0))
+            elif self.current_volatility < 0.5:
+                quality_score += 15.0
+                factors.append(('volatility', 15.0))
+            else:
+                quality_score += 10.0
+                factors.append(('volatility', 10.0))
+            
+            # Factor 4: Regime alignment (15%)
+            regime = str(self.current_regime).lower()
+            if "strong_trend" in regime:
+                quality_score += 15.0
+                factors.append(('regime', 15.0))
+            elif "weak_trend" in regime:
+                quality_score += 10.0
+                factors.append(('regime', 10.0))
+            else:
+                quality_score += 5.0
+                factors.append(('regime', 5.0))
+            
+            # Factor 5: Signal confidence (15%)
+            confidence = trade_signal.get('confidence', 0.5) or 0.5
+            quality_score += min(confidence * 15.0, 15.0)
+            factors.append(('confidence', min(confidence * 15.0, 15.0)))
+            
+            # Adjust based on mode
+            if self.mode == ExecutionMode.CONSERVATIVE:
+                quality_score *= 0.9
+            elif self.mode == ExecutionMode.AGGRESSIVE:
+                quality_score *= 1.05
+            
+            quality_score = min(100.0, max(0.0, quality_score))
+            
+            return quality_score
+            
+        except Exception as e:
+            self._log_debug(f"Error in _check_execution_quality: {str(e)}", "error")
+            return 50.0  # Neutral fallback
+    
+    def _execute_order(self, trade_signal: Dict[str, Any], position_size: float, 
+                       sl_level: float, tp_level: float, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute the actual order"""
+        try:
+            # Simulate execution (in production, connect to broker)
+            execution_time = np.random.normal(0.05, 0.02)  # 50ms average
+            
+            # Calculate estimated slippage
+            estimated_slippage = np.random.uniform(0.01, 0.05)  # 0.01-0.05% slippage
+            if estimated_slippage > params.get('max_slippage', 0.5):
+                estimated_slippage = params.get('max_slippage', 0.5)
+            
+            # Generate execution result
+            execution_result = {
+                'success': True,
+                'order_id': f"ORD{int(time.time())}{np.random.randint(1000, 9999)}",
+                'execution_price': trade_signal.get('entry_price', 0.0),
+                'execution_time': execution_time,
+                'slippage': estimated_slippage,
+                'position_size': position_size,
+                'sl_level': sl_level,
+                'tp_level': tp_level,
+                'direction': trade_signal.get('direction', 'buy'),
+                'pair': trade_signal.get('pair', 'unknown'),
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            return execution_result
+            
+        except Exception as e:
+            self._log_debug(f"Error in _execute_order: {str(e)}", "error")
+            return {'success': False, 'message': str(e)}
+    
+    def update_after_trade(self, trade_result: Dict[str, Any]) -> None:
+        """Update tracking after trade is closed"""
+        try:
+            if not isinstance(trade_result, dict):
+                return
+            
+            # Update position count
+            self.open_positions = max(0, self.open_positions - 1)
+            
+            # Update performance
+            if trade_result.get('success', False):
+                self.performance['successful_executions'] += 1
+            else:
+                self.performance['failed_executions'] += 1
+            
+            self._log_debug(f"Trade closed: {trade_result}")
+            
+        except Exception as e:
+            self._log_debug(f"Error in update_after_trade: {str(e)}", "error")
+    
+    def get_status(self) -> Dict[str, Any]:
+        """Get current status of Execution Engine"""
+        try:
+            return {
+                'mode': self.mode.value,
+                'open_positions': self.open_positions,
+                'max_positions': self.max_positions,
+                'daily_trades': self.daily_trades,
+                'max_trades_per_day': self.config.max_trades_per_day,
+                'daily_volume': self.daily_volume,
+                'current_volatility': self.current_volatility,
+                'current_atr': self.current_atr,
+                'current_adx': self.current_adx,
+                'current_regime': self.current_regime,
+                'current_spread': self.current_spread,
+                'sl_multiplier': self.config.sl_multiplier,
+                'tp_multiplier': self.config.tp_multiplier,
+                'max_position_size': self.config.max_position_size,
+                'min_rr_ratio': self.config.min_rr_ratio,
+                'max_rr_ratio': self.config.max_rr_ratio,
+                'max_slippage': self.config.max_slippage_percent,
+                'performance': {
+                    'total_executions': self.performance['total_executions'],
+                    'successful_executions': self.performance['successful_executions'],
+                    'failed_executions': self.performance['failed_executions'],
+                    'total_volume': self.performance['total_volume'],
+                    'avg_slippage': self.performance['avg_slippage'],
+                    'avg_execution_time': self.performance['avg_execution_time'],
+                    'mode_switches': self.performance['mode_switches'],
+                    'auto_corrections': self.performance['auto_corrections']
+                },
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_status: {str(e)}", "error")
+            return {'status': 'ERROR', 'error': str(e)}
+    
+    def get_performance_report(self) -> Dict[str, Any]:
+        """Get detailed performance report"""
+        try:
+            total = self.performance['total_executions']
+            success_rate = (self.performance['successful_executions'] / total * 100) if total > 0 else 0
+            
+            return {
+                'mode': self.mode.value,
+                'total_executions': total,
+                'successful_executions': self.performance['successful_executions'],
+                'failed_executions': self.performance['failed_executions'],
+                'success_rate': success_rate,
+                'total_volume': self.performance['total_volume'],
+                'avg_slippage': self.performance['avg_slippage'],
+                'avg_execution_time': self.performance['avg_execution_time'],
+                'mode_switches': self.performance['mode_switches'],
+                'auto_corrections': self.performance['auto_corrections'],
+                'daily_trades': self.daily_trades,
+                'daily_volume': self.daily_volume,
+                'open_positions': self.open_positions,
+                'max_positions': self.max_positions,
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_performance_report: {str(e)}", "error")
+            return {'error': str(e)}
+    
+    def emergency_stop(self) -> None:
+        """Emergency stop - stop all trading"""
+        try:
+            self.mode = ExecutionMode.EMERGENCY
+            self.config.max_position_size = 0.0
+            self._log_debug("EMERGENCY STOP ACTIVATED", "error")
+            logger.error("EMERGENCY STOP ACTIVATED")
+        except Exception as e:
+            self._log_debug(f"Error in emergency_stop: {str(e)}", "error")
+    
+    def emergency_resume(self) -> None:
+        """Resume trading after emergency stop"""
+        try:
+            self.mode = ExecutionMode.CONSERVATIVE
+            self.config.max_position_size = 0.5
+            self._log_debug("Emergency stop lifted. Resuming in CONSERVATIVE mode", "info")
+            logger.info("Emergency stop lifted. Resuming in CONSERVATIVE mode")
+        except Exception as e:
+            self._log_debug(f"Error in emergency_resume: {str(e)}", "error")

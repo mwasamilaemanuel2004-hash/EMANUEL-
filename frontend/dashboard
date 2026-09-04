@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
@@ -7,7 +8,9 @@
     <meta name="description" content="ESH TRADE - Advanced Trading Dashboard" />
     <title>ESH TRADE · Dashboard</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800;14..32,900&display=swap" rel="stylesheet" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800;14..32,900&display=swap"
+        rel="stylesheet" />
     <style>
         /* ============ ROOT VARIABLES ============ */
         :root {
@@ -15,7 +18,13 @@
             --bottom-nav-height: 65px;
             --transition: 0.3s ease;
         }
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
             font-family: 'Inter', sans-serif;
             background: #f0f7ff;
@@ -27,354 +36,1176 @@
 
         /* ============ THEMES (6) ============ */
         body {
-            --bg-body: #f0f7ff; --bg-card: #ffffff; --bg-sidebar: #0b1a2e;
-            --text-primary: #0b1a2e; --text-secondary: #475569; --text-sidebar: #94a3b8;
-            --border: #dbeafe; --accent: #2563eb; --accent-light: #dbeafe; --accent-hover: #1d4ed8;
-            --shadow: 0 4px 24px rgba(37,99,235,0.08); --shadow-hover: 0 8px 32px rgba(37,99,235,0.15);
-            --positive: #22c55e; --negative: #ef4444; --warning: #f59e0b;
-            --badge-bg: #dbeafe; --badge-text: #1e3a8a;
-            --gradient-start: #2563eb; --gradient-end: #0b1a2e;
+            --bg-body: #f0f7ff;
+            --bg-card: #ffffff;
+            --bg-sidebar: #0b1a2e;
+            --text-primary: #0b1a2e;
+            --text-secondary: #475569;
+            --text-sidebar: #94a3b8;
+            --border: #dbeafe;
+            --accent: #2563eb;
+            --accent-light: #dbeafe;
+            --accent-hover: #1d4ed8;
+            --shadow: 0 4px 24px rgba(37, 99, 235, 0.08);
+            --shadow-hover: 0 8px 32px rgba(37, 99, 235, 0.15);
+            --positive: #22c55e;
+            --negative: #ef4444;
+            --warning: #f59e0b;
+            --badge-bg: #dbeafe;
+            --badge-text: #1e3a8a;
+            --gradient-start: #2563eb;
+            --gradient-end: #0b1a2e;
         }
+
         body.theme-charcoal {
-            --bg-body: #eef0f2; --bg-card: #ffffff; --bg-sidebar: #1a1d23;
-            --text-primary: #1a1d23; --text-secondary: #4b5563; --text-sidebar: #9ca3af;
-            --border: #d1d5db; --accent: #84cc16; --accent-light: #e5f4d0; --accent-hover: #65a30d;
-            --shadow: 0 4px 24px rgba(132,204,22,0.08); --badge-bg: #e5f4d0; --badge-text: #3f6212;
-            --gradient-start: #84cc16; --gradient-end: #1a1d23;
+            --bg-body: #eef0f2;
+            --bg-card: #ffffff;
+            --bg-sidebar: #1a1d23;
+            --text-primary: #1a1d23;
+            --text-secondary: #4b5563;
+            --text-sidebar: #9ca3af;
+            --border: #d1d5db;
+            --accent: #84cc16;
+            --accent-light: #e5f4d0;
+            --accent-hover: #65a30d;
+            --shadow: 0 4px 24px rgba(132, 204, 22, 0.08);
+            --badge-bg: #e5f4d0;
+            --badge-text: #3f6212;
+            --gradient-start: #84cc16;
+            --gradient-end: #1a1d23;
         }
+
         body.theme-emerald {
-            --bg-body: #ecfdf5; --bg-card: #ffffff; --bg-sidebar: #064e3b;
-            --text-primary: #064e3b; --text-secondary: #065f46; --text-sidebar: #6ee7b7;
-            --border: #a7f3d0; --accent: #059669; --accent-light: #d1fae5; --accent-hover: #047857;
-            --shadow: 0 4px 24px rgba(5,150,105,0.08); --badge-bg: #d1fae5; --badge-text: #065f46;
-            --gradient-start: #059669; --gradient-end: #064e3b;
+            --bg-body: #ecfdf5;
+            --bg-card: #ffffff;
+            --bg-sidebar: #064e3b;
+            --text-primary: #064e3b;
+            --text-secondary: #065f46;
+            --text-sidebar: #6ee7b7;
+            --border: #a7f3d0;
+            --accent: #059669;
+            --accent-light: #d1fae5;
+            --accent-hover: #047857;
+            --shadow: 0 4px 24px rgba(5, 150, 105, 0.08);
+            --badge-bg: #d1fae5;
+            --badge-text: #065f46;
+            --gradient-start: #059669;
+            --gradient-end: #064e3b;
         }
+
         body.theme-teal {
-            --bg-body: #f0fdfa; --bg-card: #ffffff; --bg-sidebar: #0f3b3b;
-            --text-primary: #0f3b3b; --text-secondary: #115e59; --text-sidebar: #5eead4;
-            --border: #99f6e4; --accent: #0d9488; --accent-light: #ccfbf1; --accent-hover: #0f766e;
-            --shadow: 0 4px 24px rgba(13,148,136,0.08); --badge-bg: #ccfbf1; --badge-text: #115e59;
-            --positive: #f97316; --gradient-start: #0d9488; --gradient-end: #0f3b3b;
+            --bg-body: #f0fdfa;
+            --bg-card: #ffffff;
+            --bg-sidebar: #0f3b3b;
+            --text-primary: #0f3b3b;
+            --text-secondary: #115e59;
+            --text-sidebar: #5eead4;
+            --border: #99f6e4;
+            --accent: #0d9488;
+            --accent-light: #ccfbf1;
+            --accent-hover: #0f766e;
+            --shadow: 0 4px 24px rgba(13, 148, 136, 0.08);
+            --badge-bg: #ccfbf1;
+            --badge-text: #115e59;
+            --positive: #f97316;
+            --gradient-start: #0d9488;
+            --gradient-end: #0f3b3b;
         }
+
         body.theme-plum {
-            --bg-body: #faf5ff; --bg-card: #ffffff; --bg-sidebar: #3b1f4a;
-            --text-primary: #3b1f4a; --text-secondary: #5b21b6; --text-sidebar: #c4b5d4;
-            --border: #e9d5ff; --accent: #8b5cf6; --accent-light: #ede9fe; --accent-hover: #7c3aed;
-            --shadow: 0 4px 24px rgba(139,92,246,0.08); --badge-bg: #ede9fe; --badge-text: #5b21b6;
-            --gradient-start: #8b5cf6; --gradient-end: #3b1f4a;
+            --bg-body: #faf5ff;
+            --bg-card: #ffffff;
+            --bg-sidebar: #3b1f4a;
+            --text-primary: #3b1f4a;
+            --text-secondary: #5b21b6;
+            --text-sidebar: #c4b5d4;
+            --border: #e9d5ff;
+            --accent: #8b5cf6;
+            --accent-light: #ede9fe;
+            --accent-hover: #7c3aed;
+            --shadow: 0 4px 24px rgba(139, 92, 246, 0.08);
+            --badge-bg: #ede9fe;
+            --badge-text: #5b21b6;
+            --gradient-start: #8b5cf6;
+            --gradient-end: #3b1f4a;
         }
+
         body.theme-terracotta {
-            --bg-body: #fef6f0; --bg-card: #ffffff; --bg-sidebar: #4a2818;
-            --text-primary: #4a2818; --text-secondary: #7c2d12; --text-sidebar: #fbbf8d;
-            --border: #fed7aa; --accent: #c2410c; --accent-light: #fee2d6; --accent-hover: #9a3412;
-            --shadow: 0 4px 24px rgba(194,65,12,0.08); --badge-bg: #fee2d6; --badge-text: #7c2d12;
-            --gradient-start: #c2410c; --gradient-end: #4a2818;
+            --bg-body: #fef6f0;
+            --bg-card: #ffffff;
+            --bg-sidebar: #4a2818;
+            --text-primary: #4a2818;
+            --text-secondary: #7c2d12;
+            --text-sidebar: #fbbf8d;
+            --border: #fed7aa;
+            --accent: #c2410c;
+            --accent-light: #fee2d6;
+            --accent-hover: #9a3412;
+            --shadow: 0 4px 24px rgba(194, 65, 12, 0.08);
+            --badge-bg: #fee2d6;
+            --badge-text: #7c2d12;
+            --gradient-start: #c2410c;
+            --gradient-end: #4a2818;
+        }
+
+        body.theme-midnight {
+            --bg-body: #101114;
+            --bg-card: #1b1d22;
+            --bg-sidebar: #090a0d;
+            --text-primary: #f5f1df;
+            --text-secondary: #b8ae86;
+            --text-sidebar: #a79d76;
+            --border: #393522;
+            --accent: #d4af37;
+            --accent-light: #3b331b;
+            --accent-hover: #b8941f;
+            --shadow: 0 4px 24px rgba(212, 175, 55, 0.08);
+            --shadow-hover: 0 8px 32px rgba(212, 175, 55, 0.16);
+            --badge-bg: #3b331b;
+            --badge-text: #f5d878;
+            --gradient-start: #d4af37;
+            --gradient-end: #6e5716;
+        }
+
+        body.theme-rose {
+            --bg-body: #f8f1f3;
+            --bg-card: #ffffff;
+            --bg-sidebar: #342126;
+            --text-primary: #342126;
+            --text-secondary: #684752;
+            --text-sidebar: #d6aeb9;
+            --border: #ead5dc;
+            --accent: #d14d78;
+            --accent-light: #f8dce6;
+            --accent-hover: #b73760;
+            --shadow: 0 4px 24px rgba(209, 77, 120, 0.08);
+            --shadow-hover: 0 8px 32px rgba(209, 77, 120, 0.15);
+            --badge-bg: #f8dce6;
+            --badge-text: #8f2347;
+            --gradient-start: #d14d78;
+            --gradient-end: #342126;
+        }
+
+        body.theme-ocean {
+            --bg-body: #eef7f8;
+            --bg-card: #ffffff;
+            --bg-sidebar: #12333b;
+            --text-primary: #12333b;
+            --text-secondary: #386875;
+            --text-sidebar: #a6d5dc;
+            --border: #cce5e9;
+            --accent: #128c9e;
+            --accent-light: #d8f1f3;
+            --accent-hover: #0c6f7e;
+            --shadow: 0 4px 24px rgba(18, 140, 158, 0.08);
+            --shadow-hover: 0 8px 32px rgba(18, 140, 158, 0.15);
+            --badge-bg: #d8f1f3;
+            --badge-text: #0d5662;
+            --gradient-start: #128c9e;
+            --gradient-end: #12333b;
+        }
+
+        body.theme-forest {
+            --bg-body: #f2f7ef;
+            --bg-card: #ffffff;
+            --bg-sidebar: #1b3528;
+            --text-primary: #1b3528;
+            --text-secondary: #4f7059;
+            --text-sidebar: #b7d0b0;
+            --border: #d7e6d1;
+            --accent: #5b983f;
+            --accent-light: #e2f0d9;
+            --accent-hover: #477b30;
+            --shadow: 0 4px 24px rgba(91, 152, 63, 0.08);
+            --shadow-hover: 0 8px 32px rgba(91, 152, 63, 0.15);
+            --badge-bg: #e2f0d9;
+            --badge-text: #386326;
+            --gradient-start: #5b983f;
+            --gradient-end: #1b3528;
         }
 
         /* ============ LAYOUT ============ */
-        .layout { display: flex; min-height: 100vh; }
+        .layout {
+            display: flex;
+            min-height: 100vh;
+        }
 
         /* ============ SIDEBAR ============ */
         .sidebar {
-            width: var(--sidebar-width); background: var(--bg-sidebar);
-            position: fixed; top: 0; left: 0; bottom: 0;
-            display: flex; flex-direction: column; padding: 1.5rem 1rem; gap: 1.2rem;
-            z-index: 100; transition: transform 0.3s, background 0.4s; overflow-y: auto;
+            width: var(--sidebar-width);
+            background: var(--bg-sidebar);
+            position: fixed;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            display: flex;
+            flex-direction: column;
+            padding: 1.5rem 1rem;
+            gap: 1.2rem;
+            z-index: 100;
+            transition: transform 0.3s, background 0.4s;
+            overflow-y: auto;
         }
-        .sidebar::-webkit-scrollbar { width: 4px; }
-        .sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+        .sidebar::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .sidebar::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+        }
+
         .sidebar-brand {
-            display: flex; align-items: center; gap: 0.6rem;
-            color: #fff; font-size: 1.3rem; font-weight: 800;
-            padding: 0 0.5rem 1rem; border-bottom: 1px solid rgba(255,255,255,0.08);
-            text-decoration: none; flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            color: #fff;
+            font-size: 1.3rem;
+            font-weight: 800;
+            padding: 0 0.5rem 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            text-decoration: none;
+            flex-shrink: 0;
         }
-        .sidebar-brand i { color: var(--accent); font-size: 1.5rem; }
+
+        .sidebar-brand i {
+            color: var(--accent);
+            font-size: 1.5rem;
+        }
+
         .sidebar-brand span {
             background: linear-gradient(135deg, #fff 60%, var(--accent));
-            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
-        .sidebar-nav { display: flex; flex-direction: column; gap: 0.2rem; flex: 1; }
+
+        .sidebar-nav {
+            display: flex;
+            flex-direction: column;
+            gap: 0.2rem;
+            flex: 1;
+        }
+
         .nav-label {
-            font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.1em;
-            color: var(--text-sidebar); opacity: 0.4; padding: 0.8rem 0.8rem 0.3rem; font-weight: 600;
+            font-size: 0.6rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-sidebar);
+            opacity: 0.4;
+            padding: 0.8rem 0.8rem 0.3rem;
+            font-weight: 600;
         }
+
         .sidebar-nav a {
-            display: flex; align-items: center; gap: 0.8rem;
-            padding: 0.7rem 0.8rem; border-radius: 12px;
-            color: var(--text-sidebar); text-decoration: none;
-            font-size: 0.85rem; font-weight: 500; cursor: pointer; transition: all 0.25s; position: relative;
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+            padding: 0.7rem 0.8rem;
+            border-radius: 12px;
+            color: var(--text-sidebar);
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.25s;
+            position: relative;
         }
-        .sidebar-nav a:hover { background: rgba(255,255,255,0.06); color: #fff; transform: translateX(4px); }
-        .sidebar-nav a.active { background: var(--accent); color: #fff; box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
-        .sidebar-nav a i { width: 20px; text-align: center; }
+
+        .sidebar-nav a:hover {
+            background: rgba(255, 255, 255, 0.06);
+            color: #fff;
+            transform: translateX(4px);
+        }
+
+        .sidebar-nav a.active {
+            background: var(--accent);
+            color: #fff;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+        }
+
+        .sidebar-nav a i {
+            width: 20px;
+            text-align: center;
+        }
+
         .sidebar-nav a .badge {
-            margin-left: auto; background: rgba(255,255,255,0.15);
-            padding: 0.1rem 0.5rem; border-radius: 10px; font-size: 0.6rem;
+            margin-left: auto;
+            background: rgba(255, 255, 255, 0.15);
+            padding: 0.1rem 0.5rem;
+            border-radius: 10px;
+            font-size: 0.6rem;
         }
+
         .sidebar-overlay {
-            display: none; position: fixed; inset: 0;
-            background: rgba(0,0,0,0.5); z-index: 95; backdrop-filter: blur(4px);
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 95;
+            backdrop-filter: blur(4px);
         }
-        .sidebar-overlay.active { display: block; }
+
+        .sidebar-overlay.active {
+            display: block;
+        }
 
         /* ============ MAIN ============ */
-        .main { flex: 1; margin-left: var(--sidebar-width); padding: 0.75rem 1rem; transition: margin 0.3s; }
+        .main {
+            flex: 1;
+            margin-left: var(--sidebar-width);
+            padding: 0.75rem 1rem;
+            transition: margin 0.3s;
+        }
 
         /* ============ TOPBAR ============ */
         .topbar {
-            display: flex; align-items: center; justify-content: space-between;
-            flex-wrap: wrap; gap: 0.8rem; padding: 0.5rem 0; margin-bottom: 0.8rem;
-            position: sticky; top: 0; z-index: 50;
-            background: var(--bg-body); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 0.8rem;
+            padding: 0.5rem 0;
+            margin-bottom: 0.8rem;
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            background: var(--bg-body);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
         }
-        .topbar-left { display: flex; align-items: center; gap: 0.8rem; }
-        .topbar-left h2 { font-size: 1.2rem; color: var(--text-primary); font-weight: 700; }
-        .topbar-left h2 span { color: var(--accent); }
-        .topbar-left p { font-size: 0.75rem; color: var(--text-secondary); opacity: 0.7; }
-        .topbar-right { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+
+        .topbar-left {
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+        }
+
+        .topbar-left h2 {
+            font-size: 1.2rem;
+            color: var(--text-primary);
+            font-weight: 700;
+        }
+
+        .topbar-left h2 span {
+            color: var(--accent);
+        }
+
+        .topbar-left p {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            opacity: 0.7;
+        }
+
+        .topbar-right {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
         .icon-btn {
-            width: 36px; height: 36px; border-radius: 50%;
-            background: var(--bg-card); border: 1px solid var(--border);
-            color: var(--text-primary); display: flex; align-items: center; justify-content: center;
-            cursor: pointer; transition: all 0.25s; position: relative; font-size: 0.85rem;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.25s;
+            position: relative;
+            font-size: 0.85rem;
         }
-        .icon-btn:hover { background: var(--accent); color: #fff; transform: translateY(-2px); box-shadow: var(--shadow-hover); }
+
+        .icon-btn:hover {
+            background: var(--accent);
+            color: #fff;
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-hover);
+        }
+
         .icon-btn .dot {
-            position: absolute; top: 5px; right: 5px; width: 7px; height: 7px;
-            background: var(--negative); border-radius: 50%; border: 2px solid var(--bg-card); animation: pulse 2s infinite;
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            width: 7px;
+            height: 7px;
+            background: var(--negative);
+            border-radius: 50%;
+            border: 2px solid var(--bg-card);
+            animation: pulse 2s infinite;
         }
-        @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.3)} }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                transform: scale(1)
+            }
+
+            50% {
+                transform: scale(1.3)
+            }
+        }
+
         .user-profile {
-            display: flex; align-items: center; gap: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
             padding: 0.2rem 0.7rem 0.2rem 0.2rem;
-            background: var(--bg-card); border-radius: 40px;
-            border: 1px solid var(--border); cursor: pointer; transition: all 0.25s;
+            background: var(--bg-card);
+            border-radius: 40px;
+            border: 1px solid var(--border);
+            cursor: pointer;
+            transition: all 0.25s;
         }
-        .user-profile:hover { box-shadow: var(--shadow-hover); }
+
+        .user-profile:hover {
+            box-shadow: var(--shadow-hover);
+        }
+
         .user-profile .avatar {
-            width: 30px; height: 30px; border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
             background: linear-gradient(135deg, var(--accent), var(--accent-hover));
-            color: #fff; display: flex; align-items: center; justify-content: center;
-            font-weight: 700; font-size: 0.7rem;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 0.7rem;
         }
-        .user-profile .name { font-size: 0.75rem; font-weight: 600; color: var(--text-primary); }
-        .user-profile .role { font-size: 0.6rem; color: var(--text-secondary); opacity: 0.6; }
+
+        .user-profile .name {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .user-profile .role {
+            font-size: 0.6rem;
+            color: var(--text-secondary);
+            opacity: 0.6;
+        }
+
         .theme-btn {
-            width: 22px; height: 22px; border-radius: 50%;
-            border: 2px solid transparent; cursor: pointer; transition: all 0.25s;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: all 0.25s;
         }
-        .theme-btn:hover { transform: scale(1.2); }
-        .theme-btn.active { border-color: #fff; box-shadow: 0 0 0 2px var(--accent); }
-        .theme-btn[data-theme="navy"] { background: linear-gradient(135deg, #0b1a2e 50%, #2563eb 50%); }
-        .theme-btn[data-theme="charcoal"] { background: linear-gradient(135deg, #1a1d23 50%, #84cc16 50%); }
-        .theme-btn[data-theme="emerald"] { background: linear-gradient(135deg, #064e3b 50%, #059669 50%); }
-        .theme-btn[data-theme="teal"] { background: linear-gradient(135deg, #0f3b3b 50%, #0d9488 50%); }
-        .theme-btn[data-theme="plum"] { background: linear-gradient(135deg, #3b1f4a 50%, #8b5cf6 50%); }
-        .theme-btn[data-theme="terracotta"] { background: linear-gradient(135deg, #4a2818 50%, #c2410c 50%); }
+
+        .theme-btn:hover {
+            transform: scale(1.2);
+        }
+
+        .theme-btn.active {
+            border-color: #fff;
+            box-shadow: 0 0 0 2px var(--accent);
+        }
+
+        .theme-btn[data-theme="navy"] {
+            background: linear-gradient(135deg, #0b1a2e 50%, #2563eb 50%);
+        }
+
+        .theme-btn[data-theme="charcoal"] {
+            background: linear-gradient(135deg, #1a1d23 50%, #84cc16 50%);
+        }
+
+        .theme-btn[data-theme="emerald"] {
+            background: linear-gradient(135deg, #064e3b 50%, #059669 50%);
+        }
+
+        .theme-btn[data-theme="teal"] {
+            background: linear-gradient(135deg, #0f3b3b 50%, #0d9488 50%);
+        }
+
+        .theme-btn[data-theme="plum"] {
+            background: linear-gradient(135deg, #3b1f4a 50%, #8b5cf6 50%);
+        }
+
+        .theme-btn[data-theme="terracotta"] {
+            background: linear-gradient(135deg, #4a2818 50%, #c2410c 50%);
+        }
+
+        .theme-btn[data-theme="midnight"] {
+            background: linear-gradient(135deg, #101114 50%, #d4af37 50%);
+        }
+
+        .theme-btn[data-theme="rose"] {
+            background: linear-gradient(135deg, #342126 50%, #d14d78 50%);
+        }
+
+        .theme-btn[data-theme="ocean"] {
+            background: linear-gradient(135deg, #12333b 50%, #128c9e 50%);
+        }
+
+        .theme-btn[data-theme="forest"] {
+            background: linear-gradient(135deg, #1b3528 50%, #5b983f 50%);
+        }
 
         /* ============ TICKER ============ */
         .ticker {
-            display: flex; gap: 1.2rem; overflow-x: auto; padding: 0.5rem 1rem;
-            margin-bottom: 0.75rem; white-space: nowrap;
-            background: var(--bg-card); border-radius: 12px;
-            border: 1px solid var(--border); scrollbar-width: none;
+            display: flex;
+            gap: 1.2rem;
+            overflow-x: auto;
+            padding: 0.5rem 1rem;
+            margin-bottom: 0.75rem;
+            white-space: nowrap;
+            background: var(--bg-card);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            scrollbar-width: none;
         }
-        .ticker::-webkit-scrollbar { display: none; }
-        .ticker-item { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.75rem; font-weight: 600; color: var(--text-primary); }
-        .ticker-item .up { color: var(--positive); }
-        .ticker-item .down { color: var(--negative); }
+
+        .ticker::-webkit-scrollbar {
+            display: none;
+        }
+
+        .ticker-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .ticker-item .up {
+            color: var(--positive);
+        }
+
+        .ticker-item .down {
+            color: var(--negative);
+        }
 
         /* ============ BOTTOM NAV ============ */
         .bottom-nav {
-            position: fixed; bottom: 0; left: var(--sidebar-width); right: 0;
-            height: var(--bottom-nav-height); background: var(--bg-card);
+            position: fixed;
+            bottom: 0;
+            left: var(--sidebar-width);
+            right: 0;
+            height: var(--bottom-nav-height);
+            background: var(--bg-card);
             border-top: 1px solid var(--border);
-            display: flex; align-items: center; justify-content: space-around;
-            z-index: 90; box-shadow: 0 -4px 20px rgba(0,0,0,0.05);
-            transition: left 0.3s; padding: 0 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            z-index: 90;
+            box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.05);
+            transition: left 0.3s;
+            padding: 0 0.5rem;
         }
+
         .bottom-nav a {
-            display: flex; flex-direction: column; align-items: center; gap: 0.15rem;
-            color: var(--text-secondary); text-decoration: none;
-            font-size: 0.6rem; font-weight: 500; padding: 0.4rem 0.8rem;
-            border-radius: 16px; transition: all 0.25s; cursor: pointer; position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.15rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.6rem;
+            font-weight: 500;
+            padding: 0.4rem 0.8rem;
+            border-radius: 16px;
+            transition: all 0.25s;
+            cursor: pointer;
+            position: relative;
         }
-        .bottom-nav a i { font-size: 1.1rem; transition: all 0.25s; }
-        .bottom-nav a:hover { color: var(--accent); }
-        .bottom-nav a.active { color: var(--accent); }
+
+        .bottom-nav a i {
+            font-size: 1.1rem;
+            transition: all 0.25s;
+        }
+
+        .bottom-nav a:hover {
+            color: var(--accent);
+        }
+
+        .bottom-nav a.active {
+            color: var(--accent);
+        }
+
         .bottom-nav a.active::before {
-            content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
-            width: 25px; height: 3px; background: var(--accent); border-radius: 0 0 4px 4px;
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 25px;
+            height: 3px;
+            background: var(--accent);
+            border-radius: 0 0 4px 4px;
         }
-        .bottom-nav a.active i { transform: translateY(-2px); }
+
+        .bottom-nav a.active i {
+            transform: translateY(-2px);
+        }
 
         /* ============ PAGES ============ */
-        .page { display: none; animation: fadeUp 0.35s ease; }
-        .page.active { display: block; padding-bottom: calc(var(--bottom-nav-height) + 1rem); }
-        @keyframes fadeUp { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+        .page {
+            display: none;
+            animation: fadeUp 0.35s ease;
+        }
+
+        .page.active {
+            display: block;
+            padding-bottom: calc(var(--bottom-nav-height) + 1rem);
+        }
+
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(15px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
 
         /* ============ GRIDS & CARDS ============ */
-        .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin-bottom: 0.75rem; }
-        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-bottom: 0.75rem; }
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem; }
+        .grid-4 {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+
         .card {
-            background: var(--bg-card); border-radius: 16px; padding: 1rem;
-            border: 1px solid var(--border); box-shadow: var(--shadow); transition: all 0.25s;
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 1rem;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow);
+            transition: all 0.25s;
         }
-        .card:hover { box-shadow: var(--shadow-hover); }
+
+        .card:hover {
+            box-shadow: var(--shadow-hover);
+        }
+
         .card-title {
-            font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
-            letter-spacing: 0.06em; color: var(--text-secondary); opacity: 0.5;
-            margin-bottom: 0.6rem; display: flex; align-items: center; gap: 0.5rem;
+            font-size: 0.65rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text-secondary);
+            opacity: 0.5;
+            margin-bottom: 0.6rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
         }
-        .card-title i { color: var(--accent); }
+
+        .card-title i {
+            color: var(--accent);
+        }
+
         .stat-card {
-            background: var(--bg-card); border-radius: 14px; padding: 0.9rem 1rem;
-            border: 1px solid var(--border); box-shadow: var(--shadow);
-            transition: all 0.25s; position: relative; overflow: hidden;
+            background: var(--bg-card);
+            border-radius: 14px;
+            padding: 0.9rem 1rem;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow);
+            transition: all 0.25s;
+            position: relative;
+            overflow: hidden;
         }
+
         .stat-card::before {
-            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
-            background: linear-gradient(90deg, var(--gradient-start), var(--gradient-end)); opacity: 0.6;
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--gradient-start), var(--gradient-end));
+            opacity: 0.6;
         }
-        .stat-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-hover); }
-        .stat-card .label { font-size: 0.65rem; color: var(--text-secondary); opacity: 0.6; text-transform: uppercase; letter-spacing: 0.04em; }
-        .stat-card .value { font-size: 1.4rem; font-weight: 800; color: var(--text-primary); margin: 0.15rem 0; }
-        .stat-card .change { font-size: 0.65rem; font-weight: 600; }
-        .stat-card .change.up { color: var(--positive); }
-        .stat-card .change.down { color: var(--negative); }
+
+        .stat-card:hover {
+            transform: translateY(-3px);
+            box-shadow: var(--shadow-hover);
+        }
+
+        .stat-card .label {
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            opacity: 0.6;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .stat-card .value {
+            font-size: 1.4rem;
+            font-weight: 800;
+            color: var(--text-primary);
+            margin: 0.15rem 0;
+        }
+
+        .stat-card .change {
+            font-size: 0.65rem;
+            font-weight: 600;
+        }
+
+        .stat-card .change.up {
+            color: var(--positive);
+        }
+
+        .stat-card .change.down {
+            color: var(--negative);
+        }
+
+        .performance-bars {
+            height: 150px;
+            display: flex;
+            align-items: end;
+            gap: 0.5rem;
+            padding: 1rem 0.5rem 0;
+            background: linear-gradient(to top, var(--accent-light), transparent);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .performance-bars span {
+            flex: 1;
+            min-width: 12px;
+            background: linear-gradient(to top, var(--gradient-end), var(--accent));
+            border-radius: 4px 4px 0 0;
+        }
+
         .price-row {
-            display: flex; justify-content: space-between; align-items: center;
-            padding: 0.4rem 0; border-bottom: 1px solid var(--border); font-size: 0.8rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.4rem 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.8rem;
         }
-        .price-row:last-child { border-bottom: none; }
-        .price-row .symbol { font-weight: 600; color: var(--text-primary); }
-        .price-row .change { font-weight: 600; padding: 0.1rem 0.5rem; border-radius: 12px; font-size: 0.7rem; }
-        .price-row .change.up { color: var(--positive); background: rgba(34,197,94,0.08); }
-        .price-row .change.down { color: var(--negative); background: rgba(239,68,68,0.08); }
+
+        .price-row:last-child {
+            border-bottom: none;
+        }
+
+        .price-row .symbol {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .price-row .change {
+            font-weight: 600;
+            padding: 0.1rem 0.5rem;
+            border-radius: 12px;
+            font-size: 0.7rem;
+        }
+
+        .price-row .change.up {
+            color: var(--positive);
+            background: rgba(34, 197, 94, 0.08);
+        }
+
+        .price-row .change.down {
+            color: var(--negative);
+            background: rgba(239, 68, 68, 0.08);
+        }
+
         .btn {
             background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
-            color: #fff; border: none; padding: 0.45rem 1.2rem; border-radius: 30px;
-            font-weight: 600; font-size: 0.7rem; cursor: pointer;
-            transition: all 0.25s; display: inline-flex; align-items: center; gap: 0.4rem;
+            color: #fff;
+            border: none;
+            padding: 0.45rem 1.2rem;
+            border-radius: 30px;
+            font-weight: 600;
+            font-size: 0.7rem;
+            cursor: pointer;
+            transition: all 0.25s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
         }
-        .btn:hover { transform: translateY(-2px); box-shadow: var(--shadow-hover); }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-hover);
+        }
+
         .badge {
-            background: var(--badge-bg); color: var(--badge-text);
-            padding: 0.1rem 0.6rem; border-radius: 14px; font-size: 0.6rem; font-weight: 600;
-            display: inline-flex; align-items: center; gap: 0.2rem;
+            background: var(--badge-bg);
+            color: var(--badge-text);
+            padding: 0.1rem 0.6rem;
+            border-radius: 14px;
+            font-size: 0.6rem;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.2rem;
         }
 
         /* ============ BOT CARDS ============ */
-        .bot-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; }
-        .bot-card {
-            background: var(--bg-card); border-radius: 16px; padding: 1rem;
-            border: 1px solid var(--border); box-shadow: var(--shadow);
-            transition: all 0.25s; cursor: pointer; position: relative;
+        .bot-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.75rem;
         }
-        .bot-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-hover); }
+
+        .bot-card {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 1rem;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow);
+            transition: all 0.25s;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .bot-card:hover {
+            transform: translateY(-3px);
+            box-shadow: var(--shadow-hover);
+        }
+
         .bot-card::before {
-            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
             border-radius: 16px 16px 0 0;
             background: linear-gradient(90deg, var(--gradient-start), var(--gradient-end));
             opacity: 0.4;
         }
-        .bot-header { display: flex; align-items: center; gap: 0.7rem; margin-bottom: 0.5rem; padding-top: 0.3rem; }
+
+        .bot-header {
+            display: flex;
+            align-items: center;
+            gap: 0.7rem;
+            margin-bottom: 0.5rem;
+            padding-top: 0.3rem;
+        }
+
         .bot-icon {
-            width: 40px; height: 40px; border-radius: 12px;
-            background: var(--accent-light); color: var(--accent);
-            display: flex; align-items: center; justify-content: center; font-size: 1.1rem;
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            background: var(--accent-light);
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
             flex-shrink: 0;
         }
-        .bot-name { font-weight: 700; color: var(--text-primary); font-size: 0.85rem; }
-        .bot-desc { font-size: 0.7rem; color: var(--text-secondary); margin-bottom: 0.5rem; line-height: 1.5; }
-        .bot-stats { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
-        .bot-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; }
-        .btn-start { background: var(--positive); }
-        .btn-stop { background: var(--negative); }
-        .btn-config { background: var(--bg-body); color: var(--text-primary); border: 1px solid var(--border); }
+
+        .bot-name {
+            font-weight: 700;
+            color: var(--text-primary);
+            font-size: 0.85rem;
+        }
+
+        .bot-desc {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+            line-height: 1.5;
+        }
+
+        .bot-stats {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-bottom: 0.5rem;
+        }
+
+        .bot-actions {
+            display: flex;
+            gap: 0.4rem;
+            flex-wrap: wrap;
+        }
+
+        .btn-start {
+            background: var(--positive);
+        }
+
+        .btn-stop {
+            background: var(--negative);
+        }
+
+        .btn-config {
+            background: var(--bg-body);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
 
         /* ============ MODAL ============ */
         .modal-overlay {
-            display: none; position: fixed; inset: 0;
-            background: rgba(0,0,0,0.6); z-index: 200;
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 200;
             backdrop-filter: blur(6px);
-            align-items: center; justify-content: center;
+            align-items: center;
+            justify-content: center;
         }
-        .modal-overlay.active { display: flex; }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
         .modal {
-            background: var(--bg-card); border-radius: 20px; padding: 1.5rem;
-            max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto;
-            border: 1px solid var(--border); box-shadow: var(--shadow-hover);
+            background: var(--bg-card);
+            border-radius: 20px;
+            padding: 1.5rem;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow-hover);
             animation: modalIn 0.3s ease;
         }
-        @keyframes modalIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+
+        @keyframes modalIn {
+            from {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
         .modal-header {
-            display: flex; justify-content: space-between; align-items: center;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             margin-bottom: 1rem;
         }
-        .modal-title { font-size: 1rem; font-weight: 700; color: var(--text-primary); }
+
+        .modal-title {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
         .modal-close {
-            width: 30px; height: 30px; border-radius: 50%;
-            border: none; background: var(--bg-body); cursor: pointer;
-            font-size: 0.9rem; color: var(--text-secondary);
-            display: flex; align-items: center; justify-content: center;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            border: none;
+            background: var(--bg-body);
+            cursor: pointer;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
             transition: all 0.2s;
         }
-        .modal-close:hover { background: var(--negative); color: #fff; }
-        .modal-form-group { margin-bottom: 0.6rem; }
-        .modal-form-group label { font-size: 0.7rem; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 0.2rem; }
-        .modal-form-group input, .modal-form-group select {
-            width: 100%; padding: 0.55rem; border-radius: 10px;
-            border: 1px solid var(--border); background: var(--bg-body);
-            color: var(--text-primary); font-family: inherit; font-size: 0.8rem;
-            outline: none; transition: border 0.25s;
+
+        .modal-close:hover {
+            background: var(--negative);
+            color: #fff;
         }
-        .modal-form-group input:focus, .modal-form-group select:focus { border-color: var(--accent); }
+
+        .modal-form-group {
+            margin-bottom: 0.6rem;
+        }
+
+        .modal-form-group label {
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            display: block;
+            margin-bottom: 0.2rem;
+        }
+
+        .modal-form-group input,
+        .modal-form-group select {
+            width: 100%;
+            padding: 0.55rem;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: var(--bg-body);
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 0.8rem;
+            outline: none;
+            transition: border 0.25s;
+        }
+
+        .modal-form-group input:focus,
+        .modal-form-group select:focus {
+            border-color: var(--accent);
+        }
 
         /* ============ ORDER FORM ============ */
-        .order-form input, .order-form select {
-            width: 100%; padding: 0.5rem; border-radius: 8px;
-            border: 1px solid var(--border); background: var(--bg-body);
-            color: var(--text-primary); font-family: inherit; font-size: 0.75rem;
-            margin-bottom: 0.4rem; outline: none; transition: border 0.25s;
+        .order-form input,
+        .order-form select {
+            width: 100%;
+            padding: 0.5rem;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--bg-body);
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 0.75rem;
+            margin-bottom: 0.4rem;
+            outline: none;
+            transition: border 0.25s;
         }
-        .order-form input:focus, .order-form select:focus { border-color: var(--accent); }
-        .btn-buy { background: var(--positive); width: 100%; border-radius: 8px; }
-        .btn-sell { background: var(--negative); width: 100%; border-radius: 8px; }
+
+        .order-form input:focus,
+        .order-form select:focus {
+            border-color: var(--accent);
+        }
+
+        .btn-buy {
+            background: var(--positive);
+            width: 100%;
+            border-radius: 8px;
+        }
+
+        .btn-sell {
+            background: var(--negative);
+            width: 100%;
+            border-radius: 8px;
+        }
 
         /* ============ CHAT ============ */
-        .chat-container { display: flex; flex-direction: column; height: 350px; }
-        .chat-messages { flex: 1; overflow-y: auto; padding: 0.75rem; display: flex; flex-direction: column; gap: 0.6rem; }
-        .message { max-width: 75%; padding: 0.6rem 0.9rem; border-radius: 14px; font-size: 0.75rem; word-wrap: break-word; }
-        .message.user { background: var(--accent); color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
-        .message.ai { background: var(--bg-body); color: var(--text-primary); align-self: flex-start; border: 1px solid var(--border); border-bottom-left-radius: 4px; }
-        .chat-input { display: flex; gap: 0.4rem; padding: 0.5rem; border-top: 1px solid var(--border); }
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            height: 350px;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0.75rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+        }
+
+        .message {
+            max-width: 75%;
+            padding: 0.6rem 0.9rem;
+            border-radius: 14px;
+            font-size: 0.75rem;
+            word-wrap: break-word;
+        }
+
+        .message.user {
+            background: var(--accent);
+            color: #fff;
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.ai {
+            background: var(--bg-body);
+            color: var(--text-primary);
+            align-self: flex-start;
+            border: 1px solid var(--border);
+            border-bottom-left-radius: 4px;
+        }
+
+        .chat-input {
+            display: flex;
+            gap: 0.4rem;
+            padding: 0.5rem;
+            border-top: 1px solid var(--border);
+        }
+
         .chat-input input {
-            flex: 1; padding: 0.5rem 0.8rem; border-radius: 20px;
-            border: 1px solid var(--border); font-size: 0.75rem; outline: none; font-family: inherit;
+            flex: 1;
+            padding: 0.5rem 0.8rem;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            font-size: 0.75rem;
+            outline: none;
+            font-family: inherit;
         }
 
         /* ============ RESPONSIVE ============ */
         @media (max-width: 1024px) {
-            .grid-4 { grid-template-columns: 1fr 1fr; }
-            .bot-grid { grid-template-columns: 1fr; }
+            .grid-4 {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .bot-grid {
+                grid-template-columns: 1fr;
+            }
         }
+
         @media (max-width: 768px) {
-            .sidebar { transform: translateX(-100%); }
-            .sidebar.mobile-open { transform: translateX(0); box-shadow: 0 0 40px rgba(0,0,0,0.3); }
-            .main { margin-left: 0; padding: 0.5rem; }
-            .bottom-nav { left: 0; }
-            .grid-3, .grid-2 { grid-template-columns: 1fr; }
-            .topbar-left h2 { font-size: 1rem; }
+            .sidebar {
+                transform: translateX(-100%);
+            }
+
+            .sidebar.mobile-open {
+                transform: translateX(0);
+                box-shadow: 0 0 40px rgba(0, 0, 0, 0.3);
+            }
+
+            .main {
+                margin-left: 0;
+                padding: 0.5rem;
+            }
+
+            .bottom-nav {
+                left: 0;
+            }
+
+            .grid-3,
+            .grid-2 {
+                grid-template-columns: 1fr;
+            }
+
+            .topbar-left h2 {
+                font-size: 1rem;
+            }
         }
+
         @media (max-width: 500px) {
-            .grid-4 { grid-template-columns: 1fr; }
-            .user-profile .name, .user-profile .role { display: none; }
+            .grid-4 {
+                grid-template-columns: 1fr;
+            }
+
+            .user-profile .name,
+            .user-profile .role {
+                display: none;
+            }
         }
     </style>
 </head>
+
 <body>
     <div class="layout">
         <div class="sidebar-overlay" id="sidebarOverlay"></div>
@@ -384,15 +1215,16 @@
             <a href="index.html" class="sidebar-brand"><i class="fas fa-chart-line"></i> <span>ESH TRADE</span></a>
             <nav class="sidebar-nav">
                 <div class="nav-label">Markets</div>
-                <a class="active" data-market="forex"><i class="fas fa-dollar-sign"></i> Forex <span class="badge">50+</span></a>
+                <a class="active" data-market="forex"><i class="fas fa-dollar-sign"></i> Forex <span
+                        class="badge">50+</span></a>
                 <a data-market="crypto"><i class="fab fa-bitcoin"></i> Crypto <span class="badge">100+</span></a>
                 <a data-market="commodities"><i class="fas fa-gem"></i> Commodities <span class="badge">20+</span></a>
                 <div class="nav-label" style="margin-top:0.8rem;">Navigation</div>
                 <a href="explore.html"><i class="fas fa-compass"></i> Explore</a>
-                <a href="inbox.html"><i class="fas fa-inbox"></i> Inbox</a>
-                <a href="terminal.html"><i class="fas fa-terminal"></i> Terminal</a>
-                <a href="chatbot.html"><i class="fas fa-robot"></i> Chatbot</a>
-                <a href="me.html"><i class="fas fa-user"></i> Profile</a>
+                <a href="inbox"><i class="fas fa-inbox"></i> Inbox</a>
+                <a href="terminal"><i class="fas fa-terminal"></i> Terminal</a>
+                <a href="chatbot"><i class="fas fa-robot"></i> Chatbot</a>
+                <a href="me"><i class="fas fa-user"></i> Profile</a>
             </nav>
         </aside>
 
@@ -409,8 +1241,10 @@
                 </div>
                 <div class="topbar-right">
                     <button class="icon-btn" aria-label="Search"><i class="fas fa-search"></i></button>
-                    <button class="icon-btn" aria-label="Notifications"><i class="fas fa-bell"></i><span class="dot"></span></button>
-                    <button class="icon-btn" onclick="location.href='me.html'" aria-label="Settings"><i class="fas fa-cog"></i></button>
+                    <button class="icon-btn" aria-label="Notifications"><i class="fas fa-bell"></i><span
+                            class="dot"></span></button>
+                    <button class="icon-btn" onclick="location.href='me'" aria-label="Settings"><i
+                            class="fas fa-cog"></i></button>
                     <div class="user-profile">
                         <div class="avatar">N</div>
                         <div>
@@ -424,6 +1258,10 @@
                     <button class="theme-btn" data-theme="teal" title="Teal"></button>
                     <button class="theme-btn" data-theme="plum" title="Plum"></button>
                     <button class="theme-btn" data-theme="terracotta" title="Terracotta"></button>
+                    <button class="theme-btn" data-theme="midnight" title="Midnight + Gold"></button>
+                    <button class="theme-btn" data-theme="rose" title="Rose + Graphite"></button>
+                    <button class="theme-btn" data-theme="ocean" title="Ocean + Sand"></button>
+                    <button class="theme-btn" data-theme="forest" title="Forest + Amber"></button>
                 </div>
             </div>
 
@@ -439,27 +1277,101 @@
             <!-- HOME PAGE -->
             <div class="page active" id="page-home">
                 <div class="grid-4">
-                    <div class="stat-card"><div class="label">Total Balance</div><div class="value">$12,304</div><div class="change up">▲ 5.2%</div></div>
-                    <div class="stat-card"><div class="label">Open Positions</div><div class="value">34</div><div class="change up">+3 today</div></div>
-                    <div class="stat-card"><div class="label">Total P&L</div><div class="value">$4,230</div><div class="change up">▲ 8.3%</div></div>
-                    <div class="stat-card"><div class="label">Win Rate</div><div class="value">68%</div><div class="change up">▲ 2.1%</div></div>
+                    <div class="stat-card">
+                        <div class="label">Total Balance</div>
+                        <div class="value">$12,304</div>
+                        <div class="change up">▲ 5.2%</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">Open Positions</div>
+                        <div class="value">34</div>
+                        <div class="change up">+3 today</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">Total P&L</div>
+                        <div class="value">$4,230</div>
+                        <div class="change up">▲ 8.3%</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">Win Rate</div>
+                        <div class="value">68%</div>
+                        <div class="change up">▲ 2.1%</div>
+                    </div>
+                </div>
+                <div class="grid-3">
+                    <div class="card">
+                        <div class="card-title"><i class="fas fa-wallet"></i> Balance Breakdown</div>
+                        <div class="price-row"><span class="symbol">Available</span><strong>$8,230.00</strong></div>
+                        <div class="price-row"><span class="symbol">Locked</span><strong>$4,220.00</strong></div>
+                        <div class="price-row"><span class="symbol">Daily P&amp;L</span><span
+                                class="change up">+$320.00</span></div>
+                        <div class="price-row"><span class="symbol">Monthly P&amp;L</span><span
+                                class="change up">+$1,250.00</span></div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title"><i class="fas fa-chart-bar"></i> Performance Metrics</div>
+                        <div class="price-row"><span class="symbol">Profit Factor</span><strong>2.4</strong></div>
+                        <div class="price-row"><span class="symbol">Sharpe Ratio</span><strong>1.8</strong></div>
+                        <div class="price-row"><span class="symbol">Sortino Ratio</span><strong>2.1</strong></div>
+                        <div class="price-row"><span class="symbol">Max Drawdown</span><span
+                                class="change down">-3.2%</span></div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title"><i class="fas fa-shield-halved"></i> Risk Metrics</div>
+                        <div class="price-row"><span class="symbol">Value at Risk</span><span
+                                class="change down">-$450</span></div>
+                        <div class="price-row"><span class="symbol">Conditional VaR</span><span
+                                class="change down">-$680</span></div>
+                        <div class="price-row"><span class="symbol">Max Exposure</span><strong>$3,200</strong></div>
+                        <div class="price-row"><span class="symbol">Current Leverage</span><strong>2.5x</strong></div>
+                    </div>
+                </div>
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-title"><i class="fas fa-chart-area"></i> Equity Curve</div>
+                        <div class="performance-bars" aria-label="Equity curve snapshot">
+                            <span style="height:28%"></span><span style="height:42%"></span><span
+                                style="height:36%"></span>
+                            <span style="height:58%"></span><span style="height:70%"></span><span
+                                style="height:84%"></span>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title"><i class="fas fa-list-check"></i> Trading Summary</div>
+                        <div class="price-row"><span class="symbol">Total Trades</span><strong>1,234</strong></div>
+                        <div class="price-row"><span class="symbol">Average Profit</span><span
+                                class="change up">+$45.20</span></div>
+                        <div class="price-row"><span class="symbol">Average Loss</span><span
+                                class="change down">-$12.30</span></div>
+                        <div class="price-row"><span class="symbol">Consecutive Wins</span><span
+                                class="change up">12</span></div>
+                    </div>
                 </div>
                 <div class="grid-2">
                     <div class="card">
                         <div class="card-title"><i class="fas fa-wallet"></i> My Portfolio</div>
-                        <div class="price-row"><span class="symbol">📈 AAPL</span><span>$1,721</span><span class="change up">▲ 12.4%</span></div>
-                        <div class="price-row"><span class="symbol">💱 EUR/USD</span><span>€1,450</span><span class="change up">▲ 3.1%</span></div>
-                        <div class="price-row"><span class="symbol">🥇 Gold</span><span>$2,345</span><span class="change up">▲ 8.7%</span></div>
-                        <div class="price-row"><span class="symbol">₿ BTC</span><span>$67,234</span><span class="change up">▲ 2.3%</span></div>
+                        <div class="price-row"><span class="symbol">📈 AAPL</span><span>$1,721</span><span
+                                class="change up">▲ 12.4%</span></div>
+                        <div class="price-row"><span class="symbol">💱 EUR/USD</span><span>€1,450</span><span
+                                class="change up">▲ 3.1%</span></div>
+                        <div class="price-row"><span class="symbol">🥇 Gold</span><span>$2,345</span><span
+                                class="change up">▲ 8.7%</span></div>
+                        <div class="price-row"><span class="symbol">₿ BTC</span><span>$67,234</span><span
+                                class="change up">▲ 2.3%</span></div>
                     </div>
                     <div class="card">
                         <div class="card-title"><i class="fas fa-chart-line"></i> Performance</div>
                         <div style="display:flex; align-items:flex-end; gap:3px; height:120px;">
-                            <div style="flex:1; background:var(--accent); border-radius:3px; height:30%; opacity:0.5;"></div>
-                            <div style="flex:1; background:var(--accent); border-radius:3px; height:50%; opacity:0.6;"></div>
-                            <div style="flex:1; background:var(--accent); border-radius:3px; height:40%; opacity:0.7;"></div>
-                            <div style="flex:1; background:var(--accent); border-radius:3px; height:70%; opacity:0.8;"></div>
-                            <div style="flex:1; background:var(--accent); border-radius:3px; height:60%; opacity:0.9;"></div>
+                            <div style="flex:1; background:var(--accent); border-radius:3px; height:30%; opacity:0.5;">
+                            </div>
+                            <div style="flex:1; background:var(--accent); border-radius:3px; height:50%; opacity:0.6;">
+                            </div>
+                            <div style="flex:1; background:var(--accent); border-radius:3px; height:40%; opacity:0.7;">
+                            </div>
+                            <div style="flex:1; background:var(--accent); border-radius:3px; height:70%; opacity:0.8;">
+                            </div>
+                            <div style="flex:1; background:var(--accent); border-radius:3px; height:60%; opacity:0.9;">
+                            </div>
                             <div style="flex:1; background:var(--accent); border-radius:3px; height:90%;"></div>
                         </div>
                     </div>
@@ -469,10 +1381,26 @@
             <!-- BOT PAGE -->
             <div class="page" id="page-bot">
                 <div class="grid-4" style="margin-bottom:1rem;">
-                    <div class="stat-card"><div class="label">Active Bots</div><div class="value">4/8</div><div class="change up">● Running</div></div>
-                    <div class="stat-card"><div class="label">Total Bot Profit</div><div class="value">+$1,115</div><div class="change up">▲ Today</div></div>
-                    <div class="stat-card"><div class="label">Total Bot Trades</div><div class="value">256</div><div class="change up">+28 today</div></div>
-                    <div class="stat-card"><div class="label">Bot Success Rate</div><div class="value">74%</div><div class="change up">▲ 4.2%</div></div>
+                    <div class="stat-card">
+                        <div class="label">Active Bots</div>
+                        <div class="value">4/8</div>
+                        <div class="change up">● Running</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">Total Bot Profit</div>
+                        <div class="value">+$1,115</div>
+                        <div class="change up">▲ Today</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">Total Bot Trades</div>
+                        <div class="value">256</div>
+                        <div class="change up">+28 today</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">Bot Success Rate</div>
+                        <div class="value">74%</div>
+                        <div class="change up">▲ 4.2%</div>
+                    </div>
                 </div>
 
                 <div class="bot-grid">
@@ -483,26 +1411,35 @@
                             <div style="flex:1;">
                                 <div style="display:flex; justify-content:space-between; align-items:center;">
                                     <div class="bot-name">Scalper Bot</div>
-                                    <span class="badge" style="background:rgba(34,197,94,0.1);color:#22c55e;">● Running</span>
+                                    <span class="badge" style="background:rgba(34,197,94,0.1);color:#22c55e;">●
+                                        Running</span>
                                 </div>
-                                <div style="font-size:0.65rem; color:var(--text-secondary);">High-Frequency Trading</div>
+                                <div style="font-size:0.65rem; color:var(--text-secondary);">High-Frequency Trading
+                                </div>
                             </div>
                         </div>
-                        <div class="bot-desc"><i class="fas fa-info-circle" style="color:var(--accent);"></i> Hufanya biashara haraka (seconds) kwa faida ndogo ndogo lakini nyingi.</div>
+                        <div class="bot-desc"><i class="fas fa-info-circle" style="color:var(--accent);"></i> Hufanya
+                            biashara haraka (seconds) kwa faida ndogo ndogo lakini nyingi.</div>
                         <div class="bot-stats">
                             <span class="badge"><i class="fas fa-dollar-sign"></i> $5 Min</span>
-                            <span class="badge" style="background:rgba(239,68,68,0.1);color:#ef4444;"><i class="fas fa-exclamation-triangle"></i> High Risk</span>
-                            <span class="badge" style="background:rgba(34,197,94,0.1);color:#22c55e;"><i class="fas fa-chart-line"></i> +$450</span>
+                            <span class="badge" style="background:rgba(239,68,68,0.1);color:#ef4444;"><i
+                                    class="fas fa-exclamation-triangle"></i> High Risk</span>
+                            <span class="badge" style="background:rgba(34,197,94,0.1);color:#22c55e;"><i
+                                    class="fas fa-chart-line"></i> +$450</span>
                         </div>
                         <div class="bot-actions">
-                            <button class="btn btn-stop" onclick="stopBot(this)"><i class="fas fa-stop"></i> Stop</button>
-                            <button class="btn btn-config" onclick="configBot('Scalper Bot')"><i class="fas fa-gear"></i> Config</button>
-                            <button class="btn btn-config" onclick="viewBotDetails('Scalper Bot')"><i class="fas fa-eye"></i> Details</button>
+                            <button class="btn btn-stop" onclick="stopBot(this)"><i class="fas fa-stop"></i>
+                                Stop</button>
+                            <button class="btn btn-config" onclick="configBot('Scalper Bot')"><i
+                                    class="fas fa-gear"></i> Config</button>
+                            <button class="btn btn-config" onclick="viewBotDetails('Scalper Bot')"><i
+                                    class="fas fa-eye"></i> Details</button>
                         </div>
                     </div>
                     <!-- ... (other 7 bots similar) -->
                 </div>
-                <button class="btn" style="margin-top:1rem;"><i class="fas fa-plus"></i> Create New Bot</button>
+                <button class="btn" style="margin-top:1rem;" onclick="configBot('New Bot')"><i class="fas fa-plus"></i>
+                    Create New Bot</button>
             </div>
 
             <!-- TRADE PAGE -->
@@ -510,17 +1447,25 @@
                 <div class="grid-2">
                     <div class="card">
                         <div class="card-title"><i class="fas fa-book"></i> Order Book</div>
-                        <div class="price-row"><span class="symbol">EUR/USD</span><span>1.0842</span><span class="change up">▲</span></div>
-                        <div class="price-row"><span class="symbol">GBP/USD</span><span>1.2645</span><span class="change up">▲</span></div>
-                        <div class="price-row"><span class="symbol">USD/JPY</span><span>148.23</span><span class="change down">▼</span></div>
+                        <div class="price-row"><span class="symbol">EUR/USD</span><span>1.0842</span><span
+                                class="change up">▲</span></div>
+                        <div class="price-row"><span class="symbol">GBP/USD</span><span>1.2645</span><span
+                                class="change up">▲</span></div>
+                        <div class="price-row"><span class="symbol">USD/JPY</span><span>148.23</span><span
+                                class="change down">▼</span></div>
                     </div>
                     <div class="card order-form">
                         <div class="card-title"><i class="fas fa-bolt"></i> Quick Trade</div>
-                        <select><option>EUR/USD</option><option>GBP/USD</option><option>USD/JPY</option></select>
+                        <select>
+                            <option>EUR/USD</option>
+                            <option>GBP/USD</option>
+                            <option>USD/JPY</option>
+                        </select>
                         <input type="number" placeholder="Quantity (Lots)" value="0.01" />
                         <input type="number" placeholder="Leverage" value="10" />
                         <button class="btn btn-buy"><i class="fas fa-arrow-up"></i> BUY</button>
-                        <button class="btn btn-sell" style="margin-top:0.4rem;"><i class="fas fa-arrow-down"></i> SELL</button>
+                        <button class="btn btn-sell" style="margin-top:0.4rem;"><i class="fas fa-arrow-down"></i>
+                            SELL</button>
                     </div>
                 </div>
             </div>
@@ -529,7 +1474,8 @@
             <div class="page" id="page-chart">
                 <div class="card">
                     <div class="card-title"><i class="fas fa-chart-area"></i> Live Chart</div>
-                    <div style="height:300px; display:flex; align-items:center; justify-content:center; background:var(--bg-body); border-radius:12px; color:var(--text-secondary);">
+                    <div
+                        style="height:300px; display:flex; align-items:center; justify-content:center; background:var(--bg-body); border-radius:12px; color:var(--text-secondary);">
                         <i class="fas fa-chart-line"></i>&nbsp; Chart Coming Soon
                     </div>
                 </div>
@@ -572,7 +1518,7 @@
     </div>
 
     <script>
-        (function() {
+        (function () {
             'use strict';
 
             // ===== THEME =====
@@ -583,7 +1529,7 @@
                 themeBtns.forEach(btn => btn.classList.toggle('active', btn.dataset.theme === theme));
                 localStorage.setItem('esh_theme', theme);
             }
-            themeBtns.forEach(btn => btn.addEventListener('click', function() { setTheme(this.dataset.theme); }));
+            themeBtns.forEach(btn => btn.addEventListener('click', function () { setTheme(this.dataset.theme); }));
             setTheme(localStorage.getItem('esh_theme') || 'navy');
 
             // ===== PAGE SWITCHER =====
@@ -600,12 +1546,12 @@
                 navLinks.forEach(l => l.classList.toggle('active', l.dataset.page === page));
                 Object.keys(pages).forEach(k => pages[k].classList.toggle('active', k === page));
             }
-            navLinks.forEach(l => l.addEventListener('click', function() { switchPage(this.dataset.page); }));
+            navLinks.forEach(l => l.addEventListener('click', function () { switchPage(this.dataset.page); }));
 
             // ===== MARKET SWITCHER =====
             const marketLinks = document.querySelectorAll('.sidebar-nav a[data-market]');
             const marketNames = { forex: 'Forex Market', crypto: 'Crypto Market', commodities: 'Commodities Market' };
-            marketLinks.forEach(l => l.addEventListener('click', function() {
+            marketLinks.forEach(l => l.addEventListener('click', function () {
                 marketLinks.forEach(x => x.classList.remove('active'));
                 this.classList.add('active');
                 document.getElementById('marketName').textContent = marketNames[this.dataset.market];
@@ -617,7 +1563,7 @@
             const sidebar = document.getElementById('sidebar');
             const overlay = document.getElementById('sidebarOverlay');
             function closeMobile() { sidebar.classList.remove('mobile-open'); overlay.classList.remove('active'); }
-            menuToggle.addEventListener('click', function() {
+            menuToggle.addEventListener('click', function () {
                 if (sidebar.classList.contains('mobile-open')) closeMobile();
                 else { sidebar.classList.add('mobile-open'); overlay.classList.add('active'); }
             });
@@ -628,11 +1574,11 @@
             const modalTitle = document.getElementById('modalTitle');
             const modalContent = document.getElementById('modalContent');
 
-            window.closeModal = function() { modalOverlay.classList.remove('active'); };
-            modalOverlay.addEventListener('click', function(e) { if (e.target === modalOverlay) closeModal(); });
+            window.closeModal = function () { modalOverlay.classList.remove('active'); };
+            modalOverlay.addEventListener('click', function (e) { if (e.target === modalOverlay) closeModal(); });
 
             // ===== BOT ACTIONS =====
-            window.startBot = function(btn) {
+            window.startBot = function (btn) {
                 const card = btn.closest('.bot-card');
                 const badge = card?.querySelector('.badge');
                 if (badge) { badge.textContent = '● Running'; badge.style.background = 'rgba(34,197,94,0.1)'; badge.style.color = '#22c55e'; }
@@ -642,7 +1588,7 @@
                 showToast('✅ Bot started successfully', 'success');
             };
 
-            window.stopBot = function(btn) {
+            window.stopBot = function (btn) {
                 const card = btn.closest('.bot-card');
                 const badge = card?.querySelector('.badge');
                 if (badge) { badge.textContent = '● Stopped'; badge.style.background = 'rgba(239,68,68,0.1)'; badge.style.color = '#ef4444'; }
@@ -652,27 +1598,47 @@
                 showToast('⚠️ Bot stopped', 'error');
             };
 
-            window.configBot = function(botName) {
+            window.configBot = function (botName) {
                 modalTitle.textContent = '⚙️ Configure ' + botName;
+                let saved = {};
+                try {
+                    saved = JSON.parse(localStorage.getItem('esh_bot_settings_' + botName) || '{}');
+                } catch (error) {
+                    localStorage.removeItem('esh_bot_settings_' + botName);
+                }
                 modalContent.innerHTML = `
-                    <div class="modal-form-group"><label>Symbol/Pair</label><select><option>EURUSD</option><option>GBPUSD</option><option>BTCUSD</option><option>XAUUSD</option></select></div>
-                    <div class="modal-form-group"><label>Capital Amount ($)</label><input type="number" value="100" min="5" /></div>
-                    <div class="modal-form-group"><label>Risk Level</label><select><option>Low</option><option>Medium</option><option>High</option></select></div>
-                    <div class="modal-form-group"><label>Max Position Size (%)</label><input type="number" value="10" min="1" max="50" /></div>
-                    <div class="modal-form-group"><label>Stop Loss (%)</label><input type="number" value="2" min="0.5" max="20" /></div>
-                    <div class="modal-form-group"><label>Take Profit (%)</label><input type="number" value="4" min="1" max="50" /></div>
-                    <div class="modal-form-group"><label>Update Interval</label><select><option>1 second</option><option>5 seconds</option><option>30 seconds</option><option>1 minute</option></select></div>
+                    <div class="modal-form-group"><label>Capital ($)</label><input id="botCapital" type="number" value="${saved.capital || 100}" min="5" max="1000000" /></div>
+                    <div class="modal-form-group"><label>Pairs</label><select id="botPair"><option>BTC/USDT</option><option>ETH/USDT</option><option>EURUSD</option><option>XAUUSD</option></select></div>
+                    <div class="modal-form-group"><label>Timeframe</label><select id="botTimeframe"><option>1m</option><option>5m</option><option>15m</option><option selected>1h</option><option>4h</option><option>1d</option></select></div>
+                    <div class="modal-form-group"><label>Trading Mode</label><select id="botMode"><option>SMART_ULTRA_AGGRESSIVE</option><option>AGGRESSIVE</option><option selected>MEDIUM</option><option>CONSERVATIVE</option><option>EMERGENCY</option></select></div>
+                    <div class="modal-form-group"><label>Data Mode</label><select id="botDataMode"><option selected>OHLCV</option><option>TICK</option><option>BOTH</option></select></div>
+                    <div class="modal-form-group"><label>Risk Per Trade (%)</label><input id="botRisk" type="number" value="${saved.risk || 1}" min="0.1" max="5" step="0.1" /></div>
+                    <div class="modal-form-group"><label>Stop Loss ATR ×</label><input id="botStop" type="number" value="${saved.stopLoss || 1.5}" min="0.5" max="5" step="0.1" /></div>
+                    <div class="modal-form-group"><label>Take Profit ATR ×</label><input id="botTarget" type="number" value="${saved.takeProfit || 3}" min="1" max="10" step="0.1" /></div>
+                    <div class="modal-form-group"><label><input id="botSmart" type="checkbox" ${saved.smart !== false ? 'checked' : ''} /> Smart Aggressively</label></div>
                     <button class="btn" style="width:100%; justify-content:center; margin-top:0.5rem;" onclick="saveBotConfig('${botName}')"><i class="fas fa-save"></i> Save Configuration</button>
                 `;
                 modalOverlay.classList.add('active');
             };
 
-            window.saveBotConfig = function(botName) {
+            window.saveBotConfig = function (botName) {
+                const settings = {
+                    capital: Number(document.getElementById('botCapital')?.value || 100),
+                    pair: document.getElementById('botPair')?.value || 'BTC/USDT',
+                    timeframe: document.getElementById('botTimeframe')?.value || '1h',
+                    mode: document.getElementById('botMode')?.value || 'MEDIUM',
+                    dataMode: document.getElementById('botDataMode')?.value || 'OHLCV',
+                    risk: Number(document.getElementById('botRisk')?.value || 1),
+                    stopLoss: Number(document.getElementById('botStop')?.value || 1.5),
+                    takeProfit: Number(document.getElementById('botTarget')?.value || 3),
+                    smart: Boolean(document.getElementById('botSmart')?.checked)
+                };
+                localStorage.setItem('esh_bot_settings_' + botName, JSON.stringify(settings));
                 closeModal();
                 showToast('✅ ' + botName + ' configured successfully', 'success');
             };
 
-            window.viewBotDetails = function(botName) {
+            window.viewBotDetails = function (botName) {
                 modalTitle.textContent = '🤖 ' + botName + ' Details';
                 modalContent.innerHTML = `
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem; font-size:0.8rem;">
@@ -705,7 +1671,7 @@
                 `;
                 toast.innerHTML = '<i class="fas ' + (type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle') + '" style="color:' + (type === 'success' ? 'var(--positive)' : 'var(--negative)') + ';"></i> ' + message;
                 document.body.appendChild(toast);
-                setTimeout(function() { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; setTimeout(function() { toast.remove(); }, 300); }, 3000);
+                setTimeout(function () { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; setTimeout(function () { toast.remove(); }, 300); }, 3000);
             }
 
             // ===== CHAT =====
@@ -724,7 +1690,7 @@
                 if (!text) return;
                 addMessage(text, 'user');
                 chatInput.value = '';
-                setTimeout(function() {
+                setTimeout(function () {
                     const responses = [
                         '📊 EUR/USD shows bullish momentum. Consider buying.',
                         '🤖 Scalper Bot profit: +$450 today.',
@@ -736,10 +1702,10 @@
                 }, 800);
             }
             chatSend.addEventListener('click', sendChat);
-            chatInput.addEventListener('keypress', function(e) { if (e.key === 'Enter') sendChat(); });
+            chatInput.addEventListener('keypress', function (e) { if (e.key === 'Enter') sendChat(); });
 
             // ===== LIVE TICKER =====
-            setInterval(function() {
+            setInterval(function () {
                 document.getElementById('tickerBTC').textContent = '$' + (Math.random() * 1000 + 67000).toFixed(0);
                 document.getElementById('tickerETH').textContent = '$' + (Math.random() * 100 + 3400).toFixed(0);
                 document.getElementById('tickerEUR').textContent = (Math.random() * 0.01 + 1.08).toFixed(4);
@@ -753,4 +1719,5 @@
         })();
     </script>
 </body>
+
 </html>

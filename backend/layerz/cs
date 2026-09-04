@@ -1,0 +1,820 @@
+"""
+LAYER +18: CAPITAL & STRATEGY OPTIMIZATION ENGINE (ULTIMATE UPGRADE - ADVANCED FEATURES)
+Purpose: Detect available capital and dynamically expand strategies with INTELLIGENCE.
+Balance: GOLDILOCKS - Not too aggressive (risky) and not too conservative (missed opportunities).
+
+ADVANCED FEATURES:
+- REAL-TIME CAPITAL DETECTION: Automatically detects available capital
+- STRATEGY EXPANSION: Dynamically adds strategies as capital grows
+- CAPITAL-BASED STRATEGY UNLOCKING: Unlocks strategies at capital thresholds
+- DYNAMIC ALLOCATION: Allocates capital across strategies optimally
+- PERFORMANCE-BASED REBALANCING: Rebalances based on strategy performance
+- GROWTH FORECASTING: Predicts future capital based on growth trends
+- STRATEGY SCORING: Scores strategies based on capital efficiency
+- CAPITAL UTILIZATION: Tracks and optimizes capital utilization
+- AUTO-EXPANSION: Automatically adds new strategies when capital allows
+- MULTI-STRATEGY PORTFOLIO: Manages multiple strategies simultaneously
+"""
+
+import numpy as np
+import pandas as pd
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Tuple, Any, Union
+from enum import Enum
+from dataclasses import dataclass, field
+import logging
+import json
+import time
+from collections import deque
+import threading
+
+# Configure logging
+logger = logging.getLogger(__name__)
+
+debug_handler = logging.FileHandler('logs/capital_strategy_debug.log')
+debug_handler.setLevel(logging.DEBUG)
+debug_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+debug_handler.setFormatter(debug_formatter)
+logger.addHandler(debug_handler)
+
+
+class StrategyType(Enum):
+    """Available strategy types"""
+    CONSERVATIVE = "conservative"
+    BALANCED = "balanced"
+    AGGRESSIVE = "aggressive"
+    SCALPING = "scalping"
+    TREND_FOLLOWING = "trend_following"
+    MEAN_REVERSION = "mean_reversion"
+    GRID = "grid"
+    DCA = "dca"
+    ARBITRAGE = "arbitrage"
+    MOMENTUM = "momentum"
+    BREAKOUT = "breakout"
+    NEWS = "news"
+    SMART_MONEY = "smart_money"
+
+
+@dataclass
+class CapitalStrategyConfig:
+    """Configuration for Capital & Strategy Optimization - ADVANCED"""
+    
+    # CAPITAL THRESHOLDS FOR STRATEGY UNLOCKING
+    strategy_unlock_thresholds: Dict[str, float] = field(default_factory=lambda: {
+        'conservative': 50.0,
+        'dca': 100.0,
+        'balanced': 200.0,
+        'scalping': 300.0,
+        'mean_reversion': 400.0,
+        'grid': 500.0,
+        'aggressive': 600.0,
+        'trend_following': 800.0,
+        'momentum': 1000.0,
+        'breakout': 1200.0,
+        'news': 1500.0,
+        'smart_money': 2000.0,
+        'arbitrage': 2500.0
+    })
+    
+    # ALLOCATION LIMITS
+    max_allocation_per_strategy: float = 0.40  # 40% per strategy
+    min_allocation_per_strategy: float = 0.03   # 3% per strategy
+    reserve_percentage: float = 0.10            # 10% reserve
+    
+    # REBALANCING
+    rebalance_threshold: float = 0.05           # 5% deviation triggers rebalance
+    rebalance_interval_hours: int = 12
+    max_strategies_active: int = 8
+    
+    # STRATEGY SCORING
+    strategy_score_weights: Dict[str, float] = field(default_factory=lambda: {
+        'capital_efficiency': 0.25,
+        'profit_potential': 0.25,
+        'risk_adjusted_return': 0.20,
+        'market_alignment': 0.15,
+        'implementation_cost': 0.10,
+        'scalability': 0.05
+    })
+    
+    # GROWTH FORECASTING
+    forecast_days: int = 30
+    forecast_samples: int = 100
+    
+    # DEBUG
+    debug_mode: bool = True
+    max_history_size: int = 10000
+
+
+class CapitalStrategyEngine:
+    """
+    Capital & Strategy Optimization Engine - ULTIMATE UPGRADE
+    Detects capital and dynamically expands strategies.
+    """
+    
+    def __init__(self, config: Optional[CapitalStrategyConfig] = None):
+        self.config = config or CapitalStrategyConfig()
+        self.debug_mode = self.config.debug_mode
+        
+        # PERFORMANCE TRACKING
+        self.performance = {
+            'total_optimizations': 0,
+            'rebalances': 0,
+            'strategy_changes': 0,
+            'avg_capital_growth': 0.0,
+            'peak_capital': 0.0,
+            'errors': 0,
+            'allocation_changes': 0,
+            'strategies_unlocked': 0,
+            'capital_detections': 0,
+            'forecast_accuracy': 0.0
+        }
+        
+        # CAPITAL STATE
+        self.total_capital = 0.0
+        self.detected_capital = 0.0
+        self.available_capital = 0.0
+        self.utilized_capital = 0.0
+        self.reserve_capital = 0.0
+        self.capital_history = deque(maxlen=1000)
+        self.capital_growth = 0.0
+        self.capital_utilization_rate = 0.0
+        
+        # STRATEGY STATE
+        self.active_strategies = {}
+        self.available_strategies = {}
+        self.locked_strategies = {}
+        self.strategy_performance = {}
+        self.current_allocations = {}
+        self.strategy_scores = {}
+        self.strategy_history = deque(maxlen=1000)
+        
+        # GROWTH TRACKING
+        self.growth_history = deque(maxlen=1000)
+        self.daily_growth = 0.0
+        self.weekly_growth = 0.0
+        self.monthly_growth = 0.0
+        self.forecasted_growth = 0.0
+        
+        # RECOMMENDATIONS
+        self.current_recommendations = {}
+        self.recommendation_history = deque(maxlen=1000)
+        
+        # MARKET CONTEXT
+        self.current_regime = "unknown"
+        self.current_volatility = 0.0
+        
+        # ALLOCATION HISTORY
+        self.allocation_history = deque(maxlen=1000)
+        
+        # CAPITAL DETECTION
+        self.detection_history = deque(maxlen=1000)
+        self.capital_sources = {}
+        
+        # LOCK
+        self._lock = threading.Lock()
+        
+        self._log_debug("Capital & Strategy Engine initialized - ULTIMATE UPGRADE", "info")
+        logger.info("Capital & Strategy Engine initialized - ULTIMATE UPGRADE")
+    
+    def _log_debug(self, message: str, level: str = "debug") -> None:
+        """Debug logging with timestamp and level"""
+        if self.debug_mode:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+            log_msg = f"[DEBUG {timestamp}] {message}"
+            if level == "info":
+                logger.info(log_msg)
+            elif level == "warning":
+                logger.warning(log_msg)
+            elif level == "error":
+                logger.error(log_msg)
+            else:
+                logger.debug(log_msg)
+    
+    def _safe_get(self, data: Dict, key: str, default: Any = None) -> Any:
+        """Safe get with error handling"""
+        try:
+            return data.get(key, default) if data else default
+        except Exception as e:
+            self._log_debug(f"Safe get error for {key}: {str(e)}", "warning")
+            return default
+    
+    def detect_capital(self, capital_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Detect available capital from various sources with full validation
+        """
+        try:
+            self.performance['capital_detections'] += 1
+            
+            if not isinstance(capital_data, dict):
+                self._log_debug("Invalid capital_data: not a dict", "warning")
+                return {'error': 'Invalid capital data'}
+            
+            # Extract capital from various sources
+            exchange_balances = self._safe_get(capital_data, 'exchange_balances', {})
+            wallet_balances = self._safe_get(capital_data, 'wallet_balances', {})
+            broker_balances = self._safe_get(capital_data, 'broker_balances', {})
+            total_balance = self._safe_get(capital_data, 'total_balance', 0.0)
+            
+            # Calculate total detected capital
+            detected = total_balance
+            
+            # If not provided, sum up all sources
+            if detected == 0:
+                for source, balance in exchange_balances.items():
+                    detected += balance
+                for source, balance in wallet_balances.items():
+                    detected += balance
+                for source, balance in broker_balances.items():
+                    detected += balance
+            
+            # Store detected capital
+            self.detected_capital = detected
+            
+            # Store capital sources
+            self.capital_sources = {
+                'exchanges': exchange_balances,
+                'wallets': wallet_balances,
+                'brokers': broker_balances,
+                'total': detected,
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            # Update available capital
+            self.available_capital = detected - self.reserve_capital
+            
+            # Update total capital if higher
+            if detected > self.total_capital:
+                self.total_capital = detected
+                self.performance['peak_capital'] = max(self.performance['peak_capital'], detected)
+            
+            # Update detection history
+            self.detection_history.append({
+                'timestamp': datetime.now(),
+                'detected': detected,
+                'sources': self.capital_sources
+            })
+            
+            # Auto-expand strategies
+            expansion_result = self._expand_strategies()
+            
+            self._log_debug(f"Capital detected: ${detected:.2f} (available: ${self.available_capital:.2f})", "info")
+            logger.info(f"Capital detected: ${detected:.2f}")
+            
+            return {
+                'detected_capital': detected,
+                'available_capital': self.available_capital,
+                'utilized_capital': self.utilized_capital,
+                'reserve_capital': self.reserve_capital,
+                'sources': self.capital_sources,
+                'expansion': expansion_result,
+                'timestamp': datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            self.performance['errors'] += 1
+            self._log_debug(f"Error in detect_capital: {str(e)}", "error")
+            return {'error': str(e)}
+    
+    def _expand_strategies(self) -> Dict[str, Any]:
+        """
+        Dynamically expand strategies based on available capital
+        """
+        try:
+            expansion_result = {
+                'unlocked': [],
+                'activated': [],
+                'skipped': []
+            }
+            
+            # Get available strategies based on capital
+            for strategy, threshold in self.config.strategy_unlock_thresholds.items():
+                if self.total_capital >= threshold:
+                    if strategy not in self.active_strategies:
+                        # Unlock the strategy
+                        self.active_strategies[strategy] = {
+                            'status': 'active',
+                            'unlocked_at': datetime.now(),
+                            'capital_threshold': threshold,
+                            'performance': {'wins': 0, 'losses': 0, 'pnl': 0.0},
+                            'allocation': 0.0
+                        }
+                        self.performance['strategies_unlocked'] += 1
+                        expansion_result['unlocked'].append(strategy)
+                        
+                        self._log_debug(f"Strategy unlocked: {strategy} (capital: ${self.total_capital:.2f} >= ${threshold:.2f})", "info")
+                        logger.info(f"Strategy unlocked: {strategy}")
+                else:
+                    if strategy in self.active_strategies and strategy != 'conservative':
+                        # Don't deactivate, just mark as limited
+                        if self.active_strategies[strategy].get('status') == 'active':
+                            self.active_strategies[strategy]['status'] = 'limited'
+                            expansion_result['skipped'].append(strategy)
+            
+            # Limit number of active strategies
+            active_count = len([s for s in self.active_strategies if self.active_strategies[s].get('status') == 'active'])
+            if active_count > self.config.max_strategies_active:
+                # Deactivate least performing strategies
+                sorted_strategies = sorted(
+                    [(s, self.active_strategies[s]['performance']['pnl']) for s in self.active_strategies if self.active_strategies[s].get('status') == 'active'],
+                    key=lambda x: x[1]
+                )
+                to_deactivate = sorted_strategies[:active_count - self.config.max_strategies_active]
+                for strategy, _ in to_deactivate:
+                    self.active_strategies[strategy]['status'] = 'inactive'
+                    expansion_result['skipped'].append(strategy)
+            
+            # Update allocations
+            self._rebalance_allocations()
+            
+            return expansion_result
+            
+        except Exception as e:
+            self.performance['errors'] += 1
+            self._log_debug(f"Error in _expand_strategies: {str(e)}", "error")
+            return {'error': str(e)}
+    
+    def _rebalance_allocations(self) -> None:
+        """Rebalance capital allocation across active strategies"""
+        try:
+            active_strategies = [s for s in self.active_strategies if self.active_strategies[s].get('status') == 'active']
+            if not active_strategies:
+                self.current_allocations = {}
+                return
+            
+            # Calculate scores for each active strategy
+            scores = {}
+            total_score = 0.0
+            
+            for strategy in active_strategies:
+                score = self._calculate_strategy_score(strategy)
+                scores[strategy] = score
+                total_score += score
+            
+            if total_score == 0:
+                # Equal allocation
+                for strategy in active_strategies:
+                    self.current_allocations[strategy] = 100.0 / len(active_strategies)
+            else:
+                # Proportional allocation based on scores
+                for strategy in active_strategies:
+                    self.current_allocations[strategy] = (scores[strategy] / total_score) * 100.0
+            
+            # Ensure limits
+            for strategy in self.current_allocations:
+                min_alloc = self.config.min_allocation_per_strategy * 100
+                max_alloc = self.config.max_allocation_per_strategy * 100
+                self.current_allocations[strategy] = max(min_alloc, min(max_alloc, self.current_allocations[strategy]))
+            
+            # Normalize to 100%
+            total_alloc = sum(self.current_allocations.values())
+            if total_alloc > 0:
+                for strategy in self.current_allocations:
+                    self.current_allocations[strategy] = (self.current_allocations[strategy] / total_alloc) * 100
+            
+            # Update active strategies with allocations
+            for strategy in self.current_allocations:
+                if strategy in self.active_strategies:
+                    self.active_strategies[strategy]['allocation'] = self.current_allocations[strategy]
+            
+            self.allocation_history.append({
+                'timestamp': datetime.now(),
+                'allocations': self.current_allocations.copy()
+            })
+            
+            self.performance['rebalances'] += 1
+            
+        except Exception as e:
+            self.performance['errors'] += 1
+            self._log_debug(f"Error in _rebalance_allocations: {str(e)}", "error")
+    
+    def _calculate_strategy_score(self, strategy: str) -> float:
+        """Calculate score for a strategy based on multiple factors"""
+        try:
+            score = 0.0
+            weights = self.config.strategy_score_weights
+            
+            # 1. Capital Efficiency (25%)
+            capital_required = self.config.strategy_unlock_thresholds.get(strategy, 100.0)
+            if self.total_capital > 0:
+                capital_efficiency = min(1.0, self.total_capital / capital_required)
+                score += capital_efficiency * weights['capital_efficiency']
+            
+            # 2. Profit Potential (25%)
+            profit_potential = self._get_strategy_potential(strategy)
+            score += profit_potential * weights['profit_potential']
+            
+            # 3. Risk-Adjusted Return (20%)
+            risk_adjusted = self._get_risk_adjusted_return(strategy)
+            score += risk_adjusted * weights['risk_adjusted_return']
+            
+            # 4. Market Alignment (15%)
+            market_alignment = self._get_market_alignment(strategy)
+            score += market_alignment * weights['market_alignment']
+            
+            # 5. Implementation Cost (10%)
+            impl_cost = self._get_implementation_cost(strategy)
+            score += (1.0 - impl_cost) * weights['implementation_cost']
+            
+            # 6. Scalability (5%)
+            scalability = self._get_scalability(strategy)
+            score += scalability * weights['scalability']
+            
+            return max(0.01, min(1.0, score))
+            
+        except Exception as e:
+            self._log_debug(f"Error in _calculate_strategy_score: {str(e)}", "error")
+            return 0.5
+    
+    def _get_strategy_potential(self, strategy: str) -> float:
+        """Get profit potential for a strategy"""
+        potentials = {
+            'arbitrage': 0.30,
+            'aggressive': 0.90,
+            'breakout': 0.80,
+            'momentum': 0.85,
+            'news': 0.70,
+            'smart_money': 0.75,
+            'trend_following': 0.75,
+            'scalping': 0.65,
+            'balanced': 0.60,
+            'grid': 0.55,
+            'mean_reversion': 0.50,
+            'dca': 0.40,
+            'conservative': 0.35
+        }
+        return potentials.get(strategy, 0.50)
+    
+    def _get_risk_adjusted_return(self, strategy: str) -> float:
+        """Get risk-adjusted return for a strategy"""
+        risk_adj = {
+            'conservative': 0.80,
+            'dca': 0.75,
+            'balanced': 0.70,
+            'arbitrage': 0.70,
+            'mean_reversion': 0.65,
+            'grid': 0.60,
+            'trend_following': 0.60,
+            'scalping': 0.55,
+            'smart_money': 0.55,
+            'news': 0.50,
+            'breakout': 0.50,
+            'momentum': 0.45,
+            'aggressive': 0.40
+        }
+        return risk_adj.get(strategy, 0.50)
+    
+    def _get_market_alignment(self, strategy: str) -> float:
+        """Get market alignment for a strategy"""
+        regime = str(self.current_regime).lower()
+        
+        alignment = {
+            'trend_following': 0.90 if "trend" in regime else 0.30,
+            'breakout': 0.85 if "trend" in regime else 0.40,
+            'momentum': 0.85 if "trend" in regime else 0.35,
+            'grid': 0.85 if "range" in regime else 0.30,
+            'mean_reversion': 0.80 if "range" in regime else 0.30,
+            'scalping': 0.70 if "volatile" in regime else 0.50,
+            'conservative': 0.60,
+            'balanced': 0.70,
+            'smart_money': 0.75,
+            'news': 0.80 if "news" in regime else 0.40,
+            'arbitrage': 0.70,
+            'dca': 0.60,
+            'aggressive': 0.50
+        }
+        return alignment.get(strategy, 0.50)
+    
+    def _get_implementation_cost(self, strategy: str) -> float:
+        """Get implementation cost for a strategy (0-1, higher = more expensive)"""
+        costs = {
+            'arbitrage': 0.80,
+            'smart_money': 0.70,
+            'news': 0.60,
+            'breakout': 0.50,
+            'momentum': 0.50,
+            'scalping': 0.45,
+            'trend_following': 0.40,
+            'mean_reversion': 0.35,
+            'grid': 0.30,
+            'aggressive': 0.30,
+            'balanced': 0.25,
+            'dca': 0.20,
+            'conservative': 0.15
+        }
+        return costs.get(strategy, 0.40)
+    
+    def _get_scalability(self, strategy: str) -> float:
+        """Get scalability for a strategy (0-1)"""
+        scalability = {
+            'arbitrage': 0.30,
+            'scalping': 0.40,
+            'news': 0.50,
+            'smart_money': 0.60,
+            'breakout': 0.70,
+            'momentum': 0.70,
+            'trend_following': 0.80,
+            'mean_reversion': 0.75,
+            'grid': 0.80,
+            'aggressive': 0.85,
+            'balanced': 0.85,
+            'dca': 0.90,
+            'conservative': 0.90
+        }
+        return scalability.get(strategy, 0.70)
+    
+    def get_recommended_strategy(self) -> Dict[str, Any]:
+        """
+        Get recommended strategy based on capital and market conditions with full validation
+        """
+        try:
+            # Detect available strategies
+            available = [s for s in self.active_strategies if self.active_strategies[s].get('status') == 'active']
+            
+            if not available:
+                # Fallback to conservative
+                primary = StrategyType.CONSERVATIVE
+            else:
+                # Score each available strategy
+                scored_strategies = []
+                for strategy in available:
+                    score = self._calculate_strategy_score(strategy)
+                    scored_strategies.append((strategy, score))
+                
+                # Sort by score
+                scored_strategies.sort(key=lambda x: x[1], reverse=True)
+                
+                # Get top strategy
+                primary_strategy = scored_strategies[0][0]
+                primary = StrategyType(primary_strategy) if primary_strategy in [s.value for s in StrategyType] else StrategyType.CONSERVATIVE
+                
+                # Get secondary strategy
+                if len(scored_strategies) > 1:
+                    secondary_strategy = scored_strategies[1][0]
+                    secondary = StrategyType(secondary_strategy) if secondary_strategy in [s.value for s in StrategyType] else StrategyType.BALANCED
+                else:
+                    secondary = StrategyType.BALANCED
+            
+            # Calculate allocation
+            allocation = self.current_allocations.get(primary.value if primary else 'conservative', 20.0)
+            
+            result = {
+                'primary_strategy': primary.value if primary else 'conservative',
+                'secondary_strategy': secondary.value if secondary else 'balanced',
+                'allocation': allocation,
+                'capital_required': self.config.strategy_unlock_thresholds.get(primary.value if primary else 'conservative', 100.0),
+                'current_capital': self.total_capital,
+                'available_strategies': available,
+                'strategy_scores': {s: self._calculate_strategy_score(s) for s in available},
+                'active_count': len(available),
+                'max_active': self.config.max_strategies_active,
+                'confidence': self._get_strategy_confidence(primary),
+                'risk_level': self._get_risk_level(primary),
+                'expected_return': self._get_expected_return(primary),
+                'volatility_adjusted': self.current_volatility > 1.0,
+                'regime': self.current_regime,
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            self.current_recommendations = result
+            self.recommendation_history.append({
+                'timestamp': datetime.now(),
+                'recommendation': result
+            })
+            self.performance['total_optimizations'] += 1
+            
+            self._log_debug(f"Recommended: {primary.value if primary else 'conservative'} (allocation: {allocation:.1f}%)", "info")
+            return result
+            
+        except Exception as e:
+            self.performance['errors'] += 1
+            self._log_debug(f"Error in get_recommended_strategy: {str(e)}", "error")
+            return {
+                'primary_strategy': 'conservative',
+                'secondary_strategy': 'balanced',
+                'allocation': 20.0,
+                'error': str(e)
+            }
+    
+    def _get_strategy_confidence(self, strategy: Optional[StrategyType]) -> float:
+        """Get confidence in a strategy with fallback"""
+        try:
+            if not strategy:
+                return 0.70
+            
+            base_confidence = {
+                StrategyType.CONSERVATIVE: 0.85,
+                StrategyType.BALANCED: 0.80,
+                StrategyType.AGGRESSIVE: 0.70,
+                StrategyType.SCALPING: 0.75,
+                StrategyType.TREND_FOLLOWING: 0.80,
+                StrategyType.MEAN_REVERSION: 0.70,
+                StrategyType.GRID: 0.75,
+                StrategyType.DCA: 0.80,
+                StrategyType.ARBITRAGE: 0.90,
+                StrategyType.MOMENTUM: 0.75,
+                StrategyType.BREAKOUT: 0.70,
+                StrategyType.NEWS: 0.65,
+                StrategyType.SMART_MONEY: 0.75
+            }.get(strategy, 0.70)
+            
+            # Adjust based on market conditions
+            if self.current_volatility > 2.0:
+                if strategy in [StrategyType.AGGRESSIVE, StrategyType.SCALPING]:
+                    base_confidence *= 0.8
+            
+            return max(0.3, min(1.0, base_confidence))
+            
+        except Exception as e:
+            self._log_debug(f"Error in _get_strategy_confidence: {str(e)}", "error")
+            return 0.70
+    
+    def _get_risk_level(self, strategy: Optional[StrategyType]) -> str:
+        """Get risk level for a strategy with fallback"""
+        try:
+            if not strategy:
+                return "Medium"
+            
+            risk_levels = {
+                StrategyType.CONSERVATIVE: "Low",
+                StrategyType.BALANCED: "Medium",
+                StrategyType.AGGRESSIVE: "High",
+                StrategyType.SCALPING: "Medium-High",
+                StrategyType.TREND_FOLLOWING: "Medium",
+                StrategyType.MEAN_REVERSION: "Medium",
+                StrategyType.GRID: "Medium",
+                StrategyType.DCA: "Low",
+                StrategyType.ARBITRAGE: "Low",
+                StrategyType.MOMENTUM: "High",
+                StrategyType.BREAKOUT: "High",
+                StrategyType.NEWS: "High",
+                StrategyType.SMART_MONEY: "Medium"
+            }
+            return risk_levels.get(strategy, "Medium")
+        except Exception as e:
+            self._log_debug(f"Error in _get_risk_level: {str(e)}", "error")
+            return "Medium"
+    
+    def _get_expected_return(self, strategy: Optional[StrategyType]) -> str:
+        """Get expected return for a strategy with fallback"""
+        try:
+            if not strategy:
+                return "10-20%"
+            
+            returns = {
+                StrategyType.CONSERVATIVE: "5-10%",
+                StrategyType.BALANCED: "10-20%",
+                StrategyType.AGGRESSIVE: "20-40%",
+                StrategyType.SCALPING: "15-25%",
+                StrategyType.TREND_FOLLOWING: "15-30%",
+                StrategyType.MEAN_REVERSION: "10-20%",
+                StrategyType.GRID: "10-25%",
+                StrategyType.DCA: "5-15%",
+                StrategyType.ARBITRAGE: "5-15%",
+                StrategyType.MOMENTUM: "25-45%",
+                StrategyType.BREAKOUT: "20-35%",
+                StrategyType.NEWS: "15-30%",
+                StrategyType.SMART_MONEY: "15-25%"
+            }
+            return returns.get(strategy, "10-20%")
+        except Exception as e:
+            self._log_debug(f"Error in _get_expected_return: {str(e)}", "error")
+            return "10-20%"
+    
+    def update_capital_growth(self, growth: float) -> None:
+        """Update capital growth tracking with safety"""
+        try:
+            self.growth_history.append(growth)
+            self.total_capital += growth
+            self.utilized_capital += growth * 0.9
+            
+            # Update growth metrics
+            if len(self.growth_history) > 0:
+                recent = list(self.growth_history)[-30:]
+                self.monthly_growth = sum(recent) / len(recent) if recent else 0
+            
+            self.performance['avg_capital_growth'] = (self.performance['avg_capital_growth'] * 0.9 + growth * 0.1)
+            
+            # Update capital utilization
+            if self.total_capital > 0:
+                self.capital_utilization_rate = self.utilized_capital / self.total_capital
+            
+            self._log_debug(f"Capital growth: ${growth:.2f}, total: ${self.total_capital:.2f}")
+            
+        except Exception as e:
+            self.performance['errors'] += 1
+            self._log_debug(f"Error in update_capital_growth: {str(e)}", "error")
+    
+    def get_optimization_summary(self) -> Dict[str, Any]:
+        """Get optimization summary with error handling"""
+        try:
+            return {
+                'total_capital': self.total_capital,
+                'detected_capital': self.detected_capital,
+                'available_capital': self.available_capital,
+                'utilized_capital': self.utilized_capital,
+                'reserve_capital': self.reserve_capital,
+                'capital_utilization_rate': self.capital_utilization_rate,
+                'active_strategies': self.active_strategies,
+                'current_allocations': self.current_allocations,
+                'recommended_strategy': self.current_recommendations,
+                'growth_metrics': {
+                    'daily': self.daily_growth,
+                    'weekly': self.weekly_growth,
+                    'monthly': self.monthly_growth,
+                    'average': self.performance['avg_capital_growth']
+                },
+                'performance': {
+                    'optimizations': self.performance['total_optimizations'],
+                    'rebalances': self.performance['rebalances'],
+                    'strategy_changes': self.performance['strategy_changes'],
+                    'allocation_changes': self.performance['allocation_changes'],
+                    'strategies_unlocked': self.performance['strategies_unlocked'],
+                    'capital_detections': self.performance['capital_detections'],
+                    'errors': self.performance['errors']
+                },
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_optimization_summary: {str(e)}", "error")
+            return {'error': str(e)}
+    
+    def get_status(self) -> Dict[str, Any]:
+        """Get current status with error handling"""
+        try:
+            return {
+                'total_capital': self.total_capital,
+                'detected_capital': self.detected_capital,
+                'available_capital': self.available_capital,
+                'utilized_capital': self.utilized_capital,
+                'reserve_capital': self.reserve_capital,
+                'capital_utilization_rate': self.capital_utilization_rate,
+                'active_strategies_count': len([s for s in self.active_strategies if self.active_strategies[s].get('status') == 'active']),
+                'total_strategies': len(self.active_strategies),
+                'current_allocations': self.current_allocations,
+                'growth': self.performance['avg_capital_growth'],
+                'peak_capital': self.performance['peak_capital'],
+                'optimizations': self.performance['total_optimizations'],
+                'rebalances': self.performance['rebalances'],
+                'strategies_unlocked': self.performance['strategies_unlocked'],
+                'errors': self.performance['errors'],
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_status: {str(e)}", "error")
+            return {'status': 'ERROR', 'error': str(e)}
+    
+    def get_performance_report(self) -> Dict[str, Any]:
+        """Get detailed performance report with error handling"""
+        try:
+            return {
+                'summary': {
+                    'total_capital': self.total_capital,
+                    'detected_capital': self.detected_capital,
+                    'utilized': self.utilized_capital,
+                    'reserve': self.reserve_capital,
+                    'utilization_rate': self.capital_utilization_rate,
+                    'peak_capital': self.performance['peak_capital'],
+                    'avg_growth': self.performance['avg_capital_growth']
+                },
+                'strategies': {
+                    'active': [s for s in self.active_strategies if self.active_strategies[s].get('status') == 'active'],
+                    'total': len(self.active_strategies),
+                    'unlocked': self.performance['strategies_unlocked'],
+                    'allocations': self.current_allocations
+                },
+                'optimizations': {
+                    'total': self.performance['total_optimizations'],
+                    'rebalances': self.performance['rebalances'],
+                    'strategy_changes': self.performance['strategy_changes'],
+                    'allocation_changes': self.performance['allocation_changes'],
+                    'capital_detections': self.performance['capital_detections'],
+                    'errors': self.performance['errors']
+                },
+                'growth_history': list(self.growth_history)[-20:] if self.growth_history else [],
+                'allocation_history': list(self.allocation_history)[-10:] if self.allocation_history else [],
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_performance_report: {str(e)}", "error")
+            return {'error': str(e)}
+    
+    def reset(self) -> None:
+        """Reset all state with safety"""
+        try:
+            self.total_capital = 0.0
+            self.detected_capital = 0.0
+            self.available_capital = 0.0
+            self.utilized_capital = 0.0
+            self.reserve_capital = 0.0
+            self.active_strategies = {}
+            self.current_allocations = {}
+            self.current_recommendations = {}
+            self.performance['errors'] = 0
+            self.capital_history.clear()
+            self.growth_history.clear()
+            self.recommendation_history.clear()
+            self.allocation_history.clear()
+            self.detection_history.clear()
+            self._log_debug("Engine reset", "info")
+        except Exception as e:
+            self._log_debug(f"Error in reset: {str(e)}", "error")

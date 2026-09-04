@@ -1,6 +1,7 @@
 import json
 import os
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional, Any
 from loguru import logger
@@ -90,3 +91,80 @@ class BaseBot:
 
     def get_performance(self) -> Dict:
         return self.performance_metrics
+
+
+@dataclass
+class Position:
+    """Shared position record for bots with an internal execution ledger."""
+
+    id: str
+    side: str
+    entry_price: float
+    quantity: float
+    current_price: float
+    stop_loss: float = 0.0
+    take_profit: float = 0.0
+    realized_pnl: float = 0.0
+    is_open: bool = True
+    entry_time: datetime = field(default_factory=datetime.now)
+
+
+class UltraAdvancedBaseBot:
+    """Small shared lifecycle base for bots that manage simulated positions."""
+
+    def __init__(self, bot_name: str, symbol: str, initial_capital: float = 10000.0):
+        self.bot_name = bot_name
+        self.symbol = symbol
+        self.current_capital = float(initial_capital)
+        self.positions: Dict[str, Position] = {}
+        self.closed_positions: List[Position] = []
+        self.daily_pnl = 0.0
+        self.max_drawdown = 0.0
+        self.peak_capital = self.current_capital
+        self.logger = logger
+
+    def open_position(self, side: str, price: float, confidence: float, quantity: float) -> Optional[Position]:
+        normalized_side = {"long": "BUY", "short": "SELL", "buy": "BUY", "sell": "SELL"}.get(side.lower())
+        if normalized_side is None or price <= 0 or quantity <= 0 or not 0 <= confidence <= 1:
+            return None
+        position_id = f"{self.symbol}-{len(self.positions) + len(self.closed_positions) + 1}"
+        position = Position(
+            id=position_id,
+            side=normalized_side,
+            entry_price=float(price),
+            quantity=float(quantity),
+            current_price=float(price),
+        )
+        self.positions[position_id] = position
+        return position
+
+    def close_position(self, position_id: str, price: float, reason: str) -> Optional[Position]:
+        position = self.positions.pop(position_id, None)
+        if position is None or price <= 0:
+            return None
+        position.current_price = float(price)
+        direction = 1 if position.side == "BUY" else -1
+        position.realized_pnl = (position.current_price - position.entry_price) * position.quantity * direction
+        position.is_open = False
+        self.current_capital += position.realized_pnl
+        self.daily_pnl += position.realized_pnl
+        self.peak_capital = max(self.peak_capital, self.current_capital)
+        if self.peak_capital > 0:
+            drawdown = (self.peak_capital - self.current_capital) / self.peak_capital
+            self.max_drawdown = max(self.max_drawdown, drawdown)
+        self.closed_positions.append(position)
+        return position
+
+    def get_performance_metrics(self) -> Dict[str, Any]:
+        wins = sum(1 for position in self.closed_positions if position.realized_pnl > 0)
+        total = len(self.closed_positions)
+        return {
+            "total_trades": total,
+            "winning_trades": wins,
+            "losing_trades": total - wins,
+            "win_rate": wins / total if total else 0.0,
+            "total_profit": sum(position.realized_pnl for position in self.closed_positions),
+            "current_capital": self.current_capital,
+            "open_positions": len(self.positions),
+            "max_drawdown": self.max_drawdown,
+        }

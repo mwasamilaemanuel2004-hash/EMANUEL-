@@ -2,327 +2,816 @@
 <html lang="en">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ESMH.TRADE - AI Trading Platform</title>
-    <link rel="manifest" href="pwa/manifest.json">
-    <link rel="stylesheet" href="stye/style.css">
-    <meta name="theme-color" content="#1a1a2e">
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ESH TRADE · Welcome</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800;14..32,900&display=swap"
+        rel="stylesheet" />
+    <style>
+        /* ================================================================
+           RESET & BASE
+           ================================================================ */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #0a0e17;
+            min-height: 100vh;
+            overflow-x: hidden;
+            color: #ffffff;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* ================================================================
+           SPLASH SCREEN - FIXED
+           ================================================================ */
+        .splash-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100vh;
+            background: linear-gradient(135deg, #0b1a2e 0%, #0a0e17 50%, #1e3a8a 100%);
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.6s ease, visibility 0.6s ease;
+        }
+
+        .splash-screen.hidden {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        .splash-logo {
+            font-size: 3.5rem;
+            font-weight: 900;
+            letter-spacing: 0.15em;
+            animation: logoPulse 1.5s ease infinite;
+            user-select: none;
+        }
+
+        .splash-logo .esh {
+            color: #ffffff;
+        }
+
+        .splash-logo .trade {
+            background: linear-gradient(135deg, #2563eb, #60a5fa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .splash-tagline {
+            font-size: 0.85rem;
+            color: #94a3b8;
+            margin-top: 0.8rem;
+            letter-spacing: 0.4em;
+            text-transform: uppercase;
+            animation: fadeInUp 0.8s ease 0.5s both;
+            user-select: none;
+        }
+
+        .splash-loader {
+            width: 250px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            margin-top: 2.5rem;
+            overflow: hidden;
+        }
+
+        .splash-loader-bar {
+            display: block;
+            width: 50%;
+            height: 100%;
+            background: linear-gradient(90deg, #2563eb, #60a5fa);
+            border-radius: 10px;
+            animation: loaderSlide 1.2s ease infinite;
+        }
+
+        @keyframes logoPulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.06);
+            }
+        }
+
+        @keyframes loaderSlide {
+            0% {
+                transform: translateX(-100%);
+            }
+
+            100% {
+                transform: translateX(300%);
+            }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        @keyframes floatY {
+
+            0%,
+            100% {
+                transform: translateY(0);
+            }
+
+            50% {
+                transform: translateY(-12px);
+            }
+        }
+
+        @keyframes spin {
+            from {
+                transform: rotate(0deg);
+            }
+
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes ripple {
+            from {
+                transform: scale(0);
+                opacity: 1;
+            }
+
+            to {
+                transform: scale(4);
+                opacity: 0;
+            }
+        }
+
+        /* ================================================================
+           PARTICLE BACKGROUND - FIXED
+           ================================================================ */
+        .particles {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+            overflow: hidden;
+        }
+
+        .particle {
+            position: absolute;
+            border-radius: 50%;
+            opacity: 0.3;
+            animation: floatParticle linear infinite;
+            will-change: transform, opacity;
+        }
+
+        @keyframes floatParticle {
+            0% {
+                transform: translateY(100vh) scale(0);
+                opacity: 0;
+            }
+
+            10% {
+                opacity: 0.4;
+            }
+
+            90% {
+                opacity: 0.4;
+            }
+
+            100% {
+                transform: translateY(-10vh) scale(1.5);
+                opacity: 0;
+            }
+        }
+
+        /* ================================================================
+           LANDING PAGE
+           ================================================================ */
+        .landing {
+            position: relative;
+            z-index: 1;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 2rem;
+            background: linear-gradient(180deg, rgba(11, 26, 46, 0.9) 0%, rgba(10, 14, 23, 0.95) 100%);
+            opacity: 0;
+            animation: fadeIn 0.8s ease 3.1s forwards;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: rgba(37, 99, 235, 0.15);
+            color: #60a5fa;
+            padding: 0.4rem 1.2rem;
+            border-radius: 30px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            border: 1px solid rgba(37, 99, 235, 0.3);
+            margin-bottom: 1.5rem;
+            animation: fadeInUp 0.6s ease 3.2s both;
+        }
+
+        .hero-badge i {
+            animation: spin 4s linear infinite;
+        }
+
+        .hero-title {
+            font-size: 4rem;
+            font-weight: 900;
+            line-height: 1.1;
+            margin-bottom: 1.5rem;
+            animation: fadeInUp 0.8s ease 3.4s both;
+        }
+
+        .hero-title .gradient-text {
+            background: linear-gradient(135deg, #2563eb, #60a5fa, #93c5fd);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero-subtitle {
+            font-size: 1.1rem;
+            color: #94a3b8;
+            max-width: 650px;
+            margin: 0 auto 2.5rem;
+            line-height: 1.8;
+            animation: fadeInUp 0.8s ease 3.6s both;
+        }
+
+        .hero-cta {
+            display: flex;
+            gap: 1.2rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            animation: fadeInUp 0.8s ease 3.8s both;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            color: #fff;
+            border: none;
+            padding: 1rem 2.5rem;
+            border-radius: 50px;
+            font-weight: 700;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.7rem;
+            text-decoration: none;
+            letter-spacing: 0.02em;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .btn:hover::before {
+            left: 100%;
+        }
+
+        .btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 40px rgba(37, 99, 235, 0.4);
+        }
+
+        .btn-outline {
+            background: transparent;
+            color: #fff;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-outline:hover {
+            border-color: #2563eb;
+            background: rgba(37, 99, 235, 0.1);
+            box-shadow: 0 15px 40px rgba(37, 99, 235, 0.2);
+        }
+
+        /* ================================================================
+           MARKET CARDS - FIXED
+           ================================================================ */
+        .market-cards {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.5rem;
+            max-width: 1000px;
+            width: 100%;
+            margin: 3rem auto 0;
+            animation: fadeInUp 0.8s ease 4s both;
+        }
+
+        .market-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 20px;
+            padding: 2rem 1.5rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.4s ease;
+            position: relative;
+            overflow: hidden;
+            text-decoration: none;
+            color: #fff;
+            animation: floatY 4s ease infinite;
+            display: block;
+        }
+
+        .market-card:nth-child(2) {
+            animation-delay: 0.5s;
+        }
+
+        .market-card:nth-child(3) {
+            animation-delay: 1s;
+        }
+
+        .market-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(37, 99, 235, 0.1), transparent);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .market-card:hover {
+            transform: translateY(-10px);
+            border-color: #2563eb;
+            box-shadow: 0 20px 50px rgba(37, 99, 235, 0.2);
+        }
+
+        .market-card:hover::before {
+            opacity: 1;
+        }
+
+        .market-card-icon {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            background: rgba(37, 99, 235, 0.15);
+            color: #60a5fa;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1.2rem;
+            font-size: 1.8rem;
+            position: relative;
+            transition: all 0.4s;
+        }
+
+        .market-card:hover .market-card-icon {
+            background: #2563eb;
+            color: #fff;
+            transform: scale(1.1) rotate(10deg);
+        }
+
+        .market-card-title {
+            font-size: 1.3rem;
+            font-weight: 700;
+            position: relative;
+        }
+
+        .market-card-desc {
+            font-size: 0.85rem;
+            color: #94a3b8;
+            margin-top: 0.5rem;
+            position: relative;
+            line-height: 1.6;
+        }
+
+        .market-card-stats {
+            display: flex;
+            justify-content: center;
+            gap: 1.5rem;
+            margin-top: 1.2rem;
+            position: relative;
+        }
+
+        .market-card-stats span {
+            font-size: 0.7rem;
+            color: #64748b;
+            font-weight: 500;
+        }
+
+        /* Ripple effect */
+        .ripple {
+            position: absolute;
+            border-radius: 50%;
+            background: rgba(37, 99, 235, 0.3);
+            width: 200px;
+            height: 200px;
+            margin-top: -100px;
+            margin-left: -100px;
+            animation: ripple 0.6s ease-out;
+            pointer-events: none;
+        }
+
+        /* ================================================================
+           STATS BAR
+           ================================================================ */
+        .stats-bar {
+            display: flex;
+            justify-content: center;
+            gap: 3rem;
+            margin-top: 3rem;
+            flex-wrap: wrap;
+            animation: fadeInUp 0.8s ease 4.2s both;
+        }
+
+        .stat-item {
+            text-align: center;
+            min-width: 120px;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 800;
+            color: #60a5fa;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: #94a3b8;
+            margin-top: 0.2rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        /* ================================================================
+           RESPONSIVE - FIXED
+           ================================================================ */
+        @media (max-width: 900px) {
+            .hero-title {
+                font-size: 2.5rem;
+            }
+
+            .market-cards {
+                grid-template-columns: 1fr;
+                max-width: 500px;
+            }
+
+            .stats-bar {
+                gap: 1.5rem;
+            }
+
+            .splash-logo {
+                font-size: 2.5rem;
+            }
+        }
+
+        @media (max-width: 500px) {
+            .hero-title {
+                font-size: 2rem;
+            }
+
+            .hero-cta {
+                flex-direction: column;
+                width: 100%;
+                max-width: 300px;
+                margin: 0 auto;
+            }
+
+            .btn {
+                justify-content: center;
+                width: 100%;
+            }
+
+            .market-card {
+                padding: 1.5rem 1rem;
+            }
+
+            .stats-bar {
+                gap: 1rem;
+            }
+
+            .stat-value {
+                font-size: 1.5rem;
+            }
+        }
+    </style>
 </head>
 
 <body>
-    <div id="app">
-        <!-- Header -->
-        <header class="header">
-            <div class="logo">
-                <span class="logo-icon">📈</span>
-                <span class="logo-text">ESMH.TRADE</span>
-            </div>
-            <nav class="nav">
-                <a href="#dashboard" class="nav-link active">Dashboard</a>
-                <a href="#terminal" class="nav-link">Terminal</a>
-                <a href="#bots" class="nav-link">Bots</a>
-                <a href="#backtest" class="nav-link">Backtest</a>
-                <a href="#settings" class="nav-link">Settings</a>
-            </nav>
-            <div class="header-actions">
-                <button class="btn btn-icon" id="notificationsBtn" title="Notifications">🔔</button>
-                <button class="btn btn-icon" id="settingsBtn" title="Settings">⚙️</button>
-            </div>
-        </header>
 
-        <!-- Main Content -->
-        <main class="main-content">
-            <!-- Dashboard Section -->
-            <section id="dashboard" class="section active">
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-label">Total PnL</div>
-                        <div class="stat-value" id="totalPnl">$0.00</div>
-                        <div class="stat-change positive">+0.00%</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-label">Win Rate</div>
-                        <div class="stat-value" id="winRate">0%</div>
-                        <div class="stat-change">Last 30 days</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-label">Active Bots</div>
-                        <div class="stat-value" id="activeBots">0</div>
-                        <div class="stat-change">Running</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-label">Open Positions</div>
-                        <div class="stat-value" id="openPositions">0</div>
-                        <div class="stat-change">Across all bots</div>
-                    </div>
-                </div>
-
-                <!-- Trading Panel -->
-                <div class="trading-panel">
-                    <div class="panel-header">
-                        <h2>Quick Trade</h2>
-                        <div class="panel-tabs">
-                            <button class="tab-btn active" data-tab="single">Single</button>
-                            <button class="tab-btn" data-tab="multi">Multi-Trade</button>
-                        </div>
-                    </div>
-                    
-                    <!-- Single Trade Form -->
-                    <div class="tab-content active" id="singleTrade">
-                        <form id="tradeForm" class="trade-form">
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label for="symbol">Symbol</label>
-                                    <input type="text" id="symbol" placeholder="BTCUSDT" required>
-                                </div>
-                                <div class="form-group">
-                                    <label for="side">Side</label>
-                                    <select id="side" required>
-                                        <option value="BUY">BUY</option>
-                                        <option value="SELL">SELL</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label for="quantity">Quantity</label>
-                                    <input type="number" id="quantity" placeholder="0.001" step="0.0001" required>
-                                </div>
-                                <div class="form-group">
-                                    <label for="price">Price (optional)</label>
-                                    <input type="number" id="price" placeholder="Market" step="0.01">
-                                </div>
-                            </div>
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label for="stopLoss">Stop Loss</label>
-                                    <input type="number" id="stopLoss" placeholder="0.00" step="0.01">
-                                </div>
-                                <div class="form-group">
-                                    <label for="takeProfit">Take Profit</label>
-                                    <input type="number" id="takeProfit" placeholder="0.00" step="0.01">
-                                </div>
-                            </div>
-                            <button type="submit" class="btn btn-primary btn-block">Place Order</button>
-                        </form>
-                    </div>
-
-                    <!-- Multi Trade Form -->
-                    <div class="tab-content" id="multiTrade">
-                        <div class="multi-trade-header">
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="enableMultiTrade">
-                                <span>Enable Multi-Trade Mode</span>
-                            </label>
-                            <p class="hint">Trade multiple pairs simultaneously (requires permission)</p>
-                        </div>
-                        <div id="multiTradeOrders" class="multi-trade-orders">
-                            <!-- Dynamic order rows will be added here -->
-                        </div>
-                        <button type="button" class="btn btn-secondary" id="addOrderRow">+ Add Order</button>
-                        <button type="button" class="btn btn-primary btn-block" id="placeMultiOrders">Place All Orders</button>
-                    </div>
-                </div>
-
-                <!-- Positions Table -->
-                <div class="panel">
-                    <div class="panel-header">
-                        <h2>Open Positions</h2>
-                        <button class="btn btn-sm" id="refreshPositions">Refresh</button>
-                    </div>
-                    <div class="table-container">
-                        <table class="data-table" id="positionsTable">
-                            <thead>
-                                <tr>
-                                    <th>Symbol</th>
-                                    <th>Side</th>
-                                    <th>Entry</th>
-                                    <th>Quantity</th>
-                                    <th>PnL</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td colspan="6" class="empty-state">No open positions</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Terminal Section -->
-            <section id="terminal" class="section">
-                <div class="terminal-container">
-                    <div class="terminal-header">
-                        <h2>Trading Terminal</h2>
-                        <div class="terminal-status">
-                            <span class="status-dot connected"></span>
-                            <span>Connected</span>
-                        </div>
-                    </div>
-                    <div class="terminal-output" id="terminalOutput">
-                        <div class="terminal-line">ESMH.TRADE Terminal v2.0.0</div>
-                        <div class="terminal-line">Type 'help' for available commands</div>
-                    </div>
-                    <div class="terminal-input">
-                        <span class="prompt">></span>
-                        <input type="text" id="terminalInput" placeholder="Enter command...">
-                    </div>
-                </div>
-            </section>
-
-            <!-- Bots Section -->
-            <section id="bots" class="section">
-                <div class="panel">
-                    <div class="panel-header">
-                        <h2>Trading Bots</h2>
-                        <button class="btn btn-primary" id="addBot">+ Add Bot</button>
-                    </div>
-                    <div class="bots-grid" id="botsGrid">
-                        <!-- Bot cards will be rendered here -->
-                    </div>
-                </div>
-            </section>
-
-            <!-- Backtest Section -->
-            <section id="backtest" class="section">
-                <div class="panel">
-                    <div class="panel-header">
-                        <h2>Backtesting</h2>
-                    </div>
-                    <form id="backtestForm" class="backtest-form">
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="btSymbol">Symbol</label>
-                                <input type="text" id="btSymbol" placeholder="BTCUSDT" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="btStrategy">Strategy</label>
-                                <select id="btStrategy">
-                                    <option value="trend_follow">Trend Following</option>
-                                    <option value="mean_reversion">Mean Reversion</option>
-                                    <option value="breakout">Breakout</option>
-                                    <option value="arbitrage">Arbitrage</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="btStartDate">Start Date</label>
-                                <input type="date" id="btStartDate" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="btEndDate">End Date</label>
-                                <input type="date" id="btEndDate" required>
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="btInitialCapital">Initial Capital</label>
-                                <input type="number" id="btInitialCapital" value="10000" step="100">
-                            </div>
-                            <div class="form-group">
-                                <label for="btRiskPerTrade">Risk Per Trade (%)</label>
-                                <input type="number" id="btRiskPerTrade" value="2" step="0.5" min="0.5" max="10">
-                            </div>
-                        </div>
-                        <button type="submit" class="btn btn-primary btn-block">Run Backtest</button>
-                    </form>
-                    <div id="backtestResults" class="backtest-results" style="display:none;">
-                        <!-- Results will be shown here -->
-                    </div>
-                </div>
-            </section>
-
-            <!-- Settings Section -->
-            <section id="settings" class="section">
-                <div class="panel">
-                    <div class="panel-header">
-                        <h2>Settings</h2>
-                    </div>
-                    <div class="settings-grid">
-                        <div class="setting-item">
-                            <label>Email Notifications</label>
-                            <label class="switch">
-                                <input type="checkbox" id="emailNotifications">
-                                <span class="slider"></span>
-                            </label>
-                        </div>
-                        <div class="setting-item">
-                            <label>Telegram Alerts</label>
-                            <label class="switch">
-                                <input type="checkbox" id="telegramAlerts">
-                                <span class="slider"></span>
-                            </label>
-                        </div>
-                        <div class="setting-item">
-                            <label>Multi-Trade Permission</label>
-                            <label class="switch">
-                                <input type="checkbox" id="multiTradePermission">
-                                <span class="slider"></span>
-                            </label>
-                        </div>
-                        <div class="setting-item">
-                            <label>Risk Level</label>
-                            <select id="riskLevel">
-                                <option value="low">Low (1% per trade)</option>
-                                <option value="medium" selected>Medium (2% per trade)</option>
-                                <option value="high">High (5% per trade)</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-            </section>
-        </main>
-
-        <!-- Bottom Navigation (Mobile) -->
-        <nav class="bottom-nav">
-            <a href="#dashboard" class="bottom-nav-item active">
-                <span class="icon">📊</span>
-                <span class="label">Dashboard</span>
-            </a>
-            <a href="#terminal" class="bottom-nav-item">
-                <span class="icon">💻</span>
-                <span class="label">Terminal</span>
-            </a>
-            <a href="#bots" class="bottom-nav-item">
-                <span class="icon">🤖</span>
-                <span class="label">Bots</span>
-            </a>
-            <a href="#backtest" class="bottom-nav-item">
-                <span class="icon">📈</span>
-                <span class="label">Backtest</span>
-            </a>
-            <a href="#settings" class="bottom-nav-item">
-                <span class="icon">⚙️</span>
-                <span class="label">Settings</span>
-            </a>
-        </nav>
-
-        <!-- Footer -->
-        <footer class="footer">
-            <div class="footer-content">
-                <p>&copy; 2026 ESMH.TRADE - AI-Powered Trading Platform</p>
-                <div class="footer-links">
-                    <a href="#about">About</a>
-                    <a href="#docs">Documentation</a>
-                    <a href="#support">Support</a>
-                </div>
-            </div>
-        </footer>
+    <!-- ============================================================
+    SPLASH SCREEN
+    ============================================================ -->
+    <div class="splash-screen" id="splashScreen">
+        <div class="splash-logo">
+            <span class="esh">ESH</span><span class="trade">TRADE</span>
+        </div>
+        <div class="splash-tagline">Smart Trading Platform</div>
+        <div class="splash-loader">
+            <span class="splash-loader-bar"></span>
+        </div>
     </div>
 
-    <!-- Notification Toast Container -->
-    <div id="toastContainer" class="toast-container"></div>
+    <!-- ============================================================
+    PARTICLE BACKGROUND
+    ============================================================ -->
+    <div class="particles" id="particles"></div>
 
-    <!-- Modal Container -->
-    <div id="modalContainer" class="modal-container"></div>
+    <!-- ============================================================
+    LANDING PAGE
+    ============================================================ -->
+    <div class="landing">
+        <div class="hero-badge">
+            <i class="fas fa-bolt"></i> Welcome to the Future of Trading
+        </div>
 
-    <script src="script/app.js"></script>
+        <h1 class="hero-title">
+            Trade <span class="gradient-text">Forex, Crypto</span><br>
+            & Commodities
+        </h1>
+
+        <p class="hero-subtitle">
+            Join thousands of traders using ESH TRADE's AI-powered platform.
+            Start with just $5 and trade like a professional across 3 global markets.
+        </p>
+
+        <div class="hero-cta">
+            <a href="dashboard.html" class="btn" id="btnStart">
+                <i class="fas fa-rocket"></i> Start Trading
+            </a>
+            <a href="about.html" class="btn btn-outline" id="btnLearn">
+                <i class="fas fa-info-circle"></i> Learn More
+            </a>
+        </div>
+
+        <!-- Market Cards -->
+        <div class="market-cards">
+            <a href="dashboard.html?market=forex" class="market-card" data-market="forex">
+                <div class="market-card-icon"><i class="fas fa-dollar-sign"></i></div>
+                <div class="market-card-title">Forex</div>
+                <div class="market-card-desc">Trade 50+ currency pairs with high leverage and tight spreads</div>
+                <div class="market-card-stats">
+                    <span>50+ Pairs</span>
+                    <span>24/5</span>
+                    <span>100:1</span>
+                </div>
+            </a>
+            <a href="dashboard.html?market=crypto" class="market-card" data-market="crypto">
+                <div class="market-card-icon"><i class="fab fa-bitcoin"></i></div>
+                <div class="market-card-title">Crypto</div>
+                <div class="market-card-desc">Buy and sell 100+ digital assets with 24/7 market access</div>
+                <div class="market-card-stats">
+                    <span>100+ Coins</span>
+                    <span>24/7</span>
+                    <span>20:1</span>
+                </div>
+            </a>
+            <a href="dashboard.html?market=commodities" class="market-card" data-market="commodities">
+                <div class="market-card-icon"><i class="fas fa-gem"></i></div>
+                <div class="market-card-title">Commodities</div>
+                <div class="market-card-desc">Gold, Silver, Oil and more - diversify your portfolio</div>
+                <div class="market-card-stats">
+                    <span>20+ Assets</span>
+                    <span>Global</span>
+                    <span>10:1</span>
+                </div>
+            </a>
+        </div>
+
+        <!-- Stats Bar -->
+        <div class="stats-bar">
+            <div class="stat-item">
+                <div class="stat-value" id="statTraders">0</div>
+                <div class="stat-label">Active Traders</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="statCountries">0</div>
+                <div class="stat-label">Countries</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="statTrades">0</div>
+                <div class="stat-label">Trades Executed</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="statUptime">0</div>
+                <div class="stat-label">Uptime</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================
+    JAVASCRIPT - DEBUGGED
+    ============================================================ -->
+    <script>
+        (function () {
+            'use strict';
+
+            // ===== DOM ELEMENTS =====
+            const splashScreen = document.getElementById('splashScreen');
+            const particlesContainer = document.getElementById('particles');
+            const statTraders = document.getElementById('statTraders');
+            const statCountries = document.getElementById('statCountries');
+            const statTrades = document.getElementById('statTrades');
+            const statUptime = document.getElementById('statUptime');
+            const marketCards = document.querySelectorAll('.market-card');
+            const btnStart = document.getElementById('btnStart');
+            const btnLearn = document.getElementById('btnLearn');
+
+            // ===== PARTICLES =====
+            function createParticles() {
+                if (!particlesContainer) return;
+
+                const count = 60;
+                const colors = ['#2563eb', '#60a5fa', '#93c5fd', '#3b82f6'];
+                const fragment = document.createDocumentFragment();
+
+                for (let i = 0; i < count; i++) {
+                    const particle = document.createElement('div');
+                    particle.className = 'particle';
+
+                    const size = Math.random() * 4 + 2;
+                    const duration = Math.random() * 12 + 8;
+                    const delay = Math.random() * 10;
+                    const left = Math.random() * 100;
+                    const color = colors[Math.floor(Math.random() * colors.length)];
+
+                    particle.style.cssText = `
+                        left: ${left}%;
+                        width: ${size}px;
+                        height: ${size}px;
+                        background: ${color};
+                        animation-duration: ${duration}s;
+                        animation-delay: ${delay}s;
+                        opacity: ${Math.random() * 0.3 + 0.1};
+                    `;
+
+                    fragment.appendChild(particle);
+                }
+
+                particlesContainer.appendChild(fragment);
+            }
+            createParticles();
+
+            // ===== SPLASH SCREEN =====
+            function hideSplash() {
+                if (splashScreen) {
+                    splashScreen.classList.add('hidden');
+                }
+            }
+
+            // Hide splash after 3 seconds
+            setTimeout(hideSplash, 3000);
+
+            // Failsafe: hide splash on any click after 1 second
+            setTimeout(() => {
+                document.addEventListener('click', hideSplash, { once: true });
+            }, 1000);
+
+            // ===== COUNTER ANIMATION =====
+            function animateCounter(element, target, decimals, suffix) {
+                if (!element) return;
+
+                const duration = 2000;
+                const startTime = performance.now();
+
+                function formatValue(value) {
+                    if (decimals > 0) {
+                        return value.toFixed(decimals) + suffix;
+                    }
+                    if (target >= 1000000) {
+                        return (value / 1000000).toFixed(1) + 'M' + suffix;
+                    }
+                    if (target >= 1000) {
+                        return Math.floor(value).toLocaleString() + suffix;
+                    }
+                    return Math.floor(value) + suffix;
+                }
+
+                function update(currentTime) {
+                    const elapsed = currentTime - startTime;
+                    const progress = Math.min(elapsed / duration, 1);
+                    const eased = 1 - Math.pow(1 - progress, 3);
+                    const value = target * eased;
+
+                    element.textContent = formatValue(value);
+
+                    if (progress < 1) {
+                        requestAnimationFrame(update);
+                    } else {
+                        element.textContent = formatValue(target);
+                    }
+                }
+
+                requestAnimationFrame(update);
+            }
+
+            // Start counters after splash
+            setTimeout(() => {
+                animateCounter(statTraders, 50000, 0, '+');
+                animateCounter(statCountries, 150, 0, '+');
+                animateCounter(statTrades, 1000000, 0, '+');
+                animateCounter(statUptime, 99.9, 1, '%');
+            }, 3200);
+
+            // ===== RIPPLE EFFECT =====
+            marketCards.forEach(card => {
+                card.addEventListener('click', function (e) {
+                    const rect = this.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+
+                    const ripple = document.createElement('span');
+                    ripple.className = 'ripple';
+                    ripple.style.left = x + 'px';
+                    ripple.style.top = y + 'px';
+
+                    this.appendChild(ripple);
+
+                    setTimeout(() => {
+                        ripple.remove();
+                    }, 600);
+                });
+            });
+
+            // ===== BUTTON HOVER SOUND (Visual feedback) =====
+            btnStart?.addEventListener('mouseenter', () => {
+                btnStart.style.transform = 'translateY(-3px) scale(1.02)';
+            });
+            btnStart?.addEventListener('mouseleave', () => {
+                btnStart.style.transform = '';
+            });
+
+            // ===== KEYBOARD NAVIGATION =====
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && document.activeElement === btnStart) {
+                    window.location.href = 'dashboard.html';
+                }
+            });
+
+            // ===== CONSOLE WELCOME =====
+            console.log('%c 🚀 ESH TRADE ', 'background:linear-gradient(135deg,#0b1a2e,#2563eb); color:#fff; font-size:1.5rem; padding:1rem 2rem; border-radius:12px; font-weight:bold;');
+            console.log('%c 💎 Forex · Crypto · Commodities ', 'color:#64748b; font-size:0.9rem;');
+            console.log('%c 💰 Start with just $5 ', 'color:#60a5fa; font-size:0.8rem;');
+            console.log('%c 👑 Admin: admin123 / eSmwas@2004 ', 'color:#4ade80; font-size:0.7rem;');
+        })();
+    </script>
+
 </body>
 
 </html>

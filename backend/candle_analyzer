@@ -1,18 +1,22 @@
-# backend/app/core/candle_analyzer.py
 """
 CANDLE ANALYZER - ULTRA ADVANCED (PURE PYTHON)
 Inachambua muundo wa candles na inatambua patterns
-Features: 25+ Candlestick Patterns, Reversal Detection, Continuation Patterns
+Features: 30+ Candlestick Patterns, Reversal Detection, Continuation Patterns, 
+         Multi-Timeframe Analysis, Pattern Strength Scoring, Real-time Monitoring
 """
 
 import math
 import json
+import time
+import os
 from typing import Dict, List, Optional, Tuple, Any
 from datetime import datetime
 from dataclasses import dataclass, field
 from enum import Enum
 from loguru import logger
 import traceback
+from collections import deque
+import threading
 
 # ============================================
 # ENUMS
@@ -39,6 +43,8 @@ class CandleType(Enum):
     DOJI = "DOJI"
     SPINNING_TOP = "SPINNING_TOP"
     MARUBOZU = "MARUBOZU"
+    HAMMER = "HAMMER"
+    SHOOTING_STAR = "SHOOTING_STAR"
 
 # ============================================
 # DATA CLASSES
@@ -59,6 +65,8 @@ class Candle:
     body_ratio: float = 0.0
     candle_type: str = "NEUTRAL"
     strength: str = "MODERATE"
+    range_percent: float = 0.0
+    close_percent: float = 0.0
 
 @dataclass
 class PatternResult:
@@ -71,6 +79,8 @@ class PatternResult:
     timestamp: datetime
     description: str
     metadata: Dict[str, Any] = field(default_factory=dict)
+    trend: str = "NEUTRAL"
+    volume_confirmation: bool = False
 
 # ============================================
 # CANDLE ANALYZER CLASS
@@ -79,11 +89,13 @@ class PatternResult:
 class CandleAnalyzer:
     """
     ULTRA ADVANCED CANDLESTICK PATTERN ANALYZER (PURE PYTHON)
-    - 25+ Candlestick Patterns
+    - 30+ Candlestick Patterns
     - Pattern strength scoring
     - Reversal detection
     - Continuation patterns
     - Pattern accuracy tracking
+    - Multi-timeframe support
+    - Volume confirmation
     """
     
     def __init__(self, config: Optional[Dict] = None):
@@ -93,6 +105,7 @@ class CandleAnalyzer:
         # PATTERN REGISTRY
         # ============================================
         self.patterns = {
+            # Reversal Patterns
             'hammer': self._detect_hammer,
             'shooting_star': self._detect_shooting_star,
             'engulfing_bullish': self._detect_engulfing_bullish,
@@ -104,19 +117,30 @@ class CandleAnalyzer:
             'harami_bullish': self._detect_harami_bullish,
             'harami_bearish': self._detect_harami_bearish,
             'doji_star': self._detect_doji_star,
-            'three_white_soldiers': self._detect_three_white_soldiers,
-            'three_black_crows': self._detect_three_black_crows,
             'tweezers_bottom': self._detect_tweezers_bottom,
             'tweezers_top': self._detect_tweezers_top,
+            'dragonfly_doji': self._detect_dragonfly_doji,
+            'gravestone_doji': self._detect_gravestone_doji,
+            # Continuation Patterns
+            'three_white_soldiers': self._detect_three_white_soldiers,
+            'three_black_crows': self._detect_three_black_crows,
             'rising_three': self._detect_rising_three,
             'falling_three': self._detect_falling_three,
+            'marubozu_bullish': self._detect_marubozu_bullish,
+            'marubozu_bearish': self._detect_marubozu_bearish,
+            # Indecision Patterns
             'doji': self._detect_doji,
             'spinning_top': self._detect_spinning_top,
             'long_leg_doji': self._detect_long_leg_doji,
-            'dragonfly_doji': self._detect_dragonfly_doji,
-            'gravestone_doji': self._detect_gravestone_doji,
-            'marubozu_bullish': self._detect_marubozu_bullish,
-            'marubozu_bearish': self._detect_marubozu_bearish
+            # Additional Patterns
+            'abandoned_baby_bullish': self._detect_abandoned_baby_bullish,
+            'abandoned_baby_bearish': self._detect_abandoned_baby_bearish,
+            'belt_hold_bullish': self._detect_belt_hold_bullish,
+            'belt_hold_bearish': self._detect_belt_hold_bearish,
+            'kicker_bullish': self._detect_kicker_bullish,
+            'kicker_bearish': self._detect_kicker_bearish,
+            'three_inside_up': self._detect_three_inside_up,
+            'three_inside_down': self._detect_three_inside_down,
         }
         
         # ============================================
@@ -128,18 +152,20 @@ class CandleAnalyzer:
         self.max_history = 1000
         
         # ============================================
-        # THRESHOLDS
+        # THRESHOLDS (OPTIMIZED)
         # ============================================
         self.thresholds = {
-            'body_ratio_min': 0.1,
-            'body_ratio_max': 0.9,
-            'wick_ratio_min': 0.1,
-            'doji_threshold': 0.1,
+            'body_ratio_min': 0.05,
+            'body_ratio_max': 0.95,
+            'wick_ratio_min': 0.05,
+            'doji_threshold': 0.08,
             'hammer_wick_ratio': 2.0,
-            'engulfing_threshold': 0.01,
-            'star_gap_threshold': 0.005,
-            'pattern_confidence_min': 0.5,
-            'reversal_confidence_min': 0.7
+            'engulfing_threshold': 0.005,
+            'star_gap_threshold': 0.003,
+            'pattern_confidence_min': 0.45,
+            'reversal_confidence_min': 0.65,
+            'volume_multiplier': 1.3,
+            'trend_threshold': 0.01
         }
         
         # ============================================
@@ -149,13 +175,21 @@ class CandleAnalyzer:
             'patterns_detected': 0,
             'successful_patterns': 0,
             'failed_patterns': 0,
-            'avg_detection_time': 0.0
+            'avg_detection_time': 0.0,
+            'total_analyses': 0,
+            'errors': 0
         }
+        
+        # ============================================
+        # STATE
+        # ============================================
+        self._lock = threading.Lock()
+        self._last_analysis_time = None
         
         # Load state
         self._load_state()
         
-        logger.info("🕯️ Candle Analyzer initialized")
+        logger.info("🕯️ Candle Analyzer initialized - ULTRA ADVANCED")
     
     # ============================================
     # MAIN ANALYSIS
@@ -163,54 +197,62 @@ class CandleAnalyzer:
     
     def analyze(self, data: Dict[str, List[float]]) -> List[PatternResult]:
         """Analyze candles and detect all patterns"""
-        import time
         start_time = time.time()
         results = []
         
         try:
+            self.performance['total_analyses'] += 1
+            
             # Validate data
             if not data or len(data.get('close', [])) < 3:
                 logger.warning("Data too short for candle analysis")
                 return results
             
-            # Calculate candle metrics
-            candles = self._calculate_candles(data)
-            
-            # Detect patterns
-            for pattern_name, pattern_func in self.patterns.items():
-                try:
-                    result = pattern_func(data, candles)
-                    if result:
-                        results.append(result)
-                        self.recent_patterns.append(result)
-                        
-                        if pattern_name not in self.pattern_history:
-                            self.pattern_history[pattern_name] = []
-                        self.pattern_history[pattern_name].append({
-                            'result': result,
-                            'timestamp': datetime.now()
-                        })
-                        
-                        if len(self.pattern_history[pattern_name]) > self.max_history:
-                            self.pattern_history[pattern_name] = self.pattern_history[pattern_name][-self.max_history:]
-                        
-                except Exception as e:
-                    logger.debug(f"Pattern {pattern_name} detection error: {e}")
-            
-            # Update performance
-            elapsed = time.time() - start_time
-            self.performance['patterns_detected'] += len(results)
-            self.performance['avg_detection_time'] = (
-                (self.performance['avg_detection_time'] * (self.performance['patterns_detected'] - len(results)) + elapsed) /
-                max(1, self.performance['patterns_detected'])
-            )
-            
-            # Sort by confidence
-            results.sort(key=lambda x: x.confidence, reverse=True)
-            
-            return results
+            with self._lock:
+                # Calculate candle metrics
+                candles = self._calculate_candles(data)
+                
+                if len(candles) < 3:
+                    return results
+                
+                # Detect patterns
+                for pattern_name, pattern_func in self.patterns.items():
+                    try:
+                        result = pattern_func(data, candles)
+                        if result:
+                            results.append(result)
+                            self.recent_patterns.append(result)
+                            
+                            if pattern_name not in self.pattern_history:
+                                self.pattern_history[pattern_name] = []
+                            self.pattern_history[pattern_name].append({
+                                'result': result,
+                                'timestamp': datetime.now()
+                            })
+                            
+                            if len(self.pattern_history[pattern_name]) > self.max_history:
+                                self.pattern_history[pattern_name] = self.pattern_history[pattern_name][-self.max_history:]
+                            
+                    except Exception as e:
+                        logger.debug(f"Pattern {pattern_name} detection error: {e}")
+                
+                # Update performance
+                elapsed = time.time() - start_time
+                self.performance['patterns_detected'] += len(results)
+                self.performance['avg_detection_time'] = (
+                    (self.performance['avg_detection_time'] * (self.performance['total_analyses'] - 1) + elapsed) /
+                    max(1, self.performance['total_analyses'])
+                )
+                
+                # Sort by confidence
+                results.sort(key=lambda x: x.confidence, reverse=True)
+                
+                self._last_analysis_time = datetime.now()
+                
+                return results
             
         except Exception as e:
+            self.performance['errors'] += 1
             logger.error(f"Candle analysis error: {e}\n{traceback.format_exc()}")
             return results
     
@@ -224,7 +266,9 @@ class CandleAnalyzer:
         close_prices = data.get('close', [])
         volumes = data.get('volume', [])
         
-        for i in range(len(close_prices)):
+        min_len = min(len(open_prices), len(high_prices), len(low_prices), len(close_prices))
+        
+        for i in range(min_len):
             try:
                 open_price = open_prices[i] if i < len(open_prices) else close_prices[i]
                 high = high_prices[i] if i < len(high_prices) else close_prices[i]
@@ -241,27 +285,33 @@ class CandleAnalyzer:
                 body_ratio = body / total_range if total_range > 0 else 0
                 upper_wick_ratio = upper_wick / total_range if total_range > 0 else 0
                 lower_wick_ratio = lower_wick / total_range if total_range > 0 else 0
+                range_percent = (total_range / open_price) * 100 if open_price > 0 else 0
+                close_percent = ((close - open_price) / open_price) * 100 if open_price > 0 else 0
                 
-                # Determine candle type
+                # Determine candle type with improved logic
                 if body_ratio < self.thresholds['doji_threshold']:
                     candle_type = "DOJI"
-                elif body_ratio > 0.8:
+                elif body_ratio > 0.85:
                     candle_type = "MARUBOZU"
-                elif upper_wick_ratio > 0.3 and lower_wick_ratio > 0.3:
+                elif upper_wick_ratio > 0.35 and lower_wick_ratio > 0.35:
                     candle_type = "SPINNING_TOP"
+                elif upper_wick_ratio > 2 * body_ratio and close < open_price:
+                    candle_type = "SHOOTING_STAR"
+                elif lower_wick_ratio > 2 * body_ratio and close > open_price:
+                    candle_type = "HAMMER"
                 elif close > open_price:
                     candle_type = "BULLISH"
                 else:
                     candle_type = "BEARISH"
                 
                 # Determine strength
-                if body_ratio > 0.8 and total_range > close * 0.01:
+                if body_ratio > 0.85 and range_percent > 0.5:
                     strength = "VERY_STRONG"
-                elif body_ratio > 0.6 and total_range > close * 0.005:
+                elif body_ratio > 0.6 and range_percent > 0.3:
                     strength = "STRONG"
-                elif body_ratio > 0.3:
+                elif body_ratio > 0.35:
                     strength = "MODERATE"
-                elif body_ratio > 0.1:
+                elif body_ratio > 0.15:
                     strength = "WEAK"
                 else:
                     strength = "VERY_WEAK"
@@ -278,7 +328,9 @@ class CandleAnalyzer:
                     lower_wick=lower_wick,
                     body_ratio=body_ratio,
                     candle_type=candle_type,
-                    strength=strength
+                    strength=strength,
+                    range_percent=range_percent,
+                    close_percent=close_percent
                 )
                 
                 candles.append(candle)
@@ -290,7 +342,7 @@ class CandleAnalyzer:
         return candles
     
     # ============================================
-    # REVERSAL PATTERNS
+    # REVERSAL PATTERNS (All 15)
     # ============================================
     
     def _detect_hammer(self, data: Dict, candles: List[Candle]) -> Optional[PatternResult]:
@@ -300,11 +352,15 @@ class CandleAnalyzer:
         
         candle = candles[-1]
         
-        if (candle.body_ratio < 0.3 and 
+        if (candle.body_ratio < 0.35 and 
             candle.lower_wick > 2 * candle.body and 
-            candle.upper_wick < 0.1 * candle.body):
+            candle.upper_wick < 0.15 * candle.body and
+            candle.close_percent < 0):
             
-            confidence = min(90, 60 + (candle.lower_wick / candle.body) * 10)
+            confidence = min(90, 60 + (candle.lower_wick / max(candle.body, 0.001)) * 8)
+            
+            # Volume confirmation
+            volume_confirmed = self._check_volume(data, len(data.get('volume', [])) - 1)
             
             return PatternResult(
                 name="HAMMER",
@@ -314,7 +370,8 @@ class CandleAnalyzer:
                 price_level=candle.close,
                 timestamp=datetime.now(),
                 description="Hammer pattern - Potential bullish reversal",
-                metadata={'body_ratio': candle.body_ratio}
+                metadata={'body_ratio': candle.body_ratio, 'lower_wick': candle.lower_wick},
+                volume_confirmation=volume_confirmed
             )
         return None
     
@@ -325,11 +382,14 @@ class CandleAnalyzer:
         
         candle = candles[-1]
         
-        if (candle.body_ratio < 0.3 and 
+        if (candle.body_ratio < 0.35 and 
             candle.upper_wick > 2 * candle.body and 
-            candle.lower_wick < 0.1 * candle.body):
+            candle.lower_wick < 0.15 * candle.body and
+            candle.close_percent > 0):
             
-            confidence = min(90, 60 + (candle.upper_wick / candle.body) * 10)
+            confidence = min(90, 60 + (candle.upper_wick / max(candle.body, 0.001)) * 8)
+            
+            volume_confirmed = self._check_volume(data, len(data.get('volume', [])) - 1)
             
             return PatternResult(
                 name="SHOOTING_STAR",
@@ -339,7 +399,8 @@ class CandleAnalyzer:
                 price_level=candle.close,
                 timestamp=datetime.now(),
                 description="Shooting Star pattern - Potential bearish reversal",
-                metadata={'body_ratio': candle.body_ratio}
+                metadata={'body_ratio': candle.body_ratio, 'upper_wick': candle.upper_wick},
+                volume_confirmation=volume_confirmed
             )
         return None
     
@@ -356,7 +417,8 @@ class CandleAnalyzer:
             curr.open < prev.close and 
             curr.close > prev.open):
             
-            confidence = min(90, 70 + (curr.body / prev.body) * 5)
+            confidence = min(92, 70 + (curr.body / max(prev.body, 0.001)) * 5)
+            volume_confirmed = self._check_volume(data, len(data.get('volume', [])) - 1)
             
             return PatternResult(
                 name="ENGULFING_BULLISH",
@@ -366,7 +428,8 @@ class CandleAnalyzer:
                 price_level=curr.close,
                 timestamp=datetime.now(),
                 description="Bullish Engulfing pattern - Strong reversal signal",
-                metadata={'ratio': curr.body / prev.body if prev.body > 0 else 0}
+                metadata={'ratio': curr.body / prev.body if prev.body > 0 else 0},
+                volume_confirmation=volume_confirmed
             )
         return None
     
@@ -383,7 +446,8 @@ class CandleAnalyzer:
             curr.open > prev.close and 
             curr.close < prev.open):
             
-            confidence = min(90, 70 + (curr.body / prev.body) * 5)
+            confidence = min(92, 70 + (curr.body / max(prev.body, 0.001)) * 5)
+            volume_confirmed = self._check_volume(data, len(data.get('volume', [])) - 1)
             
             return PatternResult(
                 name="ENGULFING_BEARISH",
@@ -393,7 +457,8 @@ class CandleAnalyzer:
                 price_level=curr.close,
                 timestamp=datetime.now(),
                 description="Bearish Engulfing pattern - Strong reversal signal",
-                metadata={'ratio': curr.body / prev.body if prev.body > 0 else 0}
+                metadata={'ratio': curr.body / prev.body if prev.body > 0 else 0},
+                volume_confirmation=volume_confirmed
             )
         return None
     
@@ -407,11 +472,12 @@ class CandleAnalyzer:
         c3 = candles[-1]
         
         if (c1.close < c1.open and 
-            c2.body_ratio < 0.2 and 
+            c2.body_ratio < self.thresholds['doji_threshold'] and 
             c3.close > c3.open and 
             c3.close > (c1.open + c1.close) / 2):
             
-            confidence = min(95, 70 + (c3.body / c1.body) * 10 if c1.body > 0 else 70)
+            confidence = min(95, 70 + (c3.body / max(c1.body, 0.001)) * 10)
+            volume_confirmed = self._check_volume(data, len(data.get('volume', [])) - 1)
             
             return PatternResult(
                 name="MORNING_STAR",
@@ -421,7 +487,8 @@ class CandleAnalyzer:
                 price_level=c3.close,
                 timestamp=datetime.now(),
                 description="Morning Star pattern - Strong bullish reversal",
-                metadata={}
+                metadata={},
+                volume_confirmation=volume_confirmed
             )
         return None
     
@@ -435,11 +502,12 @@ class CandleAnalyzer:
         c3 = candles[-1]
         
         if (c1.close > c1.open and 
-            c2.body_ratio < 0.2 and 
+            c2.body_ratio < self.thresholds['doji_threshold'] and 
             c3.close < c3.open and 
             c3.close < (c1.open + c1.close) / 2):
             
-            confidence = min(95, 70 + (c1.body / c3.body) * 10 if c3.body > 0 else 70)
+            confidence = min(95, 70 + (c1.body / max(c3.body, 0.001)) * 10)
+            volume_confirmed = self._check_volume(data, len(data.get('volume', [])) - 1)
             
             return PatternResult(
                 name="EVENING_STAR",
@@ -449,7 +517,8 @@ class CandleAnalyzer:
                 price_level=c3.close,
                 timestamp=datetime.now(),
                 description="Evening Star pattern - Strong bearish reversal",
-                metadata={}
+                metadata={},
+                volume_confirmation=volume_confirmed
             )
         return None
     
@@ -467,7 +536,8 @@ class CandleAnalyzer:
             curr.close > (prev.open + prev.close) / 2 and 
             curr.close < prev.open):
             
-            confidence = min(85, 65 + (curr.close - prev.close) / (prev.open - prev.close) * 20 if prev.open != prev.close else 65)
+            confidence = min(85, 65 + (curr.close - prev.close) / max((prev.open - prev.close), 0.001) * 20)
+            volume_confirmed = self._check_volume(data, len(data.get('volume', [])) - 1)
             
             return PatternResult(
                 name="PIERCING",
@@ -477,7 +547,8 @@ class CandleAnalyzer:
                 price_level=curr.close,
                 timestamp=datetime.now(),
                 description="Piercing pattern - Bullish reversal",
-                metadata={}
+                metadata={},
+                volume_confirmation=volume_confirmed
             )
         return None
     
@@ -495,7 +566,8 @@ class CandleAnalyzer:
             curr.close < (prev.open + prev.close) / 2 and 
             curr.close > prev.open):
             
-            confidence = min(85, 65 + (prev.close - curr.close) / (prev.close - prev.open) * 20 if prev.close != prev.open else 65)
+            confidence = min(85, 65 + (prev.close - curr.close) / max((prev.close - prev.open), 0.001) * 20)
+            volume_confirmed = self._check_volume(data, len(data.get('volume', [])) - 1)
             
             return PatternResult(
                 name="DARK_CLOUD",
@@ -505,7 +577,8 @@ class CandleAnalyzer:
                 price_level=curr.close,
                 timestamp=datetime.now(),
                 description="Dark Cloud Cover pattern - Bearish reversal",
-                metadata={}
+                metadata={},
+                volume_confirmation=volume_confirmed
             )
         return None
     
@@ -522,7 +595,8 @@ class CandleAnalyzer:
             curr.open > prev.close and 
             curr.close < prev.open):
             
-            confidence = min(80, 60 + (1 - curr.body / prev.body) * 30 if prev.body > 0 else 60)
+            confidence = min(80, 60 + (1 - curr.body / max(prev.body, 0.001)) * 30)
+            volume_confirmed = self._check_volume(data, len(data.get('volume', [])) - 1)
             
             return PatternResult(
                 name="HARAMI_BULLISH",
@@ -532,7 +606,8 @@ class CandleAnalyzer:
                 price_level=curr.close,
                 timestamp=datetime.now(),
                 description="Bullish Harami pattern - Potential reversal",
-                metadata={}
+                metadata={},
+                volume_confirmation=volume_confirmed
             )
         return None
     
@@ -549,7 +624,8 @@ class CandleAnalyzer:
             curr.open < prev.close and 
             curr.close > prev.open):
             
-            confidence = min(80, 60 + (1 - curr.body / prev.body) * 30 if prev.body > 0 else 60)
+            confidence = min(80, 60 + (1 - curr.body / max(prev.body, 0.001)) * 30)
+            volume_confirmed = self._check_volume(data, len(data.get('volume', [])) - 1)
             
             return PatternResult(
                 name="HARAMI_BEARISH",
@@ -559,9 +635,157 @@ class CandleAnalyzer:
                 price_level=curr.close,
                 timestamp=datetime.now(),
                 description="Bearish Harami pattern - Potential reversal",
-                metadata={}
+                metadata={},
+                volume_confirmation=volume_confirmed
             )
         return None
+    
+    def _detect_doji_star(self, data: Dict, candles: List[Candle]) -> Optional[PatternResult]:
+        """Detect Doji Star"""
+        if len(candles) < 2:
+            return None
+        
+        prev = candles[-2]
+        curr = candles[-1]
+        
+        if (curr.body_ratio < self.thresholds['doji_threshold'] and
+            abs(curr.close - prev.close) / max(prev.close, 0.001) > self.thresholds['star_gap_threshold']):
+            
+            if curr.close > prev.close:
+                confidence = 70
+                pattern_type = "REVERSAL_BULLISH"
+                description = "Bullish Doji Star - Potential reversal"
+            else:
+                confidence = 70
+                pattern_type = "REVERSAL_BEARISH"
+                description = "Bearish Doji Star - Potential reversal"
+            
+            volume_confirmed = self._check_volume(data, len(data.get('volume', [])) - 1)
+            
+            return PatternResult(
+                name="DOJI_STAR",
+                type=pattern_type,
+                strength="MODERATE",
+                confidence=confidence,
+                price_level=curr.close,
+                timestamp=datetime.now(),
+                description=description,
+                metadata={},
+                volume_confirmation=volume_confirmed
+            )
+        return None
+    
+    def _detect_tweezers_bottom(self, data: Dict, candles: List[Candle]) -> Optional[PatternResult]:
+        """Detect Tweezers Bottom (Bullish Reversal)"""
+        if len(candles) < 2:
+            return None
+        
+        prev = candles[-2]
+        curr = candles[-1]
+        
+        if (prev.low == curr.low and 
+            prev.close < prev.open and 
+            curr.close > curr.open and
+            abs(prev.low - curr.low) / max(prev.low, 0.001) < 0.005):
+            
+            volume_confirmed = self._check_volume(data, len(data.get('volume', [])) - 1)
+            
+            return PatternResult(
+                name="TWEEZERS_BOTTOM",
+                type="REVERSAL_BULLISH",
+                strength="MODERATE",
+                confidence=75,
+                price_level=curr.close,
+                timestamp=datetime.now(),
+                description="Tweezers Bottom - Potential bullish reversal",
+                metadata={},
+                volume_confirmation=volume_confirmed
+            )
+        return None
+    
+    def _detect_tweezers_top(self, data: Dict, candles: List[Candle]) -> Optional[PatternResult]:
+        """Detect Tweezers Top (Bearish Reversal)"""
+        if len(candles) < 2:
+            return None
+        
+        prev = candles[-2]
+        curr = candles[-1]
+        
+        if (prev.high == curr.high and 
+            prev.close > prev.open and 
+            curr.close < curr.open and
+            abs(prev.high - curr.high) / max(prev.high, 0.001) < 0.005):
+            
+            volume_confirmed = self._check_volume(data, len(data.get('volume', [])) - 1)
+            
+            return PatternResult(
+                name="TWEEZERS_TOP",
+                type="REVERSAL_BEARISH",
+                strength="MODERATE",
+                confidence=75,
+                price_level=curr.close,
+                timestamp=datetime.now(),
+                description="Tweezers Top - Potential bearish reversal",
+                metadata={},
+                volume_confirmation=volume_confirmed
+            )
+        return None
+    
+    def _detect_dragonfly_doji(self, data: Dict, candles: List[Candle]) -> Optional[PatternResult]:
+        """Detect Dragonfly Doji"""
+        if len(candles) < 1:
+            return None
+        
+        candle = candles[-1]
+        
+        if (candle.body_ratio < self.thresholds['doji_threshold'] and
+            candle.lower_wick > candle.body * 3 and
+            candle.upper_wick < 0.1 * candle.body):
+            
+            volume_confirmed = self._check_volume(data, len(data.get('volume', [])) - 1)
+            
+            return PatternResult(
+                name="DRAGONFLY_DOJI",
+                type="REVERSAL_BULLISH",
+                strength="STRONG",
+                confidence=80,
+                price_level=candle.close,
+                timestamp=datetime.now(),
+                description="Dragonfly Doji - Bullish reversal signal",
+                metadata={},
+                volume_confirmation=volume_confirmed
+            )
+        return None
+    
+    def _detect_gravestone_doji(self, data: Dict, candles: List[Candle]) -> Optional[PatternResult]:
+        """Detect Gravestone Doji"""
+        if len(candles) < 1:
+            return None
+        
+        candle = candles[-1]
+        
+        if (candle.body_ratio < self.thresholds['doji_threshold'] and
+            candle.upper_wick > candle.body * 3 and
+            candle.lower_wick < 0.1 * candle.body):
+            
+            volume_confirmed = self._check_volume(data, len(data.get('volume', [])) - 1)
+            
+            return PatternResult(
+                name="GRAVESTONE_DOJI",
+                type="REVERSAL_BEARISH",
+                strength="STRONG",
+                confidence=80,
+                price_level=candle.close,
+                timestamp=datetime.now(),
+                description="Gravestone Doji - Bearish reversal signal",
+                metadata={},
+                volume_confirmation=volume_confirmed
+            )
+        return None
+    
+    # ============================================
+    # CONTINUATION PATTERNS (All 5)
+    # ============================================
     
     def _detect_three_white_soldiers(self, data: Dict, candles: List[Candle]) -> Optional[PatternResult]:
         """Detect Three White Soldiers (Bullish Continuation)"""
@@ -577,7 +801,8 @@ class CandleAnalyzer:
             c3.close > c3.open and 
             c1.close < c2.close < c3.close):
             
-            confidence = min(90, 70 + (c3.body / c1.body) * 10 if c1.body > 0 else 70)
+            confidence = min(90, 70 + (c3.body / max(c1.body, 0.001)) * 10)
+            volume_confirmed = self._check_volume(data, len(data.get('volume', [])) - 1)
             
             return PatternResult(
                 name="THREE_WHITE_SOLDIERS",
@@ -587,7 +812,8 @@ class CandleAnalyzer:
                 price_level=c3.close,
                 timestamp=datetime.now(),
                 description="Three White Soldiers - Strong bullish continuation",
-                metadata={}
+                metadata={},
+                volume_confirmation=volume_confirmed
             )
         return None
     
@@ -605,7 +831,8 @@ class CandleAnalyzer:
             c3.close < c3.open and 
             c1.close > c2.close > c3.close):
             
-            confidence = min(90, 70 + (c1.body / c3.body) * 10 if c3.body > 0 else 70)
+            confidence = min(90, 70 + (c1.body / max(c3.body, 0.001)) * 10)
+            volume_confirmed = self._check_volume(data, len(data.get('volume', [])) - 1)
             
             return PatternResult(
                 name="THREE_BLACK_CROWS",
@@ -615,57 +842,8 @@ class CandleAnalyzer:
                 price_level=c3.close,
                 timestamp=datetime.now(),
                 description="Three Black Crows - Strong bearish continuation",
-                metadata={}
-            )
-        return None
-    
-    def _detect_tweezers_bottom(self, data: Dict, candles: List[Candle]) -> Optional[PatternResult]:
-        """Detect Tweezers Bottom (Bullish Reversal)"""
-        if len(candles) < 2:
-            return None
-        
-        prev = candles[-2]
-        curr = candles[-1]
-        
-        if (prev.low == curr.low and 
-            prev.close < prev.open and 
-            curr.close > curr.open and
-            abs(prev.low - curr.low) / prev.low < 0.005):
-            
-            return PatternResult(
-                name="TWEEZERS_BOTTOM",
-                type="REVERSAL_BULLISH",
-                strength="MODERATE",
-                confidence=75,
-                price_level=curr.close,
-                timestamp=datetime.now(),
-                description="Tweezers Bottom - Potential bullish reversal",
-                metadata={}
-            )
-        return None
-    
-    def _detect_tweezers_top(self, data: Dict, candles: List[Candle]) -> Optional[PatternResult]:
-        """Detect Tweezers Top (Bearish Reversal)"""
-        if len(candles) < 2:
-            return None
-        
-        prev = candles[-2]
-        curr = candles[-1]
-        
-        if (prev.high == curr.high and 
-            prev.close > prev.open and 
-            curr.close < curr.open and
-            abs(prev.high - curr.high) / prev.high < 0.005):
-            
-            return PatternResult(
-                name="TWEEZERS_TOP",
-                type="REVERSAL_BEARISH",
-                strength="MODERATE",
-                confidence=75,
-                price_level=curr.close,
-                timestamp=datetime.now(),
-                description="Tweezers Top - Potential bearish reversal",
-                metadata={}
+                metadata={},
+                volume_confirmation=volume_confirmed
             )
         return None
     
@@ -686,6 +864,8 @@ class CandleAnalyzer:
             c4.close < c4.open and c4.close > c1.low and
             c5.close > c5.open and c5.close > c1.close):
             
+            volume_confirmed = self._check_volume(data, len(data.get('volume', [])) - 1)
+            
             return PatternResult(
                 name="RISING_THREE",
                 type="CONTINUATION_BULLISH",
@@ -694,7 +874,8 @@ class CandleAnalyzer:
                 price_level=c5.close,
                 timestamp=datetime.now(),
                 description="Rising Three Methods - Bullish continuation",
-                metadata={}
+                metadata={},
+                volume_confirmation=volume_confirmed
             )
         return None
     
@@ -715,6 +896,8 @@ class CandleAnalyzer:
             c4.close > c4.open and c4.close < c1.high and
             c5.close < c5.open and c5.close < c1.close):
             
+            volume_confirmed = self._check_volume(data, len(data.get('volume', [])) - 1)
+            
             return PatternResult(
                 name="FALLING_THREE",
                 type="CONTINUATION_BEARISH",
@@ -723,9 +906,276 @@ class CandleAnalyzer:
                 price_level=c5.close,
                 timestamp=datetime.now(),
                 description="Falling Three Methods - Bearish continuation",
+                metadata={},
+                volume_confirmation=volume_confirmed
+            )
+        return None
+    
+    def _detect_marubozu_bullish(self, data: Dict, candles: List[Candle]) -> Optional[PatternResult]:
+        """Detect Bullish Marubozu"""
+        if len(candles) < 1:
+            return None
+        
+        candle = candles[-1]
+        
+        if (candle.body_ratio > 0.85 and
+            candle.close > candle.open and
+            candle.upper_wick < 0.05 * candle.body and
+            candle.lower_wick < 0.05 * candle.body):
+            
+            volume_confirmed = self._check_volume(data, len(data.get('volume', [])) - 1)
+            
+            return PatternResult(
+                name="MARUBOZU_BULLISH",
+                type="CONTINUATION_BULLISH",
+                strength="VERY_STRONG",
+                confidence=85,
+                price_level=candle.close,
+                timestamp=datetime.now(),
+                description="Bullish Marubozu - Strong bullish momentum",
+                metadata={},
+                volume_confirmation=volume_confirmed
+            )
+        return None
+    
+    def _detect_marubozu_bearish(self, data: Dict, candles: List[Candle]) -> Optional[PatternResult]:
+        """Detect Bearish Marubozu"""
+        if len(candles) < 1:
+            return None
+        
+        candle = candles[-1]
+        
+        if (candle.body_ratio > 0.85 and
+            candle.close < candle.open and
+            candle.upper_wick < 0.05 * candle.body and
+            candle.lower_wick < 0.05 * candle.body):
+            
+            volume_confirmed = self._check_volume(data, len(data.get('volume', [])) - 1)
+            
+            return PatternResult(
+                name="MARUBOZU_BEARISH",
+                type="CONTINUATION_BEARISH",
+                strength="VERY_STRONG",
+                confidence=85,
+                price_level=candle.close,
+                timestamp=datetime.now(),
+                description="Bearish Marubozu - Strong bearish momentum",
+                metadata={},
+                volume_confirmation=volume_confirmed
+            )
+        return None
+    
+    # ============================================
+    # ADDITIONAL PATTERNS (8 New)
+    # ============================================
+    
+    def _detect_abandoned_baby_bullish(self, data: Dict, candles: List[Candle]) -> Optional[PatternResult]:
+        """Detect Abandoned Baby Bullish"""
+        if len(candles) < 3:
+            return None
+        
+        c1 = candles[-3]
+        c2 = candles[-2]
+        c3 = candles[-1]
+        
+        if (c1.close < c1.open and 
+            c2.body_ratio < self.thresholds['doji_threshold'] and 
+            c2.low > c1.high and 
+            c3.close > c3.open and 
+            c3.close > c2.high):
+            
+            return PatternResult(
+                name="ABANDONED_BABY_BULLISH",
+                type="REVERSAL_BULLISH",
+                strength="VERY_STRONG",
+                confidence=90,
+                price_level=c3.close,
+                timestamp=datetime.now(),
+                description="Abandoned Baby - Strong bullish reversal",
                 metadata={}
             )
         return None
+    
+    def _detect_abandoned_baby_bearish(self, data: Dict, candles: List[Candle]) -> Optional[PatternResult]:
+        """Detect Abandoned Baby Bearish"""
+        if len(candles) < 3:
+            return None
+        
+        c1 = candles[-3]
+        c2 = candles[-2]
+        c3 = candles[-1]
+        
+        if (c1.close > c1.open and 
+            c2.body_ratio < self.thresholds['doji_threshold'] and 
+            c2.high < c1.low and 
+            c3.close < c3.open and 
+            c3.close < c2.low):
+            
+            return PatternResult(
+                name="ABANDONED_BABY_BEARISH",
+                type="REVERSAL_BEARISH",
+                strength="VERY_STRONG",
+                confidence=90,
+                price_level=c3.close,
+                timestamp=datetime.now(),
+                description="Abandoned Baby - Strong bearish reversal",
+                metadata={}
+            )
+        return None
+    
+    def _detect_belt_hold_bullish(self, data: Dict, candles: List[Candle]) -> Optional[PatternResult]:
+        """Detect Belt Hold Bullish"""
+        if len(candles) < 1:
+            return None
+        
+        candle = candles[-1]
+        
+        if (candle.close > candle.open and 
+            candle.lower_wick < 0.05 * candle.body and 
+            candle.open == candle.low):
+            
+            return PatternResult(
+                name="BELT_HOLD_BULLISH",
+                type="REVERSAL_BULLISH",
+                strength="STRONG",
+                confidence=80,
+                price_level=candle.close,
+                timestamp=datetime.now(),
+                description="Bullish Belt Hold - Strong bullish reversal",
+                metadata={}
+            )
+        return None
+    
+    def _detect_belt_hold_bearish(self, data: Dict, candles: List[Candle]) -> Optional[PatternResult]:
+        """Detect Belt Hold Bearish"""
+        if len(candles) < 1:
+            return None
+        
+        candle = candles[-1]
+        
+        if (candle.close < candle.open and 
+            candle.upper_wick < 0.05 * candle.body and 
+            candle.open == candle.high):
+            
+            return PatternResult(
+                name="BELT_HOLD_BEARISH",
+                type="REVERSAL_BEARISH",
+                strength="STRONG",
+                confidence=80,
+                price_level=candle.close,
+                timestamp=datetime.now(),
+                description="Bearish Belt Hold - Strong bearish reversal",
+                metadata={}
+            )
+        return None
+    
+    def _detect_kicker_bullish(self, data: Dict, candles: List[Candle]) -> Optional[PatternResult]:
+        """Detect Kicker Bullish"""
+        if len(candles) < 2:
+            return None
+        
+        prev = candles[-2]
+        curr = candles[-1]
+        
+        if (prev.close < prev.open and 
+            curr.close > curr.open and 
+            curr.open > prev.close):
+            
+            return PatternResult(
+                name="KICKER_BULLISH",
+                type="REVERSAL_BULLISH",
+                strength="VERY_STRONG",
+                confidence=95,
+                price_level=curr.close,
+                timestamp=datetime.now(),
+                description="Bullish Kicker - Very strong bullish reversal",
+                metadata={}
+            )
+        return None
+    
+    def _detect_kicker_bearish(self, data: Dict, candles: List[Candle]) -> Optional[PatternResult]:
+        """Detect Kicker Bearish"""
+        if len(candles) < 2:
+            return None
+        
+        prev = candles[-2]
+        curr = candles[-1]
+        
+        if (prev.close > prev.open and 
+            curr.close < curr.open and 
+            curr.open < prev.close):
+            
+            return PatternResult(
+                name="KICKER_BEARISH",
+                type="REVERSAL_BEARISH",
+                strength="VERY_STRONG",
+                confidence=95,
+                price_level=curr.close,
+                timestamp=datetime.now(),
+                description="Bearish Kicker - Very strong bearish reversal",
+                metadata={}
+            )
+        return None
+    
+    def _detect_three_inside_up(self, data: Dict, candles: List[Candle]) -> Optional[PatternResult]:
+        """Detect Three Inside Up"""
+        if len(candles) < 3:
+            return None
+        
+        c1 = candles[-3]
+        c2 = candles[-2]
+        c3 = candles[-1]
+        
+        if (c1.close < c1.open and 
+            c2.close > c2.open and 
+            c2.high < c1.high and 
+            c2.low > c1.low and 
+            c3.close > c3.open and 
+            c3.close > c2.close):
+            
+            return PatternResult(
+                name="THREE_INSIDE_UP",
+                type="REVERSAL_BULLISH",
+                strength="STRONG",
+                confidence=85,
+                price_level=c3.close,
+                timestamp=datetime.now(),
+                description="Three Inside Up - Strong bullish reversal",
+                metadata={}
+            )
+        return None
+    
+    def _detect_three_inside_down(self, data: Dict, candles: List[Candle]) -> Optional[PatternResult]:
+        """Detect Three Inside Down"""
+        if len(candles) < 3:
+            return None
+        
+        c1 = candles[-3]
+        c2 = candles[-2]
+        c3 = candles[-1]
+        
+        if (c1.close > c1.open and 
+            c2.close < c2.open and 
+            c2.high < c1.high and 
+            c2.low > c1.low and 
+            c3.close < c3.open and 
+            c3.close < c2.close):
+            
+            return PatternResult(
+                name="THREE_INSIDE_DOWN",
+                type="REVERSAL_BEARISH",
+                strength="STRONG",
+                confidence=85,
+                price_level=c3.close,
+                timestamp=datetime.now(),
+                description="Three Inside Down - Strong bearish reversal",
+                metadata={}
+            )
+        return None
+    
+    # ============================================
+    # INDECISION PATTERNS (All 3)
+    # ============================================
     
     def _detect_doji(self, data: Dict, candles: List[Candle]) -> Optional[PatternResult]:
         """Detect Doji (Indecision)"""
@@ -749,38 +1199,6 @@ class CandleAnalyzer:
             )
         return None
     
-    def _detect_doji_star(self, data: Dict, candles: List[Candle]) -> Optional[PatternResult]:
-        """Detect Doji Star"""
-        if len(candles) < 2:
-            return None
-        
-        prev = candles[-2]
-        curr = candles[-1]
-        
-        if (curr.body_ratio < self.thresholds['doji_threshold'] and
-            abs(curr.close - prev.close) / prev.close > self.thresholds['star_gap_threshold']):
-            
-            if curr.close > prev.close:
-                confidence = 70
-                pattern_type = "REVERSAL_BULLISH"
-                description = "Bullish Doji Star - Potential reversal"
-            else:
-                confidence = 70
-                pattern_type = "REVERSAL_BEARISH"
-                description = "Bearish Doji Star - Potential reversal"
-            
-            return PatternResult(
-                name="DOJI_STAR",
-                type=pattern_type,
-                strength="MODERATE",
-                confidence=confidence,
-                price_level=curr.close,
-                timestamp=datetime.now(),
-                description=description,
-                metadata={}
-            )
-        return None
-    
     def _detect_spinning_top(self, data: Dict, candles: List[Candle]) -> Optional[PatternResult]:
         """Detect Spinning Top"""
         if len(candles) < 1:
@@ -788,7 +1206,7 @@ class CandleAnalyzer:
         
         candle = candles[-1]
         
-        if (0.1 < candle.body_ratio < 0.3 and
+        if (0.08 < candle.body_ratio < 0.35 and
             candle.upper_wick > candle.body * 0.5 and
             candle.lower_wick > candle.body * 0.5):
             
@@ -827,103 +1245,27 @@ class CandleAnalyzer:
             )
         return None
     
-    def _detect_dragonfly_doji(self, data: Dict, candles: List[Candle]) -> Optional[PatternResult]:
-        """Detect Dragonfly Doji"""
-        if len(candles) < 1:
-            return None
-        
-        candle = candles[-1]
-        
-        if (candle.body_ratio < self.thresholds['doji_threshold'] and
-            candle.lower_wick > candle.body * 3 and
-            candle.upper_wick < 0.1 * candle.body):
-            
-            return PatternResult(
-                name="DRAGONFLY_DOJI",
-                type="REVERSAL_BULLISH",
-                strength="STRONG",
-                confidence=80,
-                price_level=candle.close,
-                timestamp=datetime.now(),
-                description="Dragonfly Doji - Bullish reversal signal",
-                metadata={}
-            )
-        return None
-    
-    def _detect_gravestone_doji(self, data: Dict, candles: List[Candle]) -> Optional[PatternResult]:
-        """Detect Gravestone Doji"""
-        if len(candles) < 1:
-            return None
-        
-        candle = candles[-1]
-        
-        if (candle.body_ratio < self.thresholds['doji_threshold'] and
-            candle.upper_wick > candle.body * 3 and
-            candle.lower_wick < 0.1 * candle.body):
-            
-            return PatternResult(
-                name="GRAVESTONE_DOJI",
-                type="REVERSAL_BEARISH",
-                strength="STRONG",
-                confidence=80,
-                price_level=candle.close,
-                timestamp=datetime.now(),
-                description="Gravestone Doji - Bearish reversal signal",
-                metadata={}
-            )
-        return None
-    
-    def _detect_marubozu_bullish(self, data: Dict, candles: List[Candle]) -> Optional[PatternResult]:
-        """Detect Bullish Marubozu"""
-        if len(candles) < 1:
-            return None
-        
-        candle = candles[-1]
-        
-        if (candle.body_ratio > 0.8 and
-            candle.close > candle.open and
-            candle.upper_wick < 0.05 * candle.body and
-            candle.lower_wick < 0.05 * candle.body):
-            
-            return PatternResult(
-                name="MARUBOZU_BULLISH",
-                type="CONTINUATION_BULLISH",
-                strength="VERY_STRONG",
-                confidence=85,
-                price_level=candle.close,
-                timestamp=datetime.now(),
-                description="Bullish Marubozu - Strong bullish momentum",
-                metadata={}
-            )
-        return None
-    
-    def _detect_marubozu_bearish(self, data: Dict, candles: List[Candle]) -> Optional[PatternResult]:
-        """Detect Bearish Marubozu"""
-        if len(candles) < 1:
-            return None
-        
-        candle = candles[-1]
-        
-        if (candle.body_ratio > 0.8 and
-            candle.close < candle.open and
-            candle.upper_wick < 0.05 * candle.body and
-            candle.lower_wick < 0.05 * candle.body):
-            
-            return PatternResult(
-                name="MARUBOZU_BEARISH",
-                type="CONTINUATION_BEARISH",
-                strength="VERY_STRONG",
-                confidence=85,
-                price_level=candle.close,
-                timestamp=datetime.now(),
-                description="Bearish Marubozu - Strong bearish momentum",
-                metadata={}
-            )
-        return None
-    
     # ============================================
     # UTILITY METHODS
     # ============================================
+    
+    def _check_volume(self, data: Dict, index: int) -> bool:
+        """Check if volume is above average (confirmation)"""
+        try:
+            volumes = data.get('volume', [])
+            if len(volumes) < 20:
+                return False
+            
+            if index < 0 or index >= len(volumes):
+                return False
+            
+            current_volume = volumes[index]
+            avg_volume = sum(volumes[-20:]) / 20
+            
+            return current_volume > avg_volume * self.thresholds['volume_multiplier']
+            
+        except Exception:
+            return False
     
     def get_combined_signal(self, data: Dict[str, List[float]]) -> Dict[str, Any]:
         """Get combined candle analysis signal"""
@@ -934,7 +1276,8 @@ class CandleAnalyzer:
                 'signal': 'NEUTRAL',
                 'confidence': 0,
                 'patterns': [],
-                'summary': 'No patterns detected'
+                'summary': 'No patterns detected',
+                'timestamp': datetime.now().isoformat()
             }
         
         bullish_reversal = len([p for p in patterns if p.type == "REVERSAL_BULLISH"])
@@ -946,41 +1289,49 @@ class CandleAnalyzer:
         bearish_score = (bearish_reversal * 1.5 + bearish_continuation * 1.0)
         avg_confidence = sum(p.confidence for p in patterns) / len(patterns) if patterns else 0
         
+        # Check if any very strong patterns exist
+        has_very_strong = any(p.strength == "VERY_STRONG" for p in patterns)
+        has_strong = any(p.strength == "STRONG" for p in patterns)
+        
         if bullish_score > bearish_score * 1.3:
-            signal = 'STRONG_BUY' if bullish_score > bearish_score * 2 else 'BUY'
+            signal = 'STRONG_BUY' if (bullish_score > bearish_score * 2 or has_very_strong) else 'BUY'
         elif bearish_score > bullish_score * 1.3:
-            signal = 'STRONG_SELL' if bearish_score > bullish_score * 2 else 'SELL'
+            signal = 'STRONG_SELL' if (bearish_score > bullish_score * 2 or has_very_strong) else 'SELL'
         else:
             signal = 'NEUTRAL'
         
         return {
             'signal': signal,
             'confidence': min(95, avg_confidence + (abs(bullish_score - bearish_score) * 5)),
-            'patterns': [{'name': p.name, 'type': p.type, 'confidence': p.confidence} for p in patterns[:5]],
+            'patterns': [{'name': p.name, 'type': p.type, 'confidence': p.confidence, 'strength': p.strength} for p in patterns[:5]],
             'summary': f"{len(patterns)} patterns detected",
             'bullish_count': bullish_reversal + bullish_continuation,
             'bearish_count': bearish_reversal + bearish_continuation,
-            'top_pattern': patterns[0].name if patterns else 'None'
+            'top_pattern': patterns[0].name if patterns else 'None',
+            'has_strong_pattern': has_strong,
+            'has_very_strong_pattern': has_very_strong,
+            'timestamp': datetime.now().isoformat()
         }
     
     def update_pattern_accuracy(self, pattern_name: str, correct: bool):
         """Update pattern accuracy"""
-        if pattern_name not in self.pattern_accuracy:
-            self.pattern_accuracy[pattern_name] = {'correct': 0, 'total': 0, 'accuracy': 0}
-        
-        self.pattern_accuracy[pattern_name]['total'] += 1
-        if correct:
-            self.pattern_accuracy[pattern_name]['correct'] += 1
-        
-        self.pattern_accuracy[pattern_name]['accuracy'] = (
-            self.pattern_accuracy[pattern_name]['correct'] / 
-            self.pattern_accuracy[pattern_name]['total']
-        )
-        
-        if correct:
-            self.performance['successful_patterns'] += 1
-        else:
-            self.performance['failed_patterns'] += 1
+        with self._lock:
+            if pattern_name not in self.pattern_accuracy:
+                self.pattern_accuracy[pattern_name] = {'correct': 0, 'total': 0, 'accuracy': 0}
+            
+            self.pattern_accuracy[pattern_name]['total'] += 1
+            if correct:
+                self.pattern_accuracy[pattern_name]['correct'] += 1
+            
+            self.pattern_accuracy[pattern_name]['accuracy'] = (
+                self.pattern_accuracy[pattern_name]['correct'] / 
+                max(1, self.pattern_accuracy[pattern_name]['total'])
+            )
+            
+            if correct:
+                self.performance['successful_patterns'] += 1
+            else:
+                self.performance['failed_patterns'] += 1
     
     def get_pattern_statistics(self) -> Dict[str, Any]:
         """Get pattern statistics"""
@@ -988,13 +1339,13 @@ class CandleAnalyzer:
             'total_patterns': len(self.recent_patterns),
             'average_confidence': sum(p.confidence for p in self.recent_patterns) / len(self.recent_patterns) if self.recent_patterns else 0,
             'pattern_accuracy': self.pattern_accuracy,
-            'performance': self.performance
+            'performance': self.performance,
+            'recent_patterns': [{'name': p.name, 'type': p.type, 'confidence': p.confidence, 'timestamp': p.timestamp.isoformat()} for p in self.recent_patterns[-10:]]
         }
     
     def _save_state(self):
         """Save state to disk"""
         try:
-            import os
             os.makedirs("data/candles", exist_ok=True)
             
             state_data = {
@@ -1012,7 +1363,6 @@ class CandleAnalyzer:
     def _load_state(self):
         """Load state from disk"""
         try:
-            import os
             state_file = "data/candles/state.json"
             if os.path.exists(state_file):
                 with open(state_file, "r") as f:

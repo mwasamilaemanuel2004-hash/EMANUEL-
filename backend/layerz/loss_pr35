@@ -1,0 +1,1034 @@
+"""
+LAYERS +14, +21, +35: LOSS PREVENTION ENGINE (ULTIMATE COMBINED)
+Purpose: Prevent losses at ALL stages of trading with advanced detection and adaptive logic.
+Layers Combined:
+- +14: Loss Resistance Smart Logic
+- +21: Advanced Loss Prevention Engine
+- +35: Loss Prevention Engine (Original)
+
+Balance: GOLDILOCKS - Not too strict (no trades) and not too loose (many losses).
+Adaptive: Changes based on market conditions and performance.
+
+KEY FEATURES:
+- Support/Resistance Detection
+- Loss Zone Detection
+- False Breakout Detection
+- Momentum Failure Detection
+- Liquidity Withdrawal Detection
+- Spread Expansion Protection
+- Reversal Warning
+- Pre-Trade Rejection Gate
+- Emergency Trade Blocking
+- Smart Loss Recovery
+- Robust error handling with fallbacks
+- Debug mode with detailed logging
+- Performance tracking
+- Memory optimization (capped history)
+- Real-time status monitoring
+- Auto-correction mechanisms
+- Better adaptive thresholds
+- Recovery mode improvements
+"""
+
+import numpy as np
+import pandas as pd
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Tuple, Any, Union
+from enum import Enum
+from dataclasses import dataclass, field
+import logging
+import json
+import time
+from collections import deque
+import threading
+
+# Configure logging
+logger = logging.getLogger(__name__)
+
+debug_handler = logging.FileHandler('logs/loss_prevention_debug.log')
+debug_handler.setLevel(logging.DEBUG)
+debug_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+debug_handler.setFormatter(debug_formatter)
+logger.addHandler(debug_handler)
+
+
+class LossPreventionMode(Enum):
+    """Loss Prevention modes - adaptive based on market conditions"""
+    NORMAL = "normal"          # Standard protection
+    CAUTION = "caution"        # Increased protection
+    WARNING = "warning"        # High protection
+    CRITICAL = "critical"      # Maximum protection
+    EMERGENCY = "emergency"    # Stop all trading
+    RECOVERY = "recovery"      # Recovering from losses
+
+
+class LossPreventionLevel(Enum):
+    """Loss prevention levels"""
+    NORMAL = "normal"
+    CAUTION = "caution"
+    WARNING = "warning"
+    CRITICAL = "critical"
+    EMERGENCY = "emergency"
+
+
+@dataclass
+class LossPreventionConfig:
+    """Configuration for Loss Prevention - ULTIMATE BALANCED"""
+    
+    # Risk per trade (0.5% - 2%)
+    risk_per_trade: float = 1.0  # 1% default
+    
+    # Daily loss limit (1% - 4%)
+    daily_loss_limit: float = 2.0  # 2% default
+    
+    # Monthly drawdown limit (3% - 10%)
+    monthly_drawdown_limit: float = 5.0  # 5% default
+    
+    # Consecutive losses before pause
+    max_consecutive_losses: int = 3
+    
+    # Pause duration after consecutive losses (hours)
+    pause_duration_hours: int = 2
+    
+    # Minimum SL multiplier (0.5 - 2.0)
+    min_sl_multiplier: float = 0.8
+    
+    # Maximum SL multiplier (1.0 - 3.0)
+    max_sl_multiplier: float = 2.0
+    
+    # Minimum TP multiplier (1.5 - 4.0)
+    min_tp_multiplier: float = 2.0
+    
+    # Maximum TP multiplier (2.0 - 6.0)
+    max_tp_multiplier: float = 5.0
+    
+    # Max positions at once
+    max_positions: int = 5
+    
+    # Correlation limit between positions
+    correlation_limit: float = 0.7
+    
+    # Loss Prevention Score minimum for entry
+    min_lp_score: float = 65.0  # 65-80 range
+    
+    # Emergency volatility trigger (ATR multiplier)
+    emergency_volatility_trigger: float = 3.0
+    
+    # Recovery mode - reduce risk after drawdown
+    recovery_risk_reduction: float = 0.5  # Reduce by 50%
+    
+    # Recovery threshold
+    recovery_threshold: float = 5.0  # 5% drawdown triggers recovery
+    
+    # Support/Resistance detection
+    sr_lookback: int = 50
+    sr_zone_width: float = 0.005  # 0.5%
+    sr_confidence_threshold: float = 0.6
+    
+    # Loss zone detection
+    loss_zone_lookback: int = 30
+    loss_zone_threshold: float = 0.3  # 30% loss rate
+    
+    # False breakout detection
+    fb_lookback: int = 20
+    fb_volume_threshold: float = 1.5
+    fb_confidence_threshold: float = 0.6
+    
+    # Momentum failure
+    momentum_failure_threshold: float = 0.3
+    momentum_lookback: int = 10
+    
+    # Liquidity detection
+    liquidity_threshold: float = 0.3
+    spread_expansion_threshold: float = 2.0
+    
+    # Reversal detection
+    reversal_lookback: int = 5
+    reversal_threshold: float = 0.5
+    
+    # Pre-trade gate
+    min_risk_score: float = 0.6
+    max_loss_probability: float = 0.4
+    
+    # Recovery
+    recovery_step: float = 0.25
+    max_recovery_days: int = 7
+    
+    # History limits for memory optimization
+    max_history_size: int = 5000
+    
+    # Auto-correction thresholds
+    auto_correction_threshold: float = 5.0  # 5% deviation
+    
+    # Debug mode
+    debug_mode: bool = True
+
+
+class LossPreventionEngine:
+    """
+    ULTIMATE Loss Prevention Engine - Combines all loss prevention features
+    """
+    
+    def __init__(self, config: Optional[LossPreventionConfig] = None):
+        self.config = config or LossPreventionConfig()
+        self.mode = LossPreventionMode.NORMAL
+        self.debug_mode = self.config.debug_mode
+        
+        # Performance tracking
+        self.performance = {
+            'total_trades_checked': 0,
+            'trades_approved': 0,
+            'trades_rejected': 0,
+            'total_loss_prevented': 0.0,
+            'avg_lp_score': 0.0,
+            'last_check_time': None,
+            'rejection_reasons': {},
+            'false_breakouts_detected': 0,
+            'reversals_detected': 0,
+            'liquidity_warnings': 0,
+            'emergency_blocks': 0,
+            'recovery_events': 0,
+            'correction_count': 0
+        }
+        
+        # Tracking metrics
+        self.daily_pnl = 0.0
+        self.daily_loss = 0.0
+        self.daily_trades = 0
+        self.monthly_pnl = 0.0
+        self.monthly_drawdown = 0.0
+        self.peak_equity = 0.0
+        self.current_equity = 0.0
+        self.consecutive_losses = 0
+        self.consecutive_wins = 0
+        self.open_positions = 0
+        self.is_paused = False
+        self.pause_until = None
+        self.last_reset_date = datetime.now().date()
+        self.last_reset_month = datetime.now().month
+        
+        # Position tracking
+        self.open_positions_list = []
+        self.trade_history = deque(maxlen=self.config.max_history_size)
+        self.rejection_history = deque(maxlen=self.config.max_history_size)
+        self.loss_history = deque(maxlen=self.config.max_history_size)
+        self.price_history = deque(maxlen=self.config.max_history_size)
+        self.volume_history = deque(maxlen=self.config.max_history_size)
+        
+        # Loss Prevention Score
+        self.lp_score = 0.0
+        
+        # Adaptive parameters
+        self.adaptive_multiplier = 1.0
+        self.current_volatility = 0.0
+        self.current_atr = 0.0
+        self.current_adx = 0.0
+        self.current_regime = "unknown"
+        self.current_price = 0.0
+        self.current_volume = 0.0
+        self.current_spread = 0.0
+        
+        # Support/Resistance levels
+        self.support_levels = []
+        self.resistance_levels = []
+        self.loss_zones = []
+        
+        # Recovery
+        self.is_recovering = False
+        self.recovery_start = None
+        self.recovery_progress = 0.0
+        
+        # Auto-correction
+        self.last_auto_correction = None
+        
+        # Lock for thread safety
+        self._lock = threading.Lock()
+        
+        self._log_debug("ULTIMATE Loss Prevention Engine initialized in NORMAL mode")
+        logger.info("ULTIMATE Loss Prevention Engine initialized in NORMAL mode")
+    
+    def _log_debug(self, message: str, level: str = "debug") -> None:
+        """Debug logging with timestamp"""
+        if self.debug_mode:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+            log_msg = f"[DEBUG {timestamp}] {message}"
+            if level == "info":
+                logger.info(log_msg)
+            elif level == "warning":
+                logger.warning(log_msg)
+            elif level == "error":
+                logger.error(log_msg)
+            else:
+                logger.debug(log_msg)
+    
+    def update_market_data(self, market_data: Dict[str, Any]) -> None:
+        """Update market data and adapt parameters in real-time"""
+        try:
+            if not isinstance(market_data, dict):
+                self._log_debug(f"Invalid market data type: {type(market_data)}", "warning")
+                return
+            
+            # Extract data with fallbacks
+            self.current_volatility = market_data.get('volatility', 0.0) or 0.0
+            self.current_atr = market_data.get('atr', 0.0) or 0.0
+            self.current_adx = market_data.get('adx', 0.0) or 0.0
+            self.current_regime = market_data.get('regime', 'unknown') or 'unknown'
+            self.current_price = market_data.get('price', 0.0) or 0.0
+            self.current_volume = market_data.get('volume', 0.0) or 0.0
+            self.current_spread = market_data.get('spread', 0.0) or 0.0
+            
+            # Update history
+            self.price_history.append(self.current_price)
+            self.volume_history.append(self.current_volume)
+            
+            # Validate ranges
+            if self.current_volatility < 0:
+                self.current_volatility = 0.0
+            if self.current_atr < 0:
+                self.current_atr = 0.0
+            if self.current_adx < 0:
+                self.current_adx = 0.0
+            
+            # Detect support/resistance
+            self._detect_support_resistance()
+            
+            # Detect loss zones
+            self._detect_loss_zones()
+            
+            # Adapt mode based on market conditions
+            self._adapt_to_market_conditions()
+            
+            # Adapt parameters based on volatility
+            self._adapt_to_volatility()
+            
+            # Adapt parameters based on regime
+            self._adapt_to_regime()
+            
+            # Auto-correction check
+            self._check_auto_correction()
+            
+            self._log_debug(f"Market updated: regime={self.current_regime}, mode={self.mode.value}, volatility={self.current_volatility:.2f}")
+            
+        except Exception as e:
+            self._log_debug(f"Error in update_market_data: {str(e)}", "error")
+            self.mode = LossPreventionMode.NORMAL
+    
+    def _detect_support_resistance(self) -> None:
+        """Detect support and resistance levels"""
+        try:
+            if len(self.price_history) < self.config.sr_lookback:
+                return
+            
+            prices = list(self.price_history)[-self.config.sr_lookback:]
+            support = min(prices)
+            resistance = max(prices)
+            mid = (support + resistance) / 2
+            
+            self.support_levels = [support, support + (mid - support) * 0.3]
+            self.resistance_levels = [resistance, resistance - (resistance - mid) * 0.3]
+            
+        except Exception as e:
+            self._log_debug(f"Error in _detect_support_resistance: {str(e)}", "error")
+    
+    def _detect_loss_zones(self) -> None:
+        """Detect areas where losses occur"""
+        try:
+            if len(self.loss_history) < self.config.loss_zone_lookback:
+                return
+            
+            recent_losses = list(self.loss_history)[-self.config.loss_zone_lookback:]
+            loss_rate = sum(1 for l in recent_losses if l < 0) / len(recent_losses)
+            
+            if loss_rate > self.config.loss_zone_threshold:
+                self.loss_zones.append({
+                    'price': self.current_price,
+                    'loss_rate': loss_rate,
+                    'timestamp': datetime.now().isoformat()
+                })
+            
+            self.loss_zones = self.loss_zones[-10:]
+            
+        except Exception as e:
+            self._log_debug(f"Error in _detect_loss_zones: {str(e)}", "error")
+    
+    def _adapt_to_market_conditions(self) -> None:
+        """Adapt mode based on market conditions"""
+        try:
+            # High volatility
+            if self.current_volatility > 3.5:
+                self.mode = LossPreventionMode.EMERGENCY
+                self.config.risk_per_trade = 0.2
+                self.config.min_lp_score = 85
+                self._log_debug("ENTERED EMERGENCY mode due to extreme volatility", "warning")
+            
+            elif self.current_volatility > 2.0:
+                if self.mode != LossPreventionMode.EMERGENCY:
+                    self.mode = LossPreventionMode.CRITICAL
+                    self.config.risk_per_trade = max(0.3, min(self.config.risk_per_trade, 0.4))
+                    self.config.min_lp_score = max(75, self.config.min_lp_score)
+                    self._log_debug("Adapted to CRITICAL mode due to high volatility", "info")
+            
+            elif self.current_volatility < 0.5:
+                if self.mode != LossPreventionMode.EMERGENCY:
+                    self.mode = LossPreventionMode.CAUTION
+                    self.config.risk_per_trade = min(2.0, self.config.risk_per_trade + 0.3)
+                    self.config.min_lp_score = max(55, self.config.min_lp_score - 5)
+                    self._log_debug("Adapted to CAUTION mode due to low volatility", "info")
+            
+            # Trending market
+            elif self.current_adx >= 40:
+                if self.mode != LossPreventionMode.EMERGENCY:
+                    self.mode = LossPreventionMode.NORMAL
+                    self.config.risk_per_trade = 1.5
+                    self.config.min_lp_score = 60
+                    self._log_debug("Adapted to NORMAL mode in strong trend", "info")
+            
+            elif 20 < self.current_adx < 40:
+                if self.mode != LossPreventionMode.EMERGENCY:
+                    self.mode = LossPreventionMode.NORMAL
+                    self.config.risk_per_trade = 1.0
+                    self.config.min_lp_score = 65
+                    self._log_debug("Adapted to NORMAL mode in trending market", "info")
+            
+            # Ranging market
+            elif self.current_adx < 20:
+                if self.mode != LossPreventionMode.EMERGENCY:
+                    self.mode = LossPreventionMode.WARNING
+                    self.config.risk_per_trade = 0.75
+                    self.config.min_lp_score = 70
+                    self._log_debug("Adapted to WARNING mode in ranging market", "info")
+            
+            # News impact
+            if "news" in str(self.current_regime).lower():
+                self.mode = LossPreventionMode.EMERGENCY
+                self.config.risk_per_trade = 0.3
+                self.config.min_lp_score = 85
+                self._log_debug("ENTERED EMERGENCY mode due to news impact", "warning")
+            
+        except Exception as e:
+            self._log_debug(f"Error in _adapt_to_market_conditions: {str(e)}", "error")
+    
+    def _adapt_to_volatility(self) -> None:
+        """Adapt SL/TP multipliers based on volatility"""
+        try:
+            if self.current_atr > 0:
+                vol_ratio = self.current_atr / max(self.current_atr * 2, 0.001)
+                
+                self.config.min_sl_multiplier = max(0.5, min(1.5, 0.8 + vol_ratio * 0.3))
+                self.config.max_sl_multiplier = max(1.2, min(3.0, 1.5 + vol_ratio * 0.3))
+                self.config.min_tp_multiplier = max(1.5, min(3.0, 1.5 + vol_ratio * 0.3))
+                self.config.max_tp_multiplier = max(2.5, min(6.0, 3.0 + vol_ratio * 0.5))
+                
+            else:
+                self.config.min_sl_multiplier = 0.8
+                self.config.max_sl_multiplier = 2.0
+                self.config.min_tp_multiplier = 2.0
+                self.config.max_tp_multiplier = 5.0
+                
+        except Exception as e:
+            self._log_debug(f"Error in _adapt_to_volatility: {str(e)}", "error")
+    
+    def _adapt_to_regime(self) -> None:
+        """Adapt parameters based on regime"""
+        try:
+            regime = str(self.current_regime).lower()
+            
+            if "strong_trend" in regime:
+                self.config.min_lp_score = max(55, self.config.min_lp_score - 5)
+                self.config.max_positions = min(8, self.config.max_positions + 1)
+                
+            elif "ranging" in regime:
+                self.config.min_lp_score = min(75, self.config.min_lp_score + 5)
+                self.config.max_positions = max(3, self.config.max_positions - 1)
+                
+            elif "low_liquidity" in regime:
+                self.config.min_lp_score = 75
+                self.config.max_positions = max(2, self.config.max_positions - 2)
+                
+        except Exception as e:
+            self._log_debug(f"Error in _adapt_to_regime: {str(e)}", "error")
+    
+    def _check_auto_correction(self) -> None:
+        """Auto-correction to prevent drift"""
+        try:
+            if len(self.rejection_history) > 10:
+                recent_rejections = list(self.rejection_history)[-10:]
+                avg_score = sum(r.get('lp_score', 0) for r in recent_rejections) / len(recent_rejections)
+                
+                if avg_score > 80 and len([r for r in recent_rejections if not r.get('approved', False)]) > 7:
+                    self.config.min_lp_score = max(60, self.config.min_lp_score - 5)
+                    self._log_debug(f"AUTO-CORRECTION: Lowered threshold to {self.config.min_lp_score}", "info")
+                    self.performance['correction_count'] += 1
+            
+            if len(self.trade_history) > 20:
+                recent_trades = list(self.trade_history)[-20:]
+                avg_score = sum(t.get('lp_score', 0) for t in recent_trades) / len(recent_trades)
+                
+                if avg_score < 60 and len([t for t in recent_trades if t.get('won', False)]) < 8:
+                    self.config.min_lp_score = min(75, self.config.min_lp_score + 5)
+                    self._log_debug(f"AUTO-CORRECTION: Raised threshold to {self.config.min_lp_score}", "info")
+                    self.performance['correction_count'] += 1
+            
+            if self.performance['correction_count'] > 10:
+                self.performance['correction_count'] = 0
+                self._log_debug("AUTO-CORRECTION: Reset correction counter", "info")
+                
+        except Exception as e:
+            self._log_debug(f"Error in _check_auto_correction: {str(e)}", "error")
+    
+    def calculate_lp_score(self, trade_signal: Dict[str, Any]) -> float:
+        """Calculate Loss Prevention Score (0-100)"""
+        try:
+            if not isinstance(trade_signal, dict):
+                self._log_debug(f"Invalid trade_signal type", "warning")
+                return 50.0
+            
+            score = 0.0
+            score_details = {}
+            
+            # Factor 1: Downside Probability (20%)
+            downside_prob = max(0, min(100, trade_signal.get('downside_probability', 50.0)))
+            factor1 = (100 - downside_prob) * 0.20
+            score += factor1
+            score_details['downside_probability'] = factor1
+            
+            # Factor 2: False Breakout Risk (15%)
+            false_breakout_risk = max(0, min(100, trade_signal.get('false_breakout_risk', 50.0)))
+            factor2 = (100 - false_breakout_risk) * 0.15
+            score += factor2
+            score_details['false_breakout_risk'] = factor2
+            
+            # Factor 3: Support/Resistance Proximity (15%)
+            if self.support_levels and self.current_price:
+                support = min(self.support_levels)
+                resistance = max(self.resistance_levels) if self.resistance_levels else support * 1.05
+                price_range = resistance - support
+                if price_range > 0:
+                    proximity = min(1.0, abs(self.current_price - support) / price_range * 2)
+                    factor3 = (1 - proximity) * 15
+                else:
+                    factor3 = 10.0
+            else:
+                factor3 = 10.0
+            score += factor3
+            score_details['support_resistance'] = factor3
+            
+            # Factor 4: Momentum Strength (12%)
+            momentum = max(-1, min(1, trade_signal.get('momentum', 0.0)))
+            factor4 = abs(momentum) * 12
+            score += factor4
+            score_details['momentum'] = factor4
+            
+            # Factor 5: Liquidity Availability (10%)
+            liquidity = max(0, min(1, trade_signal.get('liquidity', 0.5)))
+            factor5 = liquidity * 10
+            score += factor5
+            score_details['liquidity'] = factor5
+            
+            # Factor 6: Spread Quality (8%)
+            spread = max(0, trade_signal.get('spread', 0.0))
+            if spread < 0.0001:
+                factor6 = 8.0
+            elif spread < 0.0003:
+                factor6 = 6.0
+            elif spread < 0.0005:
+                factor6 = 4.0
+            else:
+                factor6 = 2.0
+            score += factor6
+            score_details['spread'] = factor6
+            
+            # Factor 7: Execution Quality (8%)
+            execution_quality = max(0, min(1, trade_signal.get('execution_quality', 0.5)))
+            factor7 = execution_quality * 8
+            score += factor7
+            score_details['execution_quality'] = factor7
+            
+            # Factor 8: Market Regime (6%)
+            regime = str(self.current_regime).lower()
+            if "strong_trend" in regime:
+                factor8 = 6.0
+            elif "weak_trend" in regime:
+                factor8 = 4.0
+            elif "ranging" in regime:
+                factor8 = 3.0
+            elif "news" in regime or "volatile" in regime:
+                factor8 = 0.0
+            else:
+                factor8 = 3.0
+            score += factor8
+            score_details['regime'] = factor8
+            
+            # Factor 9: Loss Zone Detection (6%)
+            if self.loss_zones:
+                latest_zone = self.loss_zones[-1]
+                loss_rate = latest_zone.get('loss_rate', 0)
+                factor9 = (1 - min(1, loss_rate)) * 6
+            else:
+                factor9 = 6.0
+            score += factor9
+            score_details['loss_zone'] = factor9
+            
+            # Adjust score based on market conditions
+            if self.current_volatility > 2.0:
+                score *= 0.8
+            elif self.current_volatility < 0.5:
+                score *= 1.05
+            
+            # Adapt score based on mode
+            if self.mode == LossPreventionMode.EMERGENCY:
+                score *= 0.6
+            elif self.mode == LossPreventionMode.CRITICAL:
+                score *= 0.75
+            elif self.mode == LossPreventionMode.WARNING:
+                score *= 0.85
+            elif self.mode == LossPreventionMode.CAUTION:
+                score *= 1.05
+            
+            score = min(100.0, max(0.0, score))
+            
+            self.lp_score = score
+            self.performance['avg_lp_score'] = (self.performance['avg_lp_score'] * 0.9) + (score * 0.1)
+            
+            self._log_debug(f"LP Score: {score:.1f}")
+            return score
+            
+        except Exception as e:
+            self._log_debug(f"Error in calculate_lp_score: {str(e)}", "error")
+            return 50.0
+    
+    def can_enter_trade(self, trade_signal: Dict[str, Any]) -> Tuple[bool, str, float]:
+        """Check if trade can be entered based on ALL loss prevention rules"""
+        try:
+            self.performance['total_trades_checked'] += 1
+            self.performance['last_check_time'] = datetime.now().isoformat()
+            
+            if not isinstance(trade_signal, dict):
+                return False, "Invalid trade signal", 0.0
+            
+            # Check if blocked
+            if self.is_paused:
+                if datetime.now() < self.pause_until:
+                    remaining = (self.pause_until - datetime.now()).total_seconds() / 60
+                    return False, f"Paused for {remaining:.0f} minutes", 0.0
+                else:
+                    self.is_paused = False
+                    self.pause_until = None
+            
+            # Emergency mode check
+            if self.mode == LossPreventionMode.EMERGENCY:
+                self.performance['emergency_blocks'] += 1
+                return False, "EMERGENCY mode - no trading allowed", 0.0
+            
+            # Critical mode check
+            if self.mode == LossPreventionMode.CRITICAL:
+                return False, "CRITICAL mode - trading restricted", 0.0
+            
+            # Daily reset
+            today = datetime.now().date()
+            if today > self.last_reset_date:
+                self.daily_pnl = 0.0
+                self.daily_loss = 0.0
+                self.daily_trades = 0
+                self.last_reset_date = today
+            
+            # Monthly reset
+            if datetime.now().month != self.last_reset_month:
+                self.monthly_pnl = 0.0
+                self.monthly_drawdown = 0.0
+                self.last_reset_month = datetime.now().month
+            
+            # Check 1: LP Score
+            lp_score = self.calculate_lp_score(trade_signal)
+            min_score = self.config.min_lp_score
+            
+            if self.current_volatility > 1.5:
+                min_score = min(min_score + 5, 85)
+            elif self.current_volatility < 0.5:
+                min_score = max(min_score - 5, 55)
+            
+            if lp_score < min_score:
+                self.performance['trades_rejected'] += 1
+                rejection_reason = f"LP Score {lp_score:.1f} < {min_score:.1f}"
+                self.rejection_history.append({'lp_score': lp_score, 'approved': False, 'reason': rejection_reason})
+                return False, rejection_reason, 0.0
+            
+            # Check 2: Daily loss limit
+            if abs(self.daily_loss) >= self.config.daily_loss_limit:
+                self.performance['trades_rejected'] += 1
+                return False, f"Daily loss limit {self.config.daily_loss_limit}% reached", 0.0
+            
+            # Check 3: Monthly drawdown
+            if abs(self.monthly_drawdown) >= self.config.monthly_drawdown_limit:
+                self.performance['trades_rejected'] += 1
+                return False, f"Monthly drawdown limit {self.config.monthly_drawdown_limit}% reached", 0.0
+            
+            # Check 4: Consecutive losses
+            if self.consecutive_losses >= self.config.max_consecutive_losses:
+                self.is_paused = True
+                self.pause_until = datetime.now() + timedelta(hours=self.config.pause_duration_hours)
+                self.performance['trades_rejected'] += 1
+                return False, f"Max consecutive losses ({self.config.max_consecutive_losses}) reached", 0.0
+            
+            # Check 5: Max positions
+            if self.open_positions >= self.config.max_positions:
+                self.performance['trades_rejected'] += 1
+                return False, f"Max positions ({self.config.max_positions}) reached", 0.0
+            
+            # Check 6: Loss zone
+            if self.loss_zones:
+                latest_zone = self.loss_zones[-1]
+                if latest_zone.get('loss_rate', 0) > 0.5:
+                    self.performance['trades_rejected'] += 1
+                    return False, "Loss zone detected", 0.0
+            
+            # Check 7: Correlation between positions
+            if self.open_positions > 0:
+                for pos in self.open_positions_list:
+                    if self._check_correlation(pos, trade_signal):
+                        self.performance['trades_rejected'] += 1
+                        return False, "Correlation limit exceeded", 0.0
+            
+            # Check 8: Risk per trade
+            position_size = self._calculate_position_size(trade_signal, lp_score)
+            if position_size <= 0:
+                self.performance['trades_rejected'] += 1
+                return False, "Position size too small", 0.0
+            
+            # Check 9: Emergency volatility
+            if self.current_volatility > self.config.emergency_volatility_trigger:
+                position_size *= 0.5
+                if position_size < 0.1:
+                    self.performance['trades_rejected'] += 1
+                    return False, "Volatility too high", 0.0
+            
+            # All checks passed
+            self.performance['trades_approved'] += 1
+            self.rejection_history.append({'lp_score': lp_score, 'approved': True})
+            return True, "All checks passed", position_size
+            
+        except Exception as e:
+            self._log_debug(f"Error in can_enter_trade: {str(e)}", "error")
+            return False, f"Error: {str(e)}", 0.0
+    
+    def _calculate_position_size(self, trade_signal: Dict[str, Any], lp_score: float) -> float:
+        """Calculate adaptive position size"""
+        try:
+            base_risk = max(0.1, min(self.config.risk_per_trade / 100.0, 0.03))
+            
+            score_multiplier = max(0.5, min(lp_score / 100.0, 1.0))
+            
+            if self.mode == LossPreventionMode.EMERGENCY:
+                mode_multiplier = 0.0
+            elif self.mode == LossPreventionMode.CRITICAL:
+                mode_multiplier = 0.3
+            elif self.mode == LossPreventionMode.WARNING:
+                mode_multiplier = 0.6
+            elif self.mode == LossPreventionMode.CAUTION:
+                mode_multiplier = 0.8
+            else:
+                mode_multiplier = 1.0
+            
+            if self.current_volatility > 2.0:
+                volatility_multiplier = 0.5
+            elif self.current_volatility > 1.5:
+                volatility_multiplier = 0.7
+            elif self.current_volatility < 0.5:
+                volatility_multiplier = 1.2
+            else:
+                volatility_multiplier = 1.0
+            
+            if self.consecutive_losses >= 1:
+                loss_adjustment = max(0.5, 1.0 - (self.consecutive_losses * 0.15))
+            else:
+                loss_adjustment = 1.0
+            
+            position_size = base_risk * score_multiplier * mode_multiplier * volatility_multiplier * loss_adjustment
+            position_size = max(0.001, min(position_size * 100, 2.5))
+            
+            return position_size
+            
+        except Exception as e:
+            self._log_debug(f"Error in _calculate_position_size: {str(e)}", "error")
+            return 0.5
+    
+    def _check_correlation(self, position: Dict[str, Any], new_signal: Dict[str, Any]) -> bool:
+        """Check if new position correlates too much with existing"""
+        try:
+            if position.get('pair') == new_signal.get('pair'):
+                return True
+            
+            if position.get('direction') == new_signal.get('direction'):
+                pair1 = position.get('pair', '')
+                pair2 = new_signal.get('pair', '')
+                if self._pairs_correlated(pair1, pair2):
+                    return True
+            
+            return False
+            
+        except Exception as e:
+            self._log_debug(f"Error in _check_correlation: {str(e)}", "error")
+            return False
+    
+    def _pairs_correlated(self, pair1: str, pair2: str) -> bool:
+        """Check if two pairs are highly correlated"""
+        correlated_pairs = {
+            ('EURUSD', 'GBPUSD'): True,
+            ('BTCUSDT', 'ETHUSDT'): True,
+            ('XAUUSD', 'XAGUSD'): True,
+            ('US30', 'NAS100'): True,
+            ('US30', 'DAX40'): True,
+        }
+        return correlated_pairs.get((pair1, pair2), False)
+    
+    def update_after_trade(self, trade_result: Dict[str, Any]) -> None:
+        """Update tracking after trade is closed"""
+        try:
+            if not isinstance(trade_result, dict):
+                return
+            
+            pnl = trade_result.get('pnl', 0.0)
+            won = pnl > 0
+            trade_id = trade_result.get('id', 'unknown')
+            
+            self.daily_pnl += pnl
+            self.daily_trades += 1
+            if pnl < 0:
+                self.daily_loss += pnl
+                self.performance['total_loss_prevented'] += abs(pnl)
+                self.loss_history.append(pnl)
+            
+            self.monthly_pnl += pnl
+            self.current_equity += pnl
+            
+            if self.current_equity > self.peak_equity:
+                self.peak_equity = self.current_equity
+            if self.peak_equity > 0:
+                self.monthly_drawdown = (self.peak_equity - self.current_equity) / self.peak_equity * 100
+            
+            if won:
+                self.consecutive_wins += 1
+                self.consecutive_losses = 0
+                if self.consecutive_wins >= 3:
+                    self._recover_from_losses()
+            else:
+                self.consecutive_losses += 1
+                self.consecutive_wins = 0
+                if self.consecutive_losses >= 2:
+                    self._handle_loss_streak()
+            
+            self.open_positions = max(0, self.open_positions - 1)
+            self.open_positions_list = [p for p in self.open_positions_list if p.get('id') != trade_id]
+            
+            self.trade_history.append({
+                'id': trade_id,
+                'pnl': pnl,
+                'won': won,
+                'lp_score': self.lp_score,
+                'mode': self.mode.value,
+                'timestamp': datetime.now().isoformat()
+            })
+            
+            self._adapt_performance_mode()
+            
+            self._log_debug(f"Trade closed: PnL=${pnl:.2f}, Win={won}, Consecutive: Wins={self.consecutive_wins}, Losses={self.consecutive_losses}")
+            
+        except Exception as e:
+            self._log_debug(f"Error in update_after_trade: {str(e)}", "error")
+    
+    def _handle_loss_streak(self) -> None:
+        """Handle loss streak - reduce risk"""
+        try:
+            reduction = min(0.5, self.consecutive_losses * 0.15)
+            self.config.risk_per_trade = max(0.3, self.config.risk_per_trade * (1 - reduction))
+            self._log_debug(f"Loss streak: {self.consecutive_losses} losses. Risk reduced to {self.config.risk_per_trade:.2f}%", "warning")
+        except Exception as e:
+            self._log_debug(f"Error in _handle_loss_streak: {str(e)}", "error")
+    
+    def _recover_from_losses(self) -> None:
+        """Recover after winning streak"""
+        try:
+            if self.consecutive_wins >= 3 and self.config.risk_per_trade < 1.0:
+                self.config.risk_per_trade = min(1.5, self.config.risk_per_trade * 1.2)
+                self._log_debug(f"Recovering: Risk increased to {self.config.risk_per_trade:.2f}%", "info")
+        except Exception as e:
+            self._log_debug(f"Error in _recover_from_losses: {str(e)}", "error")
+    
+    def _adapt_performance_mode(self) -> None:
+        """Adapt mode based on performance"""
+        try:
+            if abs(self.monthly_drawdown) > self.config.recovery_threshold:
+                if self.mode != LossPreventionMode.EMERGENCY:
+                    self.mode = LossPreventionMode.RECOVERY
+                    self.config.risk_per_trade = max(0.3, self.config.risk_per_trade * 0.5)
+                    self.performance['recovery_events'] += 1
+                    self._log_debug(f"Entered RECOVERY mode: drawdown {abs(self.monthly_drawdown):.1f}%", "warning")
+            
+            elif self.monthly_pnl > 5.0 and abs(self.monthly_drawdown) < 2.0:
+                if self.mode == LossPreventionMode.RECOVERY and self.consecutive_wins > 3:
+                    self.mode = LossPreventionMode.NORMAL
+                    self.config.risk_per_trade = min(1.5, self.config.risk_per_trade * 1.25)
+                    self._log_debug("Recovered from drawdown. Mode: NORMAL", "info")
+                    
+        except Exception as e:
+            self._log_debug(f"Error in _adapt_performance_mode: {str(e)}", "error")
+    
+    def add_open_position(self, position: Dict[str, Any]) -> None:
+        """Track open position"""
+        try:
+            if len(self.open_positions_list) < self.config.max_positions:
+                self.open_positions_list.append(position)
+                self.open_positions = len(self.open_positions_list)
+        except Exception as e:
+            self._log_debug(f"Error in add_open_position: {str(e)}", "error")
+    
+    def emergency_stop(self) -> None:
+        """Emergency stop - stop all trading"""
+        try:
+            self.mode = LossPreventionMode.EMERGENCY
+            self.is_paused = True
+            self.pause_until = datetime.now() + timedelta(hours=24)
+            self.config.risk_per_trade = 0.1
+            self.performance['emergency_blocks'] += 1
+            self._log_debug("EMERGENCY STOP ACTIVATED - All trading paused for 24 hours", "error")
+            logger.error("EMERGENCY STOP ACTIVATED")
+        except Exception as e:
+            self._log_debug(f"Error in emergency_stop: {str(e)}", "error")
+    
+    def emergency_resume(self) -> None:
+        """Resume trading after emergency stop"""
+        try:
+            self.mode = LossPreventionMode.RECOVERY
+            self.is_paused = False
+            self.pause_until = None
+            self.config.risk_per_trade = 0.3
+            self._log_debug("Emergency stop lifted. Resuming in RECOVERY mode", "info")
+            logger.info("Emergency stop lifted. Resuming in RECOVERY mode")
+        except Exception as e:
+            self._log_debug(f"Error in emergency_resume: {str(e)}", "error")
+    
+    def get_sl_tp_multipliers(self) -> Tuple[float, float]:
+        """Get adaptive SL and TP multipliers"""
+        try:
+            if self.current_volatility > 2.0:
+                sl_mult = self.config.min_sl_multiplier
+                tp_mult = self.config.max_tp_multiplier
+            elif self.current_volatility < 0.5:
+                sl_mult = self.config.max_sl_multiplier
+                tp_mult = self.config.min_tp_multiplier
+            else:
+                sl_mult = self.config.min_sl_multiplier + (self.config.max_sl_multiplier - self.config.min_sl_multiplier) * 0.5
+                tp_mult = self.config.min_tp_multiplier + (self.config.max_tp_multiplier - self.config.min_tp_multiplier) * 0.5
+            
+            regime = str(self.current_regime).lower()
+            if "strong_trend" in regime:
+                sl_mult *= 1.2
+                tp_mult *= 1.3
+            elif "ranging" in regime:
+                sl_mult *= 0.8
+                tp_mult *= 0.8
+            elif "news" in regime or "volatile" in regime:
+                sl_mult *= 0.7
+                tp_mult *= 0.7
+            
+            sl_mult = max(0.3, min(sl_mult, 3.0))
+            tp_mult = max(1.0, min(tp_mult, 6.0))
+            
+            return sl_mult, tp_mult
+            
+        except Exception as e:
+            self._log_debug(f"Error in get_sl_tp_multipliers: {str(e)}", "error")
+            return 1.0, 2.0
+    
+    def reset_daily(self) -> None:
+        """Reset daily metrics"""
+        try:
+            self.daily_pnl = 0.0
+            self.daily_loss = 0.0
+            self.daily_trades = 0
+            self.last_reset_date = datetime.now().date()
+            self._log_debug("Daily metrics reset", "info")
+        except Exception as e:
+            self._log_debug(f"Error in reset_daily: {str(e)}", "error")
+    
+    def reset_monthly(self) -> None:
+        """Reset monthly metrics"""
+        try:
+            self.monthly_pnl = 0.0
+            self.monthly_drawdown = 0.0
+            self.peak_equity = self.current_equity
+            self.last_reset_month = datetime.now().month
+            self._log_debug("Monthly metrics reset", "info")
+        except Exception as e:
+            self._log_debug(f"Error in reset_monthly: {str(e)}", "error")
+    
+    def get_status(self) -> Dict[str, Any]:
+        """Get current status"""
+        try:
+            return {
+                'mode': self.mode.value,
+                'lp_score': self.lp_score,
+                'daily_pnl': self.daily_pnl,
+                'daily_loss': abs(self.daily_loss),
+                'daily_loss_limit': self.config.daily_loss_limit,
+                'monthly_drawdown': abs(self.monthly_drawdown),
+                'monthly_drawdown_limit': self.config.monthly_drawdown_limit,
+                'consecutive_losses': self.consecutive_losses,
+                'consecutive_wins': self.consecutive_wins,
+                'open_positions': self.open_positions,
+                'max_positions': self.config.max_positions,
+                'risk_per_trade': self.config.risk_per_trade,
+                'min_lp_score': self.config.min_lp_score,
+                'is_paused': self.is_paused,
+                'pause_remaining': round((self.pause_until - datetime.now()).total_seconds() / 60) if self.is_paused else 0,
+                'current_regime': self.current_regime,
+                'current_volatility': self.current_volatility,
+                'sl_multiplier': f"{self.config.min_sl_multiplier:.2f}-{self.config.max_sl_multiplier:.2f}",
+                'tp_multiplier': f"{self.config.min_tp_multiplier:.2f}-{self.config.max_tp_multiplier:.2f}",
+                'support_levels': self.support_levels[-3:] if self.support_levels else [],
+                'resistance_levels': self.resistance_levels[-3:] if self.resistance_levels else [],
+                'loss_zones': self.loss_zones[-3:] if self.loss_zones else [],
+                'status': 'ACTIVE' if not self.is_paused else 'PAUSED',
+                'performance': {
+                    'total_trades_checked': self.performance['total_trades_checked'],
+                    'trades_approved': self.performance['trades_approved'],
+                    'trades_rejected': self.performance['trades_rejected'],
+                    'total_loss_prevented': self.performance['total_loss_prevented'],
+                    'avg_lp_score': self.performance['avg_lp_score'],
+                    'emergency_blocks': self.performance['emergency_blocks'],
+                    'recovery_events': self.performance['recovery_events']
+                },
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_status: {str(e)}", "error")
+            return {'status': 'ERROR', 'error': str(e)}
+    
+    def get_performance_report(self) -> Dict[str, Any]:
+        """Get detailed performance report"""
+        try:
+            total_checked = self.performance['total_trades_checked']
+            approval_rate = (self.performance['trades_approved'] / max(1, total_checked)) * 100
+            
+            return {
+                'mode': self.mode.value,
+                'total_trades_checked': total_checked,
+                'trades_approved': self.performance['trades_approved'],
+                'trades_rejected': self.performance['trades_rejected'],
+                'approval_rate': approval_rate,
+                'total_loss_prevented': self.performance['total_loss_prevented'],
+                'avg_lp_score': self.performance['avg_lp_score'],
+                'consecutive_wins': self.consecutive_wins,
+                'consecutive_losses': self.consecutive_losses,
+                'daily_pnl': self.daily_pnl,
+                'monthly_pnl': self.monthly_pnl,
+                'current_drawdown': abs(self.monthly_drawdown),
+                'emergency_blocks': self.performance['emergency_blocks'],
+                'recovery_events': self.performance['recovery_events'],
+                'correction_count': self.performance['correction_count'],
+                'is_paused': self.is_paused,
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_performance_report: {str(e)}", "error")
+            return {'error': str(e)}

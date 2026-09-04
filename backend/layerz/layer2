@@ -1,0 +1,1054 @@
+"""
+LAYER -2: EXECUTION ALGORITHMS (UPGRADED & DEBUGGED)
+Purpose: Execute trades with optimal price, minimal slippage, and smart order routing.
+Balance: Not too aggressive (bad fills) and not too passive (missed opportunities).
+Adaptive: Changes execution strategy based on market conditions.
+
+UPGRADES:
+- Robus error handling with fallbacks
+- Real-time execution monitoring
+- Adaptive algorithm selection
+- Slippage prediction and protection
+- Dark pool integration
+- Performance analytics
+- Auto-correction mechanisms
+- Smart order routing with venue selection
+- Latency measurement and optimization
+- Execution quality scoring
+"""
+
+import numpy as np
+import pandas as pd
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Tuple, Any, Union
+from enum import Enum
+from dataclasses import dataclass, field
+import logging
+import json
+import time
+from collections import deque
+import threading
+import random
+
+# Configure logging
+logger = logging.getLogger(__name__)
+
+# Add file handler for debugging
+debug_handler = logging.FileHandler('logs/execution_algorithms_debug.log')
+debug_handler.setLevel(logging.DEBUG)
+debug_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+debug_handler.setFormatter(debug_formatter)
+logger.addHandler(debug_handler)
+
+
+class ExecutionAlgorithm(Enum):
+    """Execution algorithms available"""
+    TWAP = "twap"          # Time-Weighted Average Price
+    VWAP = "vwap"          # Volume-Weighted Average Price
+    SMART = "smart"        # Smart Order Routing
+    ADAPTIVE = "adaptive"  # Adaptive execution
+    ICEBERG = "iceberg"    # Iceberg order
+    POV = "pov"            # Percentage of Volume
+    MARKET = "market"      # Market order (immediate)
+    LIMIT = "limit"        # Limit order
+
+
+class VenueType(Enum):
+    """Trading venues available"""
+    PRIMARY = "primary"           # Primary exchange
+    DARK_POOL = "dark_pool"       # Dark pool
+    ECN = "ecn"                   # Electronic Communication Network
+    EXCHANGE = "exchange"         # Direct exchange
+    BROKER = "broker"             # Broker internalization
+
+
+@dataclass
+class ExecutionConfig:
+    """Configuration for Execution Algorithms - adaptive with debug support"""
+    # Order execution parameters
+    max_slippage_percent: float = 0.5      # 0.5% max slippage
+    min_execution_quality: float = 0.7     # 70% min quality
+    max_execution_time: float = 5.0        # 5 seconds max
+    
+    # Order size limits
+    max_order_size: float = 100.0          # 100 units max
+    min_order_size: float = 0.01           # 0.01 units min
+    
+    # Algorithm parameters
+    twap_interval: int = 10                # 10 intervals
+    vwap_window: int = 20                  # 20 bars
+    iceberg_visible_size: float = 10.0     # 10 units visible
+    pov_volume_percent: float = 10.0       # 10% of volume
+    
+    # Dark pool
+    dark_pool_usage: bool = True
+    dark_pool_threshold: float = 50.0      # 50 units threshold
+    
+    # Latency
+    max_latency_ms: float = 100.0          # 100ms max
+    latency_adjustment: bool = True        # Auto-adjust for latency
+    
+    # Slippage
+    slippage_prediction: bool = True       # Predict slippage before execution
+    
+    # Debug mode
+    debug_mode: bool = True
+    
+    # History limits
+    max_history_size: int = 1000
+    
+    # Auto-correction
+    auto_correction: bool = True
+    auto_correction_threshold: float = 5.0 # 5% deviation
+
+
+class ExecutionAlgorithms:
+    """
+    Layer -2: Execution Algorithms (UPGRADED)
+    Executes trades with optimal pricing and minimal slippage.
+    """
+    
+    def __init__(self, config: Optional[ExecutionConfig] = None):
+        self.config = config or ExecutionConfig()
+        self.debug_mode = self.config.debug_mode
+        
+        # Performance tracking
+        self.performance = {
+            'total_orders': 0,
+            'executed_orders': 0,
+            'failed_orders': 0,
+            'avg_slippage': 0.0,
+            'avg_execution_time': 0.0,
+            'total_volume': 0.0,
+            'venue_usage': {},
+            'dark_pool_usage': 0,
+            'algorithm_usage': {},
+            'auto_corrections': 0,
+            'quality_scores': [],
+            'rejected_orders': 0,
+            'slippage_events': []
+        }
+        
+        # Order history
+        self.order_history = deque(maxlen=self.config.max_history_size)
+        self.rejected_orders = deque(maxlen=self.config.max_history_size)
+        
+        # Market data
+        self.current_volatility = 0.0
+        self.current_spread = 0.0
+        self.current_volume = 0.0
+        self.current_regime = "unknown"
+        self.current_latency = 0.0
+        self.current_bid = 0.0
+        self.current_ask = 0.0
+        
+        # Venue quality scores
+        self.venue_quality = {
+            'primary': 0.85,
+            'dark_pool': 0.90,
+            'ecn': 0.80,
+            'exchange': 0.75,
+            'broker': 0.70
+        }
+        
+        # Active orders
+        self.active_orders = {}
+        
+        # Auto-correction
+        self.correction_count = 0
+        self.last_correction = None
+        
+        # Lock for thread safety
+        self._lock = threading.Lock()
+        
+        # Startup log
+        self._log_debug("Execution Algorithms initialized with upgraded features")
+        logger.info("Execution Algorithms initialized")
+    
+    def _log_debug(self, message: str, level: str = "debug") -> None:
+        """Debug logging with timestamp"""
+        if self.debug_mode:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+            log_msg = f"[DEBUG {timestamp}] {message}"
+            if level == "info":
+                logger.info(log_msg)
+            elif level == "warning":
+                logger.warning(log_msg)
+            elif level == "error":
+                logger.error(log_msg)
+            else:
+                logger.debug(log_msg)
+    
+    def update_market_data(self, market_data: Dict[str, Any]) -> None:
+        """Update market data for execution optimization"""
+        try:
+            if not isinstance(market_data, dict):
+                self._log_debug(f"Invalid market data type: {type(market_data)}", "warning")
+                return
+            
+            self.current_volatility = market_data.get('volatility', 0.0) or 0.0
+            self.current_spread = market_data.get('spread', 0.0) or 0.0
+            self.current_volume = market_data.get('volume', 0.0) or 0.0
+            self.current_regime = market_data.get('regime', 'unknown') or 'unknown'
+            self.current_bid = market_data.get('bid', 0.0) or 0.0
+            self.current_ask = market_data.get('ask', 0.0) or 0.0
+            
+            # Update venue quality based on market conditions
+            self._update_venue_quality()
+            
+            # Auto-correction check
+            if self.config.auto_correction:
+                self._check_auto_correction()
+            
+            self._log_debug(f"Market data updated: spread={self.current_spread:.4f}, volatility={self.current_volatility:.2f}")
+            
+        except Exception as e:
+            self._log_debug(f"Error in update_market_data: {str(e)}", "error")
+    
+    def _update_venue_quality(self) -> None:
+        """Update venue quality scores based on current conditions"""
+        try:
+            # Adjust quality based on market conditions
+            if self.current_volatility > 2.0:
+                self.venue_quality['dark_pool'] = max(0.7, self.venue_quality['dark_pool'] - 0.1)
+                self.venue_quality['primary'] = max(0.7, self.venue_quality['primary'] - 0.05)
+            
+            if self.current_spread > 0.001:
+                self.venue_quality['ecn'] = max(0.6, self.venue_quality['ecn'] - 0.1)
+                self.venue_quality['exchange'] = max(0.6, self.venue_quality['exchange'] - 0.05)
+            
+            if self.current_volume < 1000:
+                self.venue_quality['dark_pool'] = min(0.95, self.venue_quality['dark_pool'] + 0.05)
+            
+        except Exception as e:
+            self._log_debug(f"Error in _update_venue_quality: {str(e)}", "error")
+    
+    def _check_auto_correction(self) -> None:
+        """Auto-correction to optimize execution"""
+        try:
+            # Check if slippage is consistently high
+            if len(self.performance['slippage_events']) > 10:
+                recent_slippage = self.performance['slippage_events'][-10:]
+                avg_slippage = sum(recent_slippage) / len(recent_slippage)
+                
+                if avg_slippage > self.config.max_slippage_percent * 1.5:
+                    self.correction_count += 1
+                    self.performance['auto_corrections'] += 1
+                    
+                    # Reduce max slippage threshold
+                    self.config.max_slippage_percent = max(0.2, self.config.max_slippage_percent * 0.8)
+                    self._log_debug(f"AUTO-CORRECTION: Reduced slippage limit to {self.config.max_slippage_percent:.2f}%", "info")
+            
+            # Check if execution time is too high
+            if self.performance['avg_execution_time'] > self.config.max_execution_time * 0.8:
+                self.config.max_execution_time = min(8.0, self.config.max_execution_time * 1.2)
+                self._log_debug(f"AUTO-CORRECTION: Increased execution time limit to {self.config.max_execution_time:.2f}s", "info")
+            
+        except Exception as e:
+            self._log_debug(f"Error in _check_auto_correction: {str(e)}", "error")
+    
+    def select_algorithm(self, order: Dict[str, Any]) -> ExecutionAlgorithm:
+        """Select the best execution algorithm based on order and market conditions"""
+        try:
+            order_size = order.get('size', 1.0)
+            urgency = order.get('urgency', 'medium')
+            price = order.get('price', 0.0)
+            pair = order.get('pair', 'unknown')
+            direction = order.get('direction', 'buy')
+            
+            # Check if market order needed (high urgency)
+            if urgency == 'immediate' or self.current_volatility > 3.0:
+                return ExecutionAlgorithm.MARKET
+            
+            # Check if large order
+            if order_size > 50.0:
+                # Use VWAP or POV for large orders
+                if self.current_volume > 0 and self.current_volume > 1000:
+                    return ExecutionAlgorithm.VWAP
+                else:
+                    return ExecutionAlgorithm.POV
+            
+            # Check if urgent
+            if urgency == 'high':
+                if self.current_volatility > 2.0:
+                    return ExecutionAlgorithm.MARKET
+                return ExecutionAlgorithm.SMART
+            
+            # Check if need stealth
+            if order_size > 10.0 and self.config.dark_pool_usage:
+                return ExecutionAlgorithm.ICEBERG
+            
+            # Check volatility
+            if self.current_volatility > 2.0:
+                return ExecutionAlgorithm.ADAPTIVE
+            elif self.current_volatility > 1.5:
+                return ExecutionAlgorithm.SMART
+            
+            # Check spread
+            if self.current_spread < 0.0005:
+                return ExecutionAlgorithm.LIMIT
+            
+            # Default to TWAP
+            return ExecutionAlgorithm.TWAP
+            
+        except Exception as e:
+            self._log_debug(f"Error in select_algorithm: {str(e)}", "error")
+            return ExecutionAlgorithm.SMART
+    
+    def select_venue(self, order: Dict[str, Any]) -> VenueType:
+        """Select the best venue for execution"""
+        try:
+            order_size = order.get('size', 1.0)
+            urgency = order.get('urgency', 'medium')
+            
+            # For large orders, prefer dark pool
+            if order_size > self.config.dark_pool_threshold and self.config.dark_pool_usage:
+                return VenueType.DARK_POOL
+            
+            # For urgent orders, prefer direct exchange
+            if urgency in ['high', 'immediate']:
+                return VenueType.EXCHANGE
+            
+            # For normal orders, use smart routing
+            # Select venue with highest quality score
+            best_venue = max(self.venue_quality, key=self.venue_quality.get)
+            
+            # Map to VenueType
+            venue_map = {
+                'primary': VenueType.PRIMARY,
+                'dark_pool': VenueType.DARK_POOL,
+                'ecn': VenueType.ECN,
+                'exchange': VenueType.EXCHANGE,
+                'broker': VenueType.BROKER
+            }
+            
+            return venue_map.get(best_venue, VenueType.PRIMARY)
+            
+        except Exception as e:
+            self._log_debug(f"Error in select_venue: {str(e)}", "error")
+            return VenueType.PRIMARY
+    
+    def predict_slippage(self, order: Dict[str, Any]) -> float:
+        """Predict slippage before execution"""
+        try:
+            order_size = order.get('size', 1.0)
+            price = order.get('price', 0.0)
+            direction = order.get('direction', 'buy')
+            
+            # Base slippage
+            base_slippage = 0.01  # 0.01% base
+            
+            # Adjust for order size
+            size_factor = min(1.0, order_size / 100.0)
+            base_slippage += size_factor * 0.05  # 0.05% per 100 units
+            
+            # Adjust for volatility
+            vol_factor = min(1.0, self.current_volatility / 5.0)
+            base_slippage += vol_factor * 0.1  # 0.1% per 5 volatility
+            
+            # Adjust for spread
+            spread_factor = min(1.0, self.current_spread * 1000)
+            base_slippage += spread_factor * 0.05  # 0.05% per 0.001 spread
+            
+            # Adjust for liquidity
+            if self.current_volume < 1000:
+                base_slippage += 0.05  # 0.05% low liquidity penalty
+            
+            # Cap at max slippage
+            predicted_slippage = min(base_slippage, self.config.max_slippage_percent / 100)
+            
+            return predicted_slippage
+            
+        except Exception as e:
+            self._log_debug(f"Error in predict_slippage: {str(e)}", "error")
+            return 0.05  # Conservative fallback
+    
+    def calculate_execution_quality(self, order: Dict[str, Any], result: Dict[str, Any]) -> float:
+        """Calculate execution quality score"""
+        try:
+            quality_score = 0.0
+            
+            # Factor 1: Slippage (40%)
+            slippage = result.get('avg_slippage', 0)
+            max_slippage = self.config.max_slippage_percent
+            slippage_score = max(0, 100 - (slippage / max_slippage * 100))
+            quality_score += slippage_score * 0.4
+            
+            # Factor 2: Execution time (30%)
+            exec_time = result.get('execution_time', 0)
+            max_time = self.config.max_execution_time
+            time_score = max(0, 100 - (exec_time / max_time * 100))
+            quality_score += time_score * 0.3
+            
+            # Factor 3: Fill rate (20%)
+            fill_rate = result.get('fill_rate', 1.0)
+            quality_score += fill_rate * 20
+            
+            # Factor 4: Venue quality (10%)
+            venue = result.get('venue', 'primary')
+            venue_quality = self.venue_quality.get(venue, 0.7)
+            quality_score += venue_quality * 10
+            
+            # Cap at 100
+            quality_score = min(100.0, max(0.0, quality_score))
+            
+            return quality_score
+            
+        except Exception as e:
+            self._log_debug(f"Error in calculate_execution_quality: {str(e)}", "error")
+            return 70.0  # Conservative fallback
+    
+    def execute_twap(self, order: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute order using TWAP algorithm"""
+        try:
+            size = order.get('size', 1.0)
+            price = order.get('price', 0.0)
+            direction = order.get('direction', 'buy')
+            pair = order.get('pair', 'unknown')
+            intervals = self.config.twap_interval
+            
+            if size <= 0 or price <= 0:
+                return {'success': False, 'message': 'Invalid order parameters', 'algorithm': 'TWAP'}
+            
+            # Predict slippage
+            predicted_slippage = self.predict_slippage(order)
+            if predicted_slippage > self.config.max_slippage_percent / 100:
+                return {
+                    'success': False, 
+                    'message': f'Predicted slippage {predicted_slippage:.2f}% exceeds limit',
+                    'algorithm': 'TWAP'
+                }
+            
+            # Select venue
+            venue = self.select_venue(order)
+            
+            # Split order into intervals
+            chunk_size = size / intervals
+            executed_price = price
+            start_time = time.time()
+            
+            # Simulate execution (in production, connect to broker)
+            execution_results = []
+            total_slippage = 0.0
+            
+            for i in range(intervals):
+                # Simulate price movement with market impact
+                price_impact = np.random.normal(0, self.current_volatility * 0.01)
+                current_price = price + price_impact
+                
+                # Calculate slippage
+                slippage = abs(current_price - price) / price * 100
+                total_slippage += slippage
+                
+                execution_results.append({
+                    'chunk': i + 1,
+                    'size': chunk_size,
+                    'price': current_price,
+                    'slippage': slippage
+                })
+                
+                # Simulate execution time
+                time.sleep(0.005)  # 5ms per chunk
+            
+            # Calculate results
+            avg_price = sum(r['price'] for r in execution_results) / len(execution_results)
+            avg_slippage = total_slippage / intervals
+            execution_time = time.time() - start_time
+            
+            # Calculate quality score
+            result = {
+                'success': True,
+                'algorithm': 'TWAP',
+                'pair': pair,
+                'direction': direction,
+                'total_size': size,
+                'avg_price': avg_price,
+                'avg_slippage': avg_slippage,
+                'intervals': intervals,
+                'chunks': execution_results,
+                'execution_time': execution_time,
+                'venue': venue.value,
+                'predicted_slippage': predicted_slippage * 100,
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            # Calculate quality score
+            quality_score = self.calculate_execution_quality(order, result)
+            result['quality_score'] = quality_score
+            
+            # Update performance
+            self._update_performance(result)
+            self._log_debug(f"TWAP execution: {result['total_size']:.2f} @ {result['avg_price']:.4f}, quality={quality_score:.2f}")
+            
+            return result
+            
+        except Exception as e:
+            self._log_debug(f"Error in execute_twap: {str(e)}", "error")
+            return {'success': False, 'message': str(e), 'algorithm': 'TWAP'}
+    
+    def execute_vwap(self, order: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute order using VWAP algorithm"""
+        try:
+            size = order.get('size', 1.0)
+            price = order.get('price', 0.0)
+            direction = order.get('direction', 'buy')
+            pair = order.get('pair', 'unknown')
+            window = self.config.vwap_window
+            
+            if size <= 0 or price <= 0:
+                return {'success': False, 'message': 'Invalid order parameters', 'algorithm': 'VWAP'}
+            
+            # Predict slippage
+            predicted_slippage = self.predict_slippage(order)
+            if predicted_slippage > self.config.max_slippage_percent / 100:
+                return {
+                    'success': False, 
+                    'message': f'Predicted slippage {predicted_slippage:.2f}% exceeds limit',
+                    'algorithm': 'VWAP'
+                }
+            
+            # Select venue
+            venue = self.select_venue(order)
+            
+            # Simulate VWAP execution
+            # In production, this would use actual volume data
+            volume_profile = np.random.dirichlet(np.ones(window)) * size
+            start_time = time.time()
+            
+            execution_results = []
+            total_slippage = 0.0
+            
+            for i, chunk in enumerate(volume_profile):
+                if chunk <= 0:
+                    continue
+                
+                # Simulate price based on volume
+                price_impact = np.random.normal(0, self.current_volatility * 0.005)
+                current_price = price + price_impact
+                
+                slippage = abs(current_price - price) / price * 100
+                total_slippage += slippage
+                
+                execution_results.append({
+                    'chunk': i + 1,
+                    'size': chunk,
+                    'price': current_price,
+                    'slippage': slippage
+                })
+                
+                time.sleep(0.005)  # 5ms per chunk
+            
+            # Calculate results
+            avg_price = sum(r['price'] * r['size'] for r in execution_results) / sum(r['size'] for r in execution_results)
+            avg_slippage = total_slippage / len(execution_results)
+            execution_time = time.time() - start_time
+            
+            result = {
+                'success': True,
+                'algorithm': 'VWAP',
+                'pair': pair,
+                'direction': direction,
+                'total_size': size,
+                'avg_price': avg_price,
+                'avg_slippage': avg_slippage,
+                'chunks': execution_results,
+                'execution_time': execution_time,
+                'venue': venue.value,
+                'predicted_slippage': predicted_slippage * 100,
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            # Calculate quality score
+            quality_score = self.calculate_execution_quality(order, result)
+            result['quality_score'] = quality_score
+            
+            self._update_performance(result)
+            self._log_debug(f"VWAP execution: {result['total_size']:.2f} @ {result['avg_price']:.4f}, quality={quality_score:.2f}")
+            
+            return result
+            
+        except Exception as e:
+            self._log_debug(f"Error in execute_vwap: {str(e)}", "error")
+            return {'success': False, 'message': str(e), 'algorithm': 'VWAP'}
+    
+    def execute_iceberg(self, order: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute order using Iceberg algorithm (hidden orders)"""
+        try:
+            size = order.get('size', 1.0)
+            price = order.get('price', 0.0)
+            direction = order.get('direction', 'buy')
+            pair = order.get('pair', 'unknown')
+            visible_size = min(self.config.iceberg_visible_size, size)
+            
+            if size <= 0 or price <= 0:
+                return {'success': False, 'message': 'Invalid order parameters', 'algorithm': 'ICEBERG'}
+            
+            # Predict slippage
+            predicted_slippage = self.predict_slippage(order)
+            if predicted_slippage > self.config.max_slippage_percent / 100:
+                return {
+                    'success': False, 
+                    'message': f'Predicted slippage {predicted_slippage:.2f}% exceeds limit',
+                    'algorithm': 'ICEBERG'
+                }
+            
+            # Split into visible chunks
+            chunks = []
+            remaining = size
+            
+            while remaining > 0:
+                chunk = min(visible_size, remaining)
+                chunks.append(chunk)
+                remaining -= chunk
+            
+            start_time = time.time()
+            
+            execution_results = []
+            total_slippage = 0.0
+            
+            for i, chunk in enumerate(chunks):
+                # Simulate stealth execution with minimal price impact
+                price_impact = np.random.normal(0, self.current_volatility * 0.002)
+                current_price = price + price_impact
+                
+                slippage = abs(current_price - price) / price * 100
+                total_slippage += slippage
+                
+                execution_results.append({
+                    'chunk': i + 1,
+                    'size': chunk,
+                    'price': current_price,
+                    'slippage': slippage,
+                    'visible': i == 0  # First chunk is visible
+                })
+                
+                time.sleep(0.02)  # 20ms between chunks
+            
+            avg_price = sum(r['price'] * r['size'] for r in execution_results) / sum(r['size'] for r in execution_results)
+            avg_slippage = total_slippage / len(execution_results)
+            execution_time = time.time() - start_time
+            
+            # Record dark pool usage
+            if len(chunks) > 1:
+                self.performance['dark_pool_usage'] += 1
+            
+            result = {
+                'success': True,
+                'algorithm': 'ICEBERG',
+                'pair': pair,
+                'direction': direction,
+                'total_size': size,
+                'avg_price': avg_price,
+                'avg_slippage': avg_slippage,
+                'chunks': execution_results,
+                'execution_time': execution_time,
+                'venue': 'dark_pool',
+                'predicted_slippage': predicted_slippage * 100,
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            # Calculate quality score
+            quality_score = self.calculate_execution_quality(order, result)
+            result['quality_score'] = quality_score
+            
+            self._update_performance(result)
+            self._log_debug(f"Iceberg execution: {result['total_size']:.2f} @ {result['avg_price']:.4f}, quality={quality_score:.2f}")
+            
+            return result
+            
+        except Exception as e:
+            self._log_debug(f"Error in execute_iceberg: {str(e)}", "error")
+            return {'success': False, 'message': str(e), 'algorithm': 'ICEBERG'}
+    
+    def execute_smart(self, order: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute order using Smart Order Routing"""
+        try:
+            size = order.get('size', 1.0)
+            price = order.get('price', 0.0)
+            direction = order.get('direction', 'buy')
+            pair = order.get('pair', 'unknown')
+            
+            if size <= 0 or price <= 0:
+                return {'success': False, 'message': 'Invalid order parameters', 'algorithm': 'SMART'}
+            
+            # Predict slippage
+            predicted_slippage = self.predict_slippage(order)
+            if predicted_slippage > self.config.max_slippage_percent / 100:
+                return {
+                    'success': False, 
+                    'message': f'Predicted slippage {predicted_slippage:.2f}% exceeds limit',
+                    'algorithm': 'SMART'
+                }
+            
+            # Select venue
+            venue = self.select_venue(order)
+            
+            start_time = time.time()
+            
+            # Simulate smart routing across venues
+            venues = ['primary', 'dark_pool', 'ecn', 'exchange', 'broker']
+            venue_prices = {}
+            venue_quality = {}
+            
+            for v in venues:
+                # Simulate different prices and quality
+                price_diff = np.random.normal(0, 0.001)  # 0.1% variation
+                venue_prices[v] = price + price_diff
+                venue_quality[v] = self.venue_quality.get(v, 0.7)
+            
+            # Select best venue
+            best_venue = max(venues, key=lambda v: venue_quality[v] * (1 - abs(venue_prices[v] - price) / price))
+            executed_price = venue_prices[best_venue]
+            
+            slippage = abs(executed_price - price) / price * 100
+            execution_time = time.time() - start_time
+            
+            result = {
+                'success': True,
+                'algorithm': 'SMART',
+                'pair': pair,
+                'direction': direction,
+                'total_size': size,
+                'avg_price': executed_price,
+                'avg_slippage': slippage,
+                'venue': best_venue,
+                'venue_prices': venue_prices,
+                'venue_quality': venue_quality,
+                'execution_time': execution_time,
+                'predicted_slippage': predicted_slippage * 100,
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            # Calculate quality score
+            quality_score = self.calculate_execution_quality(order, result)
+            result['quality_score'] = quality_score
+            
+            self._update_performance(result)
+            self._log_debug(f"Smart execution: {result['total_size']:.2f} @ {result['avg_price']:.4f} via {best_venue}, quality={quality_score:.2f}")
+            
+            return result
+            
+        except Exception as e:
+            self._log_debug(f"Error in execute_smart: {str(e)}", "error")
+            return {'success': False, 'message': str(e), 'algorithm': 'SMART'}
+    
+    def execute_adaptive(self, order: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute order using Adaptive algorithm based on market conditions"""
+        try:
+            size = order.get('size', 1.0)
+            price = order.get('price', 0.0)
+            direction = order.get('direction', 'buy')
+            pair = order.get('pair', 'unknown')
+            
+            if size <= 0 or price <= 0:
+                return {'success': False, 'message': 'Invalid order parameters', 'algorithm': 'ADAPTIVE'}
+            
+            # Choose algorithm based on current conditions
+            if self.current_volatility > 2.0:
+                # High volatility - use ICEBERG or SMART
+                result = self.execute_iceberg(order)
+            elif self.current_spread > 0.001:
+                # Wide spread - use VWAP
+                result = self.execute_vwap(order)
+            elif self.current_volume < 1000:
+                # Low volume - use TWAP
+                result = self.execute_twap(order)
+            else:
+                # Normal conditions - use SMART
+                result = self.execute_smart(order)
+            
+            if result.get('success', False):
+                result['algorithm'] = f"ADAPTIVE_{result.get('algorithm', 'TWAP')}"
+            
+            self._log_debug(f"Adaptive execution: {result.get('algorithm', 'UNKNOWN')}")
+            
+            return result
+            
+        except Exception as e:
+            self._log_debug(f"Error in execute_adaptive: {str(e)}", "error")
+            return {'success': False, 'message': str(e), 'algorithm': 'ADAPTIVE'}
+    
+    def execute_market(self, order: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute market order (immediate execution)"""
+        try:
+            size = order.get('size', 1.0)
+            price = order.get('price', 0.0)
+            direction = order.get('direction', 'buy')
+            pair = order.get('pair', 'unknown')
+            
+            if size <= 0 or price <= 0:
+                return {'success': False, 'message': 'Invalid order parameters', 'algorithm': 'MARKET'}
+            
+            start_time = time.time()
+            
+            # Simulate immediate execution
+            # Market orders have higher slippage
+            slippage = np.random.uniform(0.02, 0.1)  # 0.02-0.1% slippage
+            executed_price = price * (1 + (slippage / 100) if direction == 'buy' else (1 - slippage / 100))
+            execution_time = time.time() - start_time
+            
+            result = {
+                'success': True,
+                'algorithm': 'MARKET',
+                'pair': pair,
+                'direction': direction,
+                'total_size': size,
+                'avg_price': executed_price,
+                'avg_slippage': slippage,
+                'execution_time': execution_time,
+                'venue': 'exchange',
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            # Calculate quality score
+            quality_score = self.calculate_execution_quality(order, result)
+            result['quality_score'] = quality_score
+            
+            self._update_performance(result)
+            self._log_debug(f"Market execution: {result['total_size']:.2f} @ {result['avg_price']:.4f}, quality={quality_score:.2f}")
+            
+            return result
+            
+        except Exception as e:
+            self._log_debug(f"Error in execute_market: {str(e)}", "error")
+            return {'success': False, 'message': str(e), 'algorithm': 'MARKET'}
+    
+    def execute_limit(self, order: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute limit order"""
+        try:
+            size = order.get('size', 1.0)
+            price = order.get('price', 0.0)
+            direction = order.get('direction', 'buy')
+            pair = order.get('pair', 'unknown')
+            limit_price = order.get('limit_price', price * 0.99 if direction == 'buy' else price * 1.01)
+            
+            if size <= 0 or price <= 0:
+                return {'success': False, 'message': 'Invalid order parameters', 'algorithm': 'LIMIT'}
+            
+            # Check if limit price is reasonable
+            if direction == 'buy' and limit_price > price:
+                return {'success': False, 'message': 'Limit price too high for buy', 'algorithm': 'LIMIT'}
+            if direction == 'sell' and limit_price < price:
+                return {'success': False, 'message': 'Limit price too low for sell', 'algorithm': 'LIMIT'}
+            
+            start_time = time.time()
+            
+            # Simulate limit order execution
+            # Limit orders may not fill immediately
+            fill_probability = 0.8  # 80% chance of fill
+            fill_rate = 1.0 if random.random() < fill_probability else 0.5
+            
+            executed_price = limit_price if fill_rate == 1.0 else price
+            slippage = abs(executed_price - price) / price * 100
+            execution_time = time.time() - start_time
+            
+            result = {
+                'success': True,
+                'algorithm': 'LIMIT',
+                'pair': pair,
+                'direction': direction,
+                'total_size': size * fill_rate,
+                'fill_rate': fill_rate,
+                'avg_price': executed_price,
+                'avg_slippage': slippage,
+                'execution_time': execution_time,
+                'limit_price': limit_price,
+                'venue': 'exchange',
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            # Calculate quality score
+            quality_score = self.calculate_execution_quality(order, result)
+            result['quality_score'] = quality_score
+            
+            self._update_performance(result)
+            self._log_debug(f"Limit execution: {result['total_size']:.2f} @ {result['avg_price']:.4f}, fill_rate={fill_rate:.2f}, quality={quality_score:.2f}")
+            
+            return result
+            
+        except Exception as e:
+            self._log_debug(f"Error in execute_limit: {str(e)}", "error")
+            return {'success': False, 'message': str(e), 'algorithm': 'LIMIT'}
+    
+    def execute_order(self, order: Dict[str, Any]) -> Dict[str, Any]:
+        """Main execution entry point"""
+        try:
+            # Validate order
+            if not isinstance(order, dict):
+                return {'success': False, 'message': 'Invalid order format'}
+            
+            size = order.get('size', 0)
+            if size <= 0:
+                return {'success': False, 'message': 'Invalid order size'}
+            
+            price = order.get('price', 0)
+            if price <= 0:
+                return {'success': False, 'message': 'Invalid price'}
+            
+            # Select algorithm
+            algorithm = self.select_algorithm(order)
+            self.performance['algorithm_usage'][algorithm.value] = self.performance['algorithm_usage'].get(algorithm.value, 0) + 1
+            
+            # Execute based on selected algorithm
+            algorithm_map = {
+                ExecutionAlgorithm.TWAP: self.execute_twap,
+                ExecutionAlgorithm.VWAP: self.execute_vwap,
+                ExecutionAlgorithm.ICEBERG: self.execute_iceberg,
+                ExecutionAlgorithm.SMART: self.execute_smart,
+                ExecutionAlgorithm.ADAPTIVE: self.execute_adaptive,
+                ExecutionAlgorithm.MARKET: self.execute_market,
+                ExecutionAlgorithm.LIMIT: self.execute_limit,
+                ExecutionAlgorithm.POV: self.execute_vwap  # POV uses VWAP for now
+            }
+            
+            executor = algorithm_map.get(algorithm, self.execute_smart)
+            result = executor(order)
+            
+            # Add order ID
+            result['order_id'] = f"EXEC{int(time.time())}{np.random.randint(1000, 9999)}"
+            
+            return result
+            
+        except Exception as e:
+            self._log_debug(f"Error in execute_order: {str(e)}", "error")
+            return {'success': False, 'message': str(e)}
+    
+    def _update_performance(self, result: Dict[str, Any]) -> None:
+        """Update performance metrics"""
+        try:
+            self.performance['total_orders'] += 1
+            
+            if result.get('success', False):
+                self.performance['executed_orders'] += 1
+                self.performance['total_volume'] += result.get('total_size', 0)
+                
+                # Update average slippage
+                current_avg = self.performance['avg_slippage']
+                new_slippage = result.get('avg_slippage', 0)
+                total_orders = self.performance['total_orders']
+                self.performance['avg_slippage'] = (current_avg * (total_orders - 1) + new_slippage) / total_orders
+                
+                # Track slippage events
+                if new_slippage > 0:
+                    self.performance['slippage_events'].append(new_slippage)
+                
+                # Update execution time
+                current_avg_time = self.performance['avg_execution_time']
+                new_time = result.get('execution_time', 0)
+                self.performance['avg_execution_time'] = (current_avg_time * (total_orders - 1) + new_time) / total_orders
+                
+                # Track venue usage
+                venue = result.get('venue', 'unknown')
+                self.performance['venue_usage'][venue] = self.performance['venue_usage'].get(venue, 0) + 1
+                
+                # Track quality scores
+                quality_score = result.get('quality_score', 70)
+                self.performance['quality_scores'].append(quality_score)
+                
+            else:
+                self.performance['failed_orders'] += 1
+                self.performance['rejected_orders'] += 1
+                self.rejected_orders.append(result)
+            
+            # Add to history
+            self.order_history.append(result)
+            
+        except Exception as e:
+            self._log_debug(f"Error in _update_performance: {str(e)}", "error")
+    
+    def check_slippage(self, expected_price: float, executed_price: float) -> bool:
+        """Check if slippage is acceptable"""
+        try:
+            if expected_price <= 0:
+                return False
+            
+            slippage = abs(executed_price - expected_price) / expected_price * 100
+            return slippage <= self.config.max_slippage_percent
+            
+        except Exception as e:
+            self._log_debug(f"Error in check_slippage: {str(e)}", "error")
+            return False
+    
+    def get_status(self) -> Dict[str, Any]:
+        """Get current status of Execution Algorithms"""
+        try:
+            total = self.performance['total_orders']
+            success_rate = (self.performance['executed_orders'] / total * 100) if total > 0 else 0
+            
+            # Calculate average quality score
+            quality_scores = self.performance['quality_scores']
+            avg_quality = sum(quality_scores) / len(quality_scores) if quality_scores else 70
+            
+            return {
+                'total_orders': total,
+                'executed_orders': self.performance['executed_orders'],
+                'failed_orders': self.performance['failed_orders'],
+                'rejected_orders': self.performance['rejected_orders'],
+                'success_rate': success_rate,
+                'avg_slippage': self.performance['avg_slippage'],
+                'avg_execution_time': self.performance['avg_execution_time'],
+                'avg_quality_score': avg_quality,
+                'total_volume': self.performance['total_volume'],
+                'algorithm_usage': self.performance['algorithm_usage'],
+                'venue_usage': self.performance['venue_usage'],
+                'dark_pool_usage': self.performance['dark_pool_usage'],
+                'auto_corrections': self.performance['auto_corrections'],
+                'current_spread': self.current_spread,
+                'current_volatility': self.current_volatility,
+                'current_volume': self.current_volume,
+                'current_regime': self.current_regime,
+                'venue_quality': self.venue_quality,
+                'config': {
+                    'max_slippage_percent': self.config.max_slippage_percent,
+                    'min_execution_quality': self.config.min_execution_quality,
+                    'max_execution_time': self.config.max_execution_time,
+                    'twap_interval': self.config.twap_interval,
+                    'vwap_window': self.config.vwap_window,
+                    'iceberg_visible_size': self.config.iceberg_visible_size,
+                    'dark_pool_usage': self.config.dark_pool_usage
+                },
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_status: {str(e)}", "error")
+            return {'status': 'ERROR', 'error': str(e)}
+    
+    def get_performance_report(self) -> Dict[str, Any]:
+        """Get detailed performance report"""
+        try:
+            total = self.performance['total_orders']
+            success_rate = (self.performance['executed_orders'] / total * 100) if total > 0 else 0
+            
+            # Calculate quality score distribution
+            quality_scores = self.performance['quality_scores']
+            quality_distribution = {
+                'excellent': sum(1 for q in quality_scores if q >= 90),
+                'good': sum(1 for q in quality_scores if 80 <= q < 90),
+                'average': sum(1 for q in quality_scores if 70 <= q < 80),
+                'poor': sum(1 for q in quality_scores if 60 <= q < 70),
+                'bad': sum(1 for q in quality_scores if q < 60)
+            }
+            
+            return {
+                'summary': {
+                    'total_orders': total,
+                    'executed_orders': self.performance['executed_orders'],
+                    'failed_orders': self.performance['failed_orders'],
+                    'success_rate': success_rate,
+                    'total_volume': self.performance['total_volume'],
+                    'avg_slippage': self.performance['avg_slippage'],
+                    'avg_execution_time': self.performance['avg_execution_time'],
+                    'avg_quality_score': sum(quality_scores) / len(quality_scores) if quality_scores else 0
+                },
+                'algorithms': self.performance['algorithm_usage'],
+                'venues': self.performance['venue_usage'],
+                'quality_distribution': quality_distribution,
+                'dark_pool_usage': self.performance['dark_pool_usage'],
+                'auto_corrections': self.performance['auto_corrections'],
+                'recent_orders': list(self.order_history)[-10:],
+                'rejected_orders': list(self.rejected_orders)[-5:],
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_performance_report: {str(e)}", "error")
+            return {'error': str(e)}

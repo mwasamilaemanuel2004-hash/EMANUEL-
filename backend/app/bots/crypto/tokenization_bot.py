@@ -20,7 +20,7 @@ from loguru import logger
 from ..base_bot import BaseBot, TradeSignal, SignalStrength, TradeQuality
 from ...core.token_analyzer import (
     TokenMetrics, RegulatoryStatus, NetworkPhase,
-    compute_token_score, should_trade, estimate_timing_quality,
+    compute_token_score, compute_enhanced_token_score, should_trade, estimate_timing_quality,
 )
 from ...core.smart_entry import SmartEntryEngine
 from .._shared_signals import AiSignalGate
@@ -36,6 +36,16 @@ TOKEN_UNIVERSE: Dict[str, TokenMetrics] = {
         staking_etf_available=True, net_capital_flow_30d=15.0,
         cycle_phase=NetworkPhase.BULL_RUN,
         active_addresses_30d_pct=5.0, real_usage_score=90,
+        # Supply / Dilution
+        circulating_supply=19_700_000, total_supply=19_700_000, max_supply=21_000_000,
+        annual_inflation_pct=0.8, unlock_30d_pct=0.0, unlock_90d_pct=0.0,
+        team_investor_pct=0.0, top10_holder_pct=5.0,
+        # Token Capture
+        annual_fees_usd=1_200_000_000, annual_revenue_usd=800_000_000,
+        annual_burn_usd=0, staking_yield_pct=0.0, daily_volume_usd=25_000_000_000,
+        # Valuation
+        price=65000, mcap_usd=1_280_000_000_000, fdv_usd=1_365_000_000_000,
+        price_ath=73750, price_200d_avg=55000, active_addresses=900000,
     ),
     "ETH": TokenMetrics(
         symbol="ETH", regulatory_status=RegulatoryStatus.COMPLIANT,
@@ -45,6 +55,16 @@ TOKEN_UNIVERSE: Dict[str, TokenMetrics] = {
         staking_etf_available=True, net_capital_flow_30d=10.0,
         cycle_phase=NetworkPhase.UPGRADE_CATALYST,
         active_addresses_30d_pct=4.0, real_usage_score=95,
+        # Supply / Dilution
+        circulating_supply=120_000_000, total_supply=120_000_000, max_supply=0,
+        annual_inflation_pct=0.5, unlock_30d_pct=0.0, unlock_90d_pct=0.0,
+        team_investor_pct=0.0, top10_holder_pct=8.0,
+        # Token Capture
+        annual_fees_usd=2_500_000_000, annual_revenue_usd=1_800_000_000,
+        annual_burn_usd=500_000_000, staking_yield_pct=3.5, daily_volume_usd=15_000_000_000,
+        # Valuation
+        price=3500, mcap_usd=420_000_000_000, fdv_usd=420_000_000_000,
+        price_ath=4878, price_200d_avg=2800, active_addresses=500000,
     ),
     "SOL": TokenMetrics(
         symbol="SOL", regulatory_status=RegulatoryStatus.PENDING,
@@ -54,6 +74,16 @@ TOKEN_UNIVERSE: Dict[str, TokenMetrics] = {
         staking_etf_available=True, net_capital_flow_30d=20.0,
         cycle_phase=NetworkPhase.UPGRADE_CATALYST,
         active_addresses_30d_pct=10.0, real_usage_score=85,
+        # Supply / Dilution
+        circulating_supply=440_000_000, total_supply=580_000_000, max_supply=0,
+        annual_inflation_pct=5.0, unlock_30d_pct=2.0, unlock_90d_pct=5.0,
+        team_investor_pct=20.0, top10_holder_pct=25.0,
+        # Token Capture
+        annual_fees_usd=150_000_000, annual_revenue_usd=100_000_000,
+        annual_burn_usd=30_000_000, staking_yield_pct=6.5, daily_volume_usd=3_000_000_000,
+        # Valuation
+        price=150, mcap_usd=66_000_000_000, fdv_usd=87_000_000_000,
+        price_ath=260, price_200d_avg=120, active_addresses=1_200_000,
     ),
     "ONDO": TokenMetrics(
         symbol="ONDO", regulatory_status=RegulatoryStatus.COMPLIANT,
@@ -63,6 +93,16 @@ TOKEN_UNIVERSE: Dict[str, TokenMetrics] = {
         staking_etf_available=False, net_capital_flow_30d=25.0,
         cycle_phase=NetworkPhase.BULL_RUN,
         active_addresses_30d_pct=15.0, real_usage_score=75,
+        # Supply / Dilution
+        circulating_supply=1_400_000_000, total_supply=10_000_000_000, max_supply=10_000_000_000,
+        annual_inflation_pct=15.0, unlock_30d_pct=5.0, unlock_90d_pct=12.0,
+        team_investor_pct=35.0, top10_holder_pct=45.0,
+        # Token Capture
+        annual_fees_usd=20_000_000, annual_revenue_usd=15_000_000,
+        annual_burn_usd=0, staking_yield_pct=0.0, daily_volume_usd=200_000_000,
+        # Valuation
+        price=0.85, mcap_usd=1_190_000_000, fdv_usd=8_500_000_000,
+        price_ath=1.50, price_200d_avg=0.70, active_addresses=50000,
     ),
 }
 
@@ -97,8 +137,13 @@ class TokenizationBot(BaseBot):
             if metrics is None:
                 metrics = self._derive_metrics_from_price(data, symbol)
 
-            result = compute_token_score(metrics)
+            result = compute_enhanced_token_score(metrics)
             token_score = result['total']
+            base_score = result['base_score']
+            dilution_score = result['dilution_score']
+            capture_score = result['capture_score']
+            upside_potential = result['upside_potential_pct']
+            risk_reward = result['risk_reward_ratio']
             timing = estimate_timing_quality(metrics)
 
             if token_score < self.score_threshold:
@@ -130,9 +175,11 @@ class TokenizationBot(BaseBot):
             return self.gate.make_signal(
                 mtf_data, side, entry,
                 reason=(f"Tokenization {symbol} score={token_score:.0f} "
-                        f"timing={timing:.2f} reg={metrics.regulatory_status.value} "
-                        f"rwa_growth={metrics.rwa_growth_30d_pct:.0f}%"),
-                indicators=['token_score', 'rwa_growth', 'regulatory', 'timing',
+                        f"base={base_score:.0f} dilution={dilution_score:.0f} "
+                        f"capture={capture_score:.0f} upside={upside_potential:.0f}% "
+                        f"rr={risk_reward:.1f} timing={timing:.2f}"),
+                indicators=['token_score', 'enhanced_score', 'dilution', 'capture',
+                            'upside', 'risk_reward', 'rwa_growth', 'regulatory', 'timing',
                             'capital_flow', 'cycle'],
                 symbol=symbol, risk_pct=1.0,
             )

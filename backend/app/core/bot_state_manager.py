@@ -140,9 +140,9 @@ class BotStateManager:
         self._log_event("start")
         self._save_state()
 
-    def stop(self, trigger: StopTrigger = StopTrigger.USER_PAUSE) -> None:
+    def stop(self, trigger: StopTrigger = StopTrigger.USER_PAUSE, reason: str = "user/manual stop") -> None:
         self.state = BotState.STOPPED
-        self.stop_history.append(StopRecord(trigger=trigger, reason="user/manual stop"))
+        self.stop_history.append(StopRecord(trigger=trigger, reason=reason))
         self._log_event("stop", trigger=trigger.value)
         self._save_state()
 
@@ -175,14 +175,20 @@ class BotStateManager:
     def heartbeat(self) -> None:
         self.last_heartbeat = datetime.now()
 
-    def check_health(self) -> bool:
-        return (datetime.now() - self.last_heartbeat) < timedelta(seconds=60)
+    def check_health(self) -> Dict[str, Any]:
+        heartbeat_age = datetime.now() - self.last_heartbeat
+        return {
+            "is_healthy": heartbeat_age < timedelta(seconds=60),
+            "last_heartbeat": self.last_heartbeat.isoformat(),
+            "heartbeat_age_seconds": heartbeat_age.total_seconds(),
+        }
 
     # ============================================================
     # STATS / STOPS
     # ============================================================
-    def update_stats(self, **kwargs) -> None:
-        for k, v in kwargs.items():
+    def update_stats(self, stats: Optional[Dict[str, Any]] = None, **kwargs: Any) -> None:
+        updates = {**(stats or {}), **kwargs}
+        for k, v in updates.items():
             if hasattr(self.stats, k):
                 setattr(self.stats, k, v)
         self.stats.last_update = datetime.now()
@@ -265,8 +271,12 @@ class BotStateManager:
     # ============================================================
     # READ API
     # ============================================================
-    def get_state(self) -> BotState:
-        return self.state
+    def get_state(self) -> Dict[str, Any]:
+        return {
+            "current_state": self.state.value,
+            "bot_id": self.bot_id,
+            "is_running": self.state == BotState.RUNNING,
+        }
 
     def get_stats(self) -> BotStats:
         return self.stats

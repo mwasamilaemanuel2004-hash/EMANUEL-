@@ -68,7 +68,7 @@ class BacktestResult:
     equity_curve: List[float]
     drawdown_curve: List[float]
     timestamps: List[datetime]
-    
+
     # Performance metrics
     total_trades: int = 0
     winning_trades: int = 0
@@ -166,7 +166,7 @@ class BacktestEngine:
         try:
             if data is not None:
                 self.load_data(data)
-            
+
             if self.data is None:
                 logger.error("No data loaded for backtest")
                 return None
@@ -212,7 +212,7 @@ class BacktestEngine:
         data['ema_fast'] = data['close'].ewm(span=12).mean()
         data['ema_slow'] = data['close'].ewm(span=26).mean()
         data['atr'] = self._calculate_atr(data)
-        # ENHANCED: multi-factor confirmation — ADX trend strength + volume filter
+        # ENHANCED: multi-factor confirmation - ADX trend strength + volume filter
         delta_high = data['high'].diff()
         delta_low = data['low'].diff()
         tr = pd.concat([delta_high, delta_low], axis=1).abs().max(axis=1)
@@ -234,13 +234,13 @@ class BacktestEngine:
 
             # Entry signals
             if position is None:
-                # ENHANCED: confirmation gate — require ADX>20 (trending) and volume confirmation
+                # ENHANCED: confirmation gate - require ADX>20 (trending) and volume confirmation
                 adx_ok = pd.notna(current['adx']) and current['adx'] > 15
                 vol_ok = current['volume'] > current['vol_avg'] if pd.notna(current['vol_avg']) and current['vol_avg'] > 0 else True
                 if not (adx_ok and vol_ok):
                     pass  # skip unconfirmed entry
                 elif prev['ema_fast'] <= prev['ema_slow'] and current['ema_fast'] > current['ema_slow']:
-                    # ENHANCED: loss-control gate — skip entry after consecutive losses or daily loss limit.
+                    # ENHANCED: loss-control gate - skip entry after consecutive losses or daily loss limit.
                     # Backtest uses a cooldown so trading resumes after the streak cools down.
                     if cooldown_bars > 0:
                         cooldown_bars -= 1
@@ -288,7 +288,7 @@ class BacktestEngine:
                     risk_amount = capital * (self.config.risk_per_trade / 100)
                     stop_distance = current['atr'] * 1.0
                     quantity = risk_amount / stop_distance if stop_distance > 0 else 0
-                    
+
                     if quantity > 0 and len([t for t in trades if t.exit_price == 0]) < self.config.max_positions:
                         trade_id += 1
                         position = BacktestTrade(
@@ -310,7 +310,7 @@ class BacktestEngine:
 
             # Exit signals
             elif position is not None:
-                # ENHANCED: trailing profit lock — when 0.75R into profit move SL to breakeven
+                # ENHANCED: trailing profit lock - when 0.75R into profit move SL to breakeven
                 risk_distance = abs(position.stop_loss - position.entry_price)
                 if position.side == 'BUY' and risk_distance > 0:
                     unlocked_profit = (current['close'] - position.entry_price) / risk_distance
@@ -585,9 +585,31 @@ class BacktestEngine:
         result.consecutive_wins = max_consec_wins
         result.consecutive_losses = max_consec_losses
 
-        # Sharpe ratio (simplified)
+        # Sharpe ratio (annualized)
         returns = np.diff(equity) / equity[:-1] if len(equity) > 1 else [0]
-        result.sharpe_ratio = np.mean(returns) / np.std(returns) * np.sqrt(252) if np.std(returns) > 0 else 0
+        if np.std(returns) > 0 and len(returns) > 1:
+            result.sharpe_ratio = float(np.mean(returns) / np.std(returns) * np.sqrt(252))
+        else:
+            result.sharpe_ratio = 0.0
+
+        # Sortino ratio (downside deviation only)
+        if len(returns) > 1:
+            negative_returns = returns[returns < 0]
+            downside_std = np.std(negative_returns) if len(negative_returns) > 0 else 0
+            if downside_std > 0:
+                result.sortino_ratio = float(np.mean(returns) / downside_std * np.sqrt(252))
+            else:
+                result.sortino_ratio = 0.0
+        else:
+            result.sortino_ratio = 0.0
+
+        # Calmar ratio (annualized return / max drawdown)
+        total_return_pct = (equity[-1] - equity[0]) / equity[0] * 100 if equity[0] > 0 else 0
+        annualized_return = total_return_pct  # already over the full period
+        if result.max_drawdown > 0:
+            result.calmar_ratio = float(annualized_return / result.max_drawdown)
+        else:
+            result.calmar_ratio = 0.0
 
         # Expectancy
         result.expectancy = (result.win_rate / 100 * result.avg_profit) + ((1 - result.win_rate / 100) * result.avg_loss)
@@ -691,6 +713,8 @@ class BacktestEngine:
                 'profit_factor': f"{r.profit_factor:.2f}",
                 'max_drawdown': f"{r.max_drawdown_percent:.1f}%",
                 'sharpe_ratio': f"{r.sharpe_ratio:.2f}",
+                'sortino_ratio': f"{r.sortino_ratio:.2f}",
+                'calmar_ratio': f"{r.calmar_ratio:.2f}",
                 'expectancy': f"${r.expectancy:.2f}"
             },
             'details': {

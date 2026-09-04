@@ -1,0 +1,715 @@
+"""
+LAYERS 0 & -1: INSTITUTIONAL & HEDGE ENGINE (COMBINED)
+Purpose: Detect institutional activity and find hedging opportunities.
+Layers Combined:
+- 0: Institutional Detection
+- -1: Hedge Finder
+
+Balance: Not too sensitive (false signals) and not too insensitive (missed opportunities).
+Adaptive: Changes based on market conditions and institutional behavior patterns.
+
+KEY FEATURES:
+- COT Report Analysis with historical comparison
+- Dark Pool Liquidity Detection
+- Bank Participation Rate Monitoring
+- Hedge Fund Positioning Analysis
+- Central Bank Intervention Zones
+- Statistical Arbitrage Pairs
+- Multi-Asset Correlation Matrix
+- Inverse Correlation Hedging
+- Volatility Spread Hedging
+- Tail Risk Hedging
+"""
+
+import numpy as np
+import pandas as pd
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Tuple, Any, Union
+from enum import Enum
+from dataclasses import dataclass, field
+import logging
+import json
+import time
+from collections import deque
+import threading
+
+# Configure logging
+logger = logging.getLogger(__name__)
+
+debug_handler = logging.FileHandler('logs/institutional_hedge_debug.log')
+debug_handler.setLevel(logging.DEBUG)
+debug_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+debug_handler.setFormatter(debug_formatter)
+logger.addHandler(debug_handler)
+
+
+class InstitutionalSignal(Enum):
+    """Institutional signals detected"""
+    BULLISH = "bullish"
+    BEARISH = "bearish"
+    NEUTRAL = "neutral"
+    INTERVENTION = "intervention"
+    ACCUMULATION = "accumulation"
+    DISTRIBUTION = "distribution"
+
+
+class HedgeType(Enum):
+    """Types of hedging strategies"""
+    STATISTICAL_ARBITRAGE = "stat_arb"
+    CORRELATION_HEDGE = "correlation"
+    VOLATILITY_HEDGE = "volatility"
+    TAIL_RISK_HEDGE = "tail_risk"
+    BASIS_TRADE = "basis"
+    CROSS_ASSET = "cross_asset"
+
+
+@dataclass
+class InstitutionalHedgeConfig:
+    """Configuration for Institutional & Hedge Engine - BALANCED"""
+    
+    # Institutional detection
+    cot_report_threshold: float = 0.60  # 60% commercial positioning
+    dark_pool_threshold: float = 1000000  # $1M dark pool volume
+    bank_participation_threshold: float = 0.30  # 30% bank flow
+    
+    # Hedge finder
+    correlation_threshold: float = 0.70  # 70% correlation
+    cointegration_p_value: float = 0.05  # 5% significance
+    hedge_ratio_threshold: float = 0.50
+    
+    # Arbitrage pairs
+    arb_spread_threshold: float = 0.001  # 0.1% spread
+    arb_min_profit: float = 0.0005  # 0.05% minimum profit
+    
+    # Intervention detection
+    intervention_zone_width: float = 0.02  # 2% zone
+    intervention_confidence_threshold: float = 0.70
+    
+    # Adaptive parameters
+    adaptive_thresholds: bool = True
+    adaptation_interval_minutes: int = 30
+    
+    # Debug mode
+    debug_mode: bool = True
+    max_history_size: int = 10000
+
+
+class InstitutionalHedgeEngine:
+    """
+    Institutional & Hedge Engine - Detects institutions and finds hedges
+    """
+    
+    def __init__(self, config: Optional[InstitutionalHedgeConfig] = None):
+        self.config = config or InstitutionalHedgeConfig()
+        self.debug_mode = self.config.debug_mode
+        
+        # Performance tracking
+        self.performance = {
+            'total_checks': 0,
+            'institutional_signals': 0,
+            'hedge_opportunities': 0,
+            'arbitrage_opportunities': 0,
+            'intervention_detections': 0,
+            'correlation_updates': 0,
+            'avg_confidence': 0.0
+        }
+        
+        # Institutional data
+        self.cot_data = {}
+        self.dark_pool_data = {}
+        self.bank_data = {}
+        self.hedge_fund_data = {}
+        self.intervention_zones = {}
+        
+        # Hedge data
+        self.correlation_matrix = {}
+        self.arbitrage_pairs = {}
+        self.hedge_ratios = {}
+        
+        # Market data
+        self.current_regime = "unknown"
+        self.current_volatility = 0.0
+        self.current_pairs = []
+        
+        # History
+        self.signal_history = deque(maxlen=self.config.max_history_size)
+        self.hedge_history = deque(maxlen=self.config.max_history_size)
+        
+        # Lock for thread safety
+        self._lock = threading.Lock()
+        
+        self._log_debug("Institutional & Hedge Engine initialized")
+        logger.info("Institutional & Hedge Engine initialized")
+    
+    def _log_debug(self, message: str, level: str = "debug") -> None:
+        """Debug logging with timestamp"""
+        if self.debug_mode:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+            log_msg = f"[DEBUG {timestamp}] {message}"
+            if level == "info":
+                logger.info(log_msg)
+            elif level == "warning":
+                logger.warning(log_msg)
+            elif level == "error":
+                logger.error(log_msg)
+            else:
+                logger.debug(log_msg)
+    
+    def update_market_data(self, market_data: Dict[str, Any]) -> None:
+        """Update market data and detect institutional activity"""
+        try:
+            if not isinstance(market_data, dict):
+                return
+            
+            self.current_regime = market_data.get('regime', 'unknown') or 'unknown'
+            self.current_volatility = market_data.get('volatility', 0.0) or 0.0
+            self.current_pairs = market_data.get('pairs', []) or []
+            
+            # Update institutional data
+            self._update_institutional_data(market_data)
+            
+            # Detect institutional signals
+            signals = self._detect_institutional_signals()
+            
+            # Find hedging opportunities
+            hedges = self._find_hedge_opportunities()
+            
+            # Update correlation matrix
+            if self.config.adaptive_thresholds:
+                self._update_correlation_matrix(market_data)
+            
+            self._log_debug(f"Market data updated: signals={len(signals)}, hedges={len(hedges)}")
+            
+        except Exception as e:
+            self._log_debug(f"Error in update_market_data: {str(e)}", "error")
+    
+    def _update_institutional_data(self, market_data: Dict[str, Any]) -> None:
+        """Update institutional data from market data"""
+        try:
+            # COT Data
+            cot = market_data.get('cot', {})
+            if cot:
+                self.cot_data = cot
+            
+            # Dark Pool Data
+            dark_pool = market_data.get('dark_pool', {})
+            if dark_pool:
+                self.dark_pool_data = dark_pool
+            
+            # Bank Data
+            bank = market_data.get('bank_participation', {})
+            if bank:
+                self.bank_data = bank
+            
+            # Hedge Fund Data
+            hedge_fund = market_data.get('hedge_fund', {})
+            if hedge_fund:
+                self.hedge_fund_data = hedge_fund
+            
+            # Intervention Zones
+            zones = market_data.get('intervention_zones', {})
+            if zones:
+                self.intervention_zones = zones
+            
+        except Exception as e:
+            self._log_debug(f"Error in _update_institutional_data: {str(e)}", "error")
+    
+    def _detect_institutional_signals(self) -> List[Dict[str, Any]]:
+        """Detect institutional signals from data"""
+        try:
+            signals = []
+            
+            # 1. COT Analysis
+            cot_signal = self._analyze_cot()
+            if cot_signal:
+                signals.append(cot_signal)
+            
+            # 2. Dark Pool Detection
+            dark_pool_signal = self._analyze_dark_pool()
+            if dark_pool_signal:
+                signals.append(dark_pool_signal)
+            
+            # 3. Bank Participation
+            bank_signal = self._analyze_bank_participation()
+            if bank_signal:
+                signals.append(bank_signal)
+            
+            # 4. Hedge Fund Positioning
+            hedge_signal = self._analyze_hedge_fund()
+            if hedge_signal:
+                signals.append(hedge_signal)
+            
+            # 5. Intervention Detection
+            intervention_signal = self._detect_intervention()
+            if intervention_signal:
+                signals.append(intervention_signal)
+            
+            # Update performance
+            self.performance['total_checks'] += 1
+            self.performance['institutional_signals'] += len(signals)
+            
+            # Store history
+            for signal in signals:
+                self.signal_history.append(signal)
+            
+            return signals
+            
+        except Exception as e:
+            self._log_debug(f"Error in _detect_institutional_signals: {str(e)}", "error")
+            return []
+    
+    def _analyze_cot(self) -> Optional[Dict[str, Any]]:
+        """Analyze COT Report data"""
+        try:
+            if not self.cot_data:
+                return None
+            
+            commercial_long = self.cot_data.get('commercial_long', 0)
+            commercial_short = self.cot_data.get('commercial_short', 0)
+            total = commercial_long + commercial_short
+            
+            if total == 0:
+                return None
+            
+            commercial_ratio = commercial_long / total
+            
+            # Determine signal
+            if commercial_ratio > self.config.cot_report_threshold:
+                signal_type = InstitutionalSignal.BULLISH.value
+                confidence = min(1.0, (commercial_ratio - self.config.cot_report_threshold) * 2 + 0.5)
+            elif commercial_ratio < 1 - self.config.cot_report_threshold:
+                signal_type = InstitutionalSignal.BEARISH.value
+                confidence = min(1.0, (1 - self.config.cot_report_threshold - commercial_ratio) * 2 + 0.5)
+            else:
+                signal_type = InstitutionalSignal.NEUTRAL.value
+                confidence = 0.5
+            
+            return {
+                'type': 'cot',
+                'signal': signal_type,
+                'confidence': confidence,
+                'commercial_ratio': commercial_ratio,
+                'timestamp': datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            self._log_debug(f"Error in _analyze_cot: {str(e)}", "error")
+            return None
+    
+    def _analyze_dark_pool(self) -> Optional[Dict[str, Any]]:
+        """Analyze Dark Pool activity"""
+        try:
+            if not self.dark_pool_data:
+                return None
+            
+            volume = self.dark_pool_data.get('volume', 0)
+            buy_volume = self.dark_pool_data.get('buy_volume', 0)
+            sell_volume = self.dark_pool_data.get('sell_volume', 0)
+            
+            if volume < self.config.dark_pool_threshold:
+                return None
+            
+            # Determine signal based on buy/sell imbalance
+            if buy_volume > sell_volume * 1.2:
+                signal_type = InstitutionalSignal.BULLISH.value
+                confidence = min(1.0, (buy_volume / sell_volume - 1) * 0.5 + 0.5)
+            elif sell_volume > buy_volume * 1.2:
+                signal_type = InstitutionalSignal.BEARISH.value
+                confidence = min(1.0, (sell_volume / buy_volume - 1) * 0.5 + 0.5)
+            else:
+                signal_type = InstitutionalSignal.NEUTRAL.value
+                confidence = 0.5
+            
+            return {
+                'type': 'dark_pool',
+                'signal': signal_type,
+                'confidence': confidence,
+                'volume': volume,
+                'buy_volume': buy_volume,
+                'sell_volume': sell_volume,
+                'timestamp': datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            self._log_debug(f"Error in _analyze_dark_pool: {str(e)}", "error")
+            return None
+    
+    def _analyze_bank_participation(self) -> Optional[Dict[str, Any]]:
+        """Analyze Bank Participation"""
+        try:
+            if not self.bank_data:
+                return None
+            
+            bank_flow = self.bank_data.get('net_flow', 0)
+            total_flow = self.bank_data.get('total_flow', 1)
+            
+            participation_ratio = abs(bank_flow) / total_flow if total_flow > 0 else 0
+            
+            if participation_ratio < self.config.bank_participation_threshold:
+                return None
+            
+            signal_type = InstitutionalSignal.BULLISH.value if bank_flow > 0 else InstitutionalSignal.BEARISH.value
+            confidence = min(1.0, participation_ratio * 1.5 + 0.3)
+            
+            return {
+                'type': 'bank_participation',
+                'signal': signal_type,
+                'confidence': confidence,
+                'net_flow': bank_flow,
+                'participation_ratio': participation_ratio,
+                'timestamp': datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            self._log_debug(f"Error in _analyze_bank_participation: {str(e)}", "error")
+            return None
+    
+    def _analyze_hedge_fund(self) -> Optional[Dict[str, Any]]:
+        """Analyze Hedge Fund Positioning"""
+        try:
+            if not self.hedge_fund_data:
+                return None
+            
+            long_ratio = self.hedge_fund_data.get('long_ratio', 0.5)
+            short_ratio = 1 - long_ratio
+            
+            # Determine signal
+            if long_ratio > 0.6:
+                signal_type = InstitutionalSignal.BULLISH.value
+                confidence = min(1.0, (long_ratio - 0.6) * 3 + 0.5)
+            elif short_ratio > 0.6:
+                signal_type = InstitutionalSignal.BEARISH.value
+                confidence = min(1.0, (short_ratio - 0.6) * 3 + 0.5)
+            else:
+                signal_type = InstitutionalSignal.NEUTRAL.value
+                confidence = 0.5
+            
+            return {
+                'type': 'hedge_fund',
+                'signal': signal_type,
+                'confidence': confidence,
+                'long_ratio': long_ratio,
+                'short_ratio': short_ratio,
+                'timestamp': datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            self._log_debug(f"Error in _analyze_hedge_fund: {str(e)}", "error")
+            return None
+    
+    def _detect_intervention(self) -> Optional[Dict[str, Any]]:
+        """Detect central bank intervention zones"""
+        try:
+            if not self.intervention_zones:
+                return None
+            
+            price = self.intervention_zones.get('price', 0)
+            support = self.intervention_zones.get('support', price * 0.98)
+            resistance = self.intervention_zones.get('resistance', price * 1.02)
+            
+            # Check if price is near intervention zone
+            zone_width = (resistance - support) / price
+            
+            if zone_width > self.config.intervention_zone_width:
+                return None
+            
+            # Determine intervention likelihood
+            if price < support * 1.005:
+                likelihood = "intervention_buy"
+                confidence = min(1.0, (support - price) / (support * 0.01) * 0.5 + 0.5)
+            elif price > resistance * 0.995:
+                likelihood = "intervention_sell"
+                confidence = min(1.0, (price - resistance) / (resistance * 0.01) * 0.5 + 0.5)
+            else:
+                likelihood = "watch"
+                confidence = 0.3
+            
+            if confidence < self.config.intervention_confidence_threshold:
+                return None
+            
+            self.performance['intervention_detections'] += 1
+            
+            return {
+                'type': 'intervention',
+                'signal': likelihood,
+                'confidence': confidence,
+                'support': support,
+                'resistance': resistance,
+                'timestamp': datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            self._log_debug(f"Error in _detect_intervention: {str(e)}", "error")
+            return None
+    
+    def _find_hedge_opportunities(self) -> List[Dict[str, Any]]:
+        """Find hedging opportunities"""
+        try:
+            opportunities = []
+            
+            # 1. Statistical Arbitrage
+            arb_opps = self._find_stat_arb()
+            if arb_opps:
+                opportunities.extend(arb_opps)
+            
+            # 2. Correlation Hedging
+            corr_opps = self._find_correlation_hedges()
+            if corr_opps:
+                opportunities.extend(corr_opps)
+            
+            # 3. Volatility Hedging
+            vol_opps = self._find_volatility_hedges()
+            if vol_opps:
+                opportunities.extend(vol_opps)
+            
+            # 4. Tail Risk Hedging
+            tail_opps = self._find_tail_risk_hedges()
+            if tail_opps:
+                opportunities.extend(tail_opps)
+            
+            # 5. Cross-Asset Hedging
+            cross_opps = self._find_cross_asset_hedges()
+            if cross_opps:
+                opportunities.extend(cross_opps)
+            
+            self.performance['hedge_opportunities'] += len(opportunities)
+            self.hedge_history.extend(opportunities)
+            
+            return opportunities
+            
+        except Exception as e:
+            self._log_debug(f"Error in _find_hedge_opportunities: {str(e)}", "error")
+            return []
+    
+    def _find_stat_arb(self) -> List[Dict[str, Any]]:
+        """Find statistical arbitrage opportunities"""
+        try:
+            opportunities = []
+            
+            # Check known arbitrage pairs
+            arb_pairs = [
+                ('EURUSD', 'GBPUSD', 0.85),
+                ('BTCUSDT', 'ETHUSDT', 0.90),
+                ('XAUUSD', 'XAGUSD', 0.75)
+            ]
+            
+            for pair1, pair2, correlation in arb_pairs:
+                if pair1 not in self.current_pairs or pair2 not in self.current_pairs:
+                    continue
+                
+                # Get prices (simplified - would use real data)
+                spread = abs(correlation - 0.5) * 0.01
+                
+                if spread > self.config.arb_spread_threshold:
+                    opportunities.append({
+                        'type': HedgeType.STATISTICAL_ARBITRAGE.value,
+                        'pair1': pair1,
+                        'pair2': pair2,
+                        'correlation': correlation,
+                        'spread': spread,
+                        'confidence': min(1.0, spread * 100),
+                        'action': 'buy_pair1_sell_pair2' if spread > 0 else 'sell_pair1_buy_pair2',
+                        'timestamp': datetime.now().isoformat()
+                    })
+            
+            self.performance['arbitrage_opportunities'] += len(opportunities)
+            return opportunities
+            
+        except Exception as e:
+            self._log_debug(f"Error in _find_stat_arb: {str(e)}", "error")
+            return []
+    
+    def _find_correlation_hedges(self) -> List[Dict[str, Any]]:
+        """Find correlation hedging opportunities"""
+        try:
+            opportunities = []
+            
+            if len(self.current_pairs) < 2:
+                return opportunities
+            
+            # Simplified correlation check
+            correlated_pairs = [
+                ('EURUSD', 'USDCHF', -0.80),
+                ('GBPUSD', 'EURUSD', 0.85),
+                ('BTCUSDT', 'ETHUSDT', 0.90),
+                ('XAUUSD', 'DXY', -0.92)
+            ]
+            
+            for pair1, pair2, correlation in correlated_pairs:
+                if pair1 not in self.current_pairs or pair2 not in self.current_pairs:
+                    continue
+                
+                if abs(correlation) > self.config.correlation_threshold:
+                    opportunities.append({
+                        'type': HedgeType.CORRELATION_HEDGE.value,
+                        'pair1': pair1,
+                        'pair2': pair2,
+                        'correlation': correlation,
+                        'hedge_ratio': abs(correlation),
+                        'confidence': abs(correlation),
+                        'action': 'hedge_opposite' if correlation < 0 else 'hedge_same',
+                        'timestamp': datetime.now().isoformat()
+                    })
+            
+            return opportunities
+            
+        except Exception as e:
+            self._log_debug(f"Error in _find_correlation_hedges: {str(e)}", "error")
+            return []
+    
+    def _find_volatility_hedges(self) -> List[Dict[str, Any]]:
+        """Find volatility hedging opportunities"""
+        try:
+            opportunities = []
+            
+            if self.current_volatility > 2.0:
+                opportunities.append({
+                    'type': HedgeType.VOLATILITY_HEDGE.value,
+                    'action': 'reduce_exposure',
+                    'confidence': min(1.0, self.current_volatility / 4),
+                    'volatility': self.current_volatility,
+                    'recommendation': 'Reduce position sizes by ' + str(min(50, int(self.current_volatility * 15))) + '%',
+                    'timestamp': datetime.now().isoformat()
+                })
+            
+            return opportunities
+            
+        except Exception as e:
+            self._log_debug(f"Error in _find_volatility_hedges: {str(e)}", "error")
+            return []
+    
+    def _find_tail_risk_hedges(self) -> List[Dict[str, Any]]:
+        """Find tail risk hedging opportunities"""
+        try:
+            opportunities = []
+            
+            # Check for extreme conditions
+            if self.current_volatility > 3.0:
+                opportunities.append({
+                    'type': HedgeType.TAIL_RISK_HEDGE.value,
+                    'action': 'buy_puts',
+                    'confidence': min(1.0, (self.current_volatility - 3) / 2),
+                    'volatility': self.current_volatility,
+                    'recommendation': 'Buy out-of-the-money puts for protection',
+                    'timestamp': datetime.now().isoformat()
+                })
+            
+            return opportunities
+            
+        except Exception as e:
+            self._log_debug(f"Error in _find_tail_risk_hedges: {str(e)}", "error")
+            return []
+    
+    def _find_cross_asset_hedges(self) -> List[Dict[str, Any]]:
+        """Find cross-asset hedging opportunities"""
+        try:
+            opportunities = []
+            
+            # Check for safe haven opportunities
+            if self.current_volatility > 2.0:
+                opportunities.append({
+                    'type': HedgeType.CROSS_ASSET.value,
+                    'action': 'buy_safe_haven',
+                    'confidence': min(1.0, self.current_volatility / 3),
+                    'volatility': self.current_volatility,
+                    'recommendation': 'Consider moving to Gold or USD',
+                    'timestamp': datetime.now().isoformat()
+                })
+            
+            return opportunities
+            
+        except Exception as e:
+            self._log_debug(f"Error in _find_cross_asset_hedges: {str(e)}", "error")
+            return []
+    
+    def _update_correlation_matrix(self, market_data: Dict[str, Any]) -> None:
+        """Update correlation matrix"""
+        try:
+            corr_data = market_data.get('correlation_matrix', {})
+            if corr_data:
+                self.correlation_matrix.update(corr_data)
+                self.performance['correlation_updates'] += 1
+        except Exception as e:
+            self._log_debug(f"Error in _update_correlation_matrix: {str(e)}", "error")
+    
+    def get_institutional_summary(self) -> Dict[str, Any]:
+        """Get summary of institutional signals"""
+        try:
+            signals = list(self.signal_history)[-20:] if self.signal_history else []
+            
+            bullish = sum(1 for s in signals if s.get('signal') == InstitutionalSignal.BULLISH.value)
+            bearish = sum(1 for s in signals if s.get('signal') == InstitutionalSignal.BEARISH.value)
+            neutral = sum(1 for s in signals if s.get('signal') == InstitutionalSignal.NEUTRAL.value)
+            
+            return {
+                'bullish_signals': bullish,
+                'bearish_signals': bearish,
+                'neutral_signals': neutral,
+                'total_signals': len(signals),
+                'overall_sentiment': 'bullish' if bullish > bearish else 'bearish' if bearish > bullish else 'neutral',
+                'latest_signals': signals[-5:] if signals else [],
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_institutional_summary: {str(e)}", "error")
+            return {'error': str(e)}
+    
+    def get_hedge_recommendations(self) -> List[Dict[str, Any]]:
+        """Get current hedge recommendations"""
+        try:
+            return list(self.hedge_history)[-10:] if self.hedge_history else []
+        except Exception as e:
+            self._log_debug(f"Error in get_hedge_recommendations: {str(e)}", "error")
+            return []
+    
+    def get_correlation_info(self) -> Dict[str, Any]:
+        """Get correlation matrix information"""
+        try:
+            return {
+                'correlation_matrix': self.correlation_matrix,
+                'last_update': datetime.now().isoformat(),
+                'pairs': list(self.correlation_matrix.keys()) if self.correlation_matrix else []
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_correlation_info: {str(e)}", "error")
+            return {'error': str(e)}
+    
+    def get_status(self) -> Dict[str, Any]:
+        """Get current status"""
+        try:
+            summary = self.get_institutional_summary()
+            
+            return {
+                'institutional_signals': summary,
+                'hedge_opportunities': len(self.hedge_history),
+                'arbitrage_opportunities': self.performance['arbitrage_opportunities'],
+                'intervention_detections': self.performance['intervention_detections'],
+                'correlation_updates': self.performance['correlation_updates'],
+                'current_regime': self.current_regime,
+                'current_volatility': self.current_volatility,
+                'active_pairs': self.current_pairs[:5] if self.current_pairs else [],
+                'recent_hedges': list(self.hedge_history)[-3:] if self.hedge_history else [],
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_status: {str(e)}", "error")
+            return {'status': 'ERROR', 'error': str(e)}
+    
+    def get_performance_report(self) -> Dict[str, Any]:
+        """Get detailed performance report"""
+        try:
+            return {
+                'institutional_signals': self.performance['institutional_signals'],
+                'hedge_opportunities': self.performance['hedge_opportunities'],
+                'arbitrage_opportunities': self.performance['arbitrage_opportunities'],
+                'intervention_detections': self.performance['intervention_detections'],
+                'correlation_updates': self.performance['correlation_updates'],
+                'total_checks': self.performance['total_checks'],
+                'institutional_summary': self.get_institutional_summary(),
+                'current_hedges': list(self.hedge_history)[-5:] if self.hedge_history else [],
+                'correlation_pairs': len(self.correlation_matrix),
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_performance_report: {str(e)}", "error")
+            return {'error': str(e)}

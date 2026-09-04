@@ -15,6 +15,15 @@ from .._shared_signals import AiSignalGate
 class ForexScalperBot(BaseBot):
     def __init__(self, config: Dict[str, Any]):
         super().__init__("Forex Scalper", config)
+        self.symbol = config.get('symbol', 'EURUSD')
+        self.timeframes = tuple(config.get('timeframes', ('1m', '5m', '10m', '15m')))
+        self.timeframe = config.get('timeframe', '1m')
+        if self.timeframe not in self.timeframes:
+            raise ValueError(f"Unsupported scalper timeframe: {self.timeframe}")
+        self.risk_per_trade_pct = float(config.get('risk_per_trade_pct', config.get('risk_per_trade', 1.0)))
+        if not 0.8 <= self.risk_per_trade_pct <= 5.0:
+            raise ValueError("Forex scalper risk_per_trade_pct must be between 0.8 and 5.0")
+        self.capital = float(config.get('capital', 1000.0))
         self.gate = AiSignalGate(config.get('ai', {}))
         self.pip_value = config.get('pip_value', 0.0001)
         self.target_pips = config.get('target_pips', 8)
@@ -37,7 +46,7 @@ class ForexScalperBot(BaseBot):
 
     async def analyze_market(self, data) -> Optional[TradeSignal]:
         try:
-            df = data if isinstance(data, pd.DataFrame) else data.get('1m')
+            df = data if isinstance(data, pd.DataFrame) else data.get(self.timeframe)
             if df is None or len(df) < 30:
                 return None
             if self.trades_today >= self.max_trades_per_day:
@@ -68,11 +77,14 @@ class ForexScalperBot(BaseBot):
 
             if side and score is not None and score.total_score >= self.gate.engine.cfg.MIN_CONFIDENCE and rr >= 2.0:
                 sig = self.gate.make_signal(
-                    score, side, entry, stop_loss, take_profit,
-                    reason, ['tick_velocity', 'spread', 'micro_structure'],
-                    {'tf': '1m', 'target_pips': self.target_pips}
+                    {self.timeframe: df}, side, entry, reason,
+                    ['tick_velocity', 'spread', 'micro_structure'],
+                    {'tf': self.timeframe, 'target_pips': self.target_pips},
+                    symbol=self.symbol, risk_pct=self.risk_per_trade_pct,
+                    atr=sl
                 )
                 if sig:
+                    sig.position_size = (self.capital * self.risk_per_trade_pct / 100) / sl
                     self.trades_today += 1
                 return sig
             return None

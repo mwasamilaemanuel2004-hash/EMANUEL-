@@ -1,0 +1,1437 @@
+"""
+LAYERS +33, +34: LEARNING & MEMORY ENGINE (ULTIMATE UPGRADE - FULL VERSION)
+Purpose: Comprehensive learning system that learns from EVERY trade and remembers ALL patterns.
+Balance: GOLDILOCKS - Not too forgetful (repeats mistakes) and not too rigid (adapts slowly).
+
+ALL LEARNING SYSTEMS COMBINED (FULL):
+- Trade Journal Learning (every trade recorded with full details)
+- Failure Pattern Learning (learns from every loss with deep analysis)
+- Success Pattern Learning (reinforces winning patterns)
+- Market Regime Learning (learns regime-specific patterns)
+- Strategy Performance Learning (tracks strategy effectiveness)
+- Pattern Recognition Learning (identifies recurring patterns)
+- Confidence Learning (adjusts confidence based on outcomes)
+- Adaptive Learning (changes based on market conditions)
+- Memory Consolidation (prunes and strengthens memories)
+- Predictive Learning (predicts outcomes based on history)
+- Sequence Learning (learns pattern sequences)
+- Correlation Learning (learns pair correlations)
+- Time-based Learning (learns time-based patterns)
+- Volatility Learning (learns volatility-based patterns)
+"""
+
+import numpy as np
+import pandas as pd
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Tuple, Any, Union
+from enum import Enum
+from dataclasses import dataclass, field
+import logging
+import json
+import time
+from collections import deque
+import threading
+import hashlib
+import pickle
+import os
+
+# Configure logging
+logger = logging.getLogger(__name__)
+
+debug_handler = logging.FileHandler('logs/learning_memory_debug.log')
+debug_handler.setLevel(logging.DEBUG)
+debug_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+debug_handler.setFormatter(debug_formatter)
+logger.addHandler(debug_handler)
+
+
+class PatternType(Enum):
+    """Types of patterns remembered"""
+    PROFITABLE = "profitable"
+    LOSING = "losing"
+    REVERSAL = "reversal"
+    BREAKOUT = "breakout"
+    MOMENTUM = "momentum"
+    NEWS = "news"
+    LIQUIDITY_SWEEP = "liquidity_sweep"
+    SEASONAL = "seasonal"
+    REGIME_BASED = "regime_based"
+    STRATEGY_BASED = "strategy_based"
+    SEQUENCE = "sequence"
+    CORRELATION = "correlation"
+    TIME_BASED = "time_based"
+    VOLATILITY_BASED = "volatility_based"
+
+
+class LearningLevel(Enum):
+    """Learning confidence levels"""
+    HIGH = "high"           # Multiple confirmations, strong pattern
+    MEDIUM = "medium"       # Some confirmations, moderate pattern
+    LOW = "low"             # Limited evidence, weak pattern
+    EXPERIMENTAL = "experimental"  # New pattern, untested
+
+
+@dataclass
+class LearningMemoryConfig:
+    """Configuration for Learning & Memory Engine - ULTIMATE FULL"""
+    
+    # JOURNAL SETTINGS
+    max_journal_entries: int = 50000
+    journal_save_interval_minutes: int = 30
+    auto_save: bool = True
+    
+    # LEARNING SETTINGS
+    min_pattern_occurrences: int = 2
+    pattern_confidence_threshold: float = 0.50
+    pattern_success_threshold: float = 0.50
+    learning_rate: float = 0.15
+    max_learning_iterations: int = 100
+    
+    # MEMORY SETTINGS
+    memory_retention_days: int = 180
+    max_memory_entries: int = 10000
+    memory_prune_interval_hours: int = 12
+    strong_memory_boost: float = 1.5
+    
+    # PATTERN MATCHING
+    matching_threshold: float = 0.60
+    max_patterns_to_match: int = 20
+    
+    # FAILURE LEARNING
+    max_failure_patterns: int = 1000
+    failure_learning_rate: float = 0.15
+    
+    # REGIME LEARNING
+    regime_learning_enabled: bool = True
+    regime_learning_rate: float = 0.10
+    
+    # STRATEGY LEARNING
+    strategy_learning_enabled: bool = True
+    strategy_learning_rate: float = 0.10
+    
+    # PREDICTIVE LEARNING
+    predictive_learning_enabled: bool = True
+    prediction_horizon: int = 10
+    
+    # SEQUENCE LEARNING
+    sequence_learning_enabled: bool = True
+    sequence_length: int = 5
+    
+    # CORRELATION LEARNING
+    correlation_learning_enabled: bool = True
+    
+    # TIME LEARNING
+    time_learning_enabled: bool = True
+    
+    # VOLATILITY LEARNING
+    volatility_learning_enabled: bool = True
+    
+    # DEBUG
+    debug_mode: bool = True
+    save_debug_logs: bool = True
+
+
+class LearningMemoryEngine:
+    """
+    ULTIMATE Learning & Memory Engine - ALL LEARNING SYSTEMS COMBINED (FULL)
+    Learns from EVERY trade and remembers ALL patterns.
+    """
+    
+    def __init__(self, config: Optional[LearningMemoryConfig] = None):
+        self.config = config or LearningMemoryConfig()
+        self.debug_mode = self.config.debug_mode
+        
+        # ============================================================
+        # PERFORMANCE TRACKING
+        # ============================================================
+        self.performance = {
+            'total_trades_journaled': 0,
+            'patterns_identified': 0,
+            'patterns_matched': 0,
+            'successful_matches': 0,
+            'failed_matches': 0,
+            'learning_events': 0,
+            'memory_prunes': 0,
+            'regime_learnings': 0,
+            'strategy_learnings': 0,
+            'predictions_made': 0,
+            'correct_predictions': 0,
+            'confidence_adjustments': 0,
+            'sequence_learnings': 0,
+            'correlation_learnings': 0,
+            'time_learnings': 0,
+            'volatility_learnings': 0
+        }
+        
+        # ============================================================
+        # TRADE JOURNAL (ALL TRADES)
+        # ============================================================
+        self.trade_journal = deque(maxlen=self.config.max_journal_entries)
+        self.failure_journal = deque(maxlen=self.config.max_journal_entries)
+        self.success_journal = deque(maxlen=self.config.max_journal_entries)
+        self.all_trades = []
+        
+        # ============================================================
+        # PATTERN DATABASES (ALL PATTERNS)
+        # ============================================================
+        self.profit_patterns = {}      # Winning patterns
+        self.loss_patterns = {}        # Losing patterns
+        self.failure_patterns = {}     # Failure patterns
+        self.regime_patterns = {}      # Regime-specific patterns
+        self.strategy_patterns = {}    # Strategy-specific patterns
+        self.combined_patterns = {}    # Combined patterns
+        self.sequence_patterns = {}    # Sequence patterns
+        self.correlation_patterns = {} # Correlation patterns
+        self.time_patterns = {}        # Time-based patterns
+        self.volatility_patterns = {}  # Volatility-based patterns
+        
+        # ============================================================
+        # MEMORY SYSTEMS
+        # ============================================================
+        self.memory = {}               # Main memory
+        self.pattern_memory = {}       # Pattern-specific memory
+        self.sequence_memory = {}      # Sequence patterns
+        self.confidence_memory = {}    # Confidence scores
+        self.regime_memory = {}        # Regime-specific memory
+        self.strategy_memory = {}      # Strategy-specific memory
+        self.learning_memory = {}      # Learning history
+        self.correlation_memory = {}   # Correlation memory
+        self.time_memory = {}          # Time-based memory
+        self.volatility_memory = {}    # Volatility memory
+        
+        # ============================================================
+        # LEARNING SYSTEMS
+        # ============================================================
+        self.learning_data = {}
+        self.failure_learning = {}
+        self.correction_history = deque(maxlen=5000)
+        self.regime_learning = {}
+        self.strategy_learning = {}
+        self.prediction_learning = {}
+        self.sequence_learning = {}
+        self.correlation_learning = {}
+        self.time_learning = {}
+        self.volatility_learning = {}
+        
+        # ============================================================
+        # SEQUENCE TRACKING
+        # ============================================================
+        self.recent_patterns = deque(maxlen=self.config.sequence_length)
+        self.sequence_history = deque(maxlen=1000)
+        
+        # ============================================================
+        # MARKET CONTEXT
+        # ============================================================
+        self.current_regime = "unknown"
+        self.current_volatility = 0.0
+        self.current_strategy = "unknown"
+        self.current_time = datetime.now()
+        self.current_day = datetime.now().weekday()
+        self.current_hour = datetime.now().hour
+        self.market_context = {}
+        
+        # ============================================================
+        # LEARNING STATE
+        # ============================================================
+        self.learning_iteration = 0
+        self.is_learning = False
+        self.last_learning_time = datetime.now()
+        self.learning_phase = "initial"
+        
+        # ============================================================
+        # TIMING
+        # ============================================================
+        self.last_journal_save = datetime.now()
+        self.last_memory_prune = datetime.now()
+        self.last_learning_update = datetime.now()
+        
+        # ============================================================
+        # LOCK
+        # ============================================================
+        self._lock = threading.Lock()
+        
+        # ============================================================
+        # INIT
+        # ============================================================
+        self._load_existing_memory()
+        self._log_debug("ULTIMATE FULL Learning & Memory Engine initialized - ALL LEARNING SYSTEMS ACTIVE")
+        logger.info("ULTIMATE FULL Learning & Memory Engine initialized - ALL LEARNING SYSTEMS ACTIVE")
+    
+    def _log_debug(self, message: str, level: str = "debug") -> None:
+        """Debug logging with timestamp"""
+        if self.debug_mode:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+            log_msg = f"[DEBUG {timestamp}] {message}"
+            if level == "info":
+                logger.info(log_msg)
+            elif level == "warning":
+                logger.warning(log_msg)
+            elif level == "error":
+                logger.error(log_msg)
+            else:
+                logger.debug(log_msg)
+    
+    def _load_existing_memory(self) -> None:
+        """Load existing memory from disk"""
+        try:
+            memory_file = 'logs/memory_data.pkl'
+            if os.path.exists(memory_file):
+                with open(memory_file, 'rb') as f:
+                    data = pickle.load(f)
+                    self.memory = data.get('memory', {})
+                    self.profit_patterns = data.get('profit_patterns', {})
+                    self.loss_patterns = data.get('loss_patterns', {})
+                    self.regime_patterns = data.get('regime_patterns', {})
+                    self.strategy_patterns = data.get('strategy_patterns', {})
+                    self.sequence_patterns = data.get('sequence_patterns', {})
+                    self.correlation_patterns = data.get('correlation_patterns', {})
+                    self.time_patterns = data.get('time_patterns', {})
+                    self.volatility_patterns = data.get('volatility_patterns', {})
+                    self.confidence_memory = data.get('confidence_memory', {})
+                    self.learning_data = data.get('learning_data', {})
+                    self.regime_learning = data.get('regime_learning', {})
+                    self.strategy_learning = data.get('strategy_learning', {})
+                    self.sequence_learning = data.get('sequence_learning', {})
+                    self.correlation_learning = data.get('correlation_learning', {})
+                    self.time_learning = data.get('time_learning', {})
+                    self.volatility_learning = data.get('volatility_learning', {})
+                self._log_debug("Existing memory loaded", "info")
+        except Exception as e:
+            self._log_debug(f"Error loading memory: {str(e)}", "warning")
+    
+    def _save_memory(self) -> None:
+        """Save memory to disk"""
+        try:
+            data = {
+                'memory': self.memory,
+                'profit_patterns': self.profit_patterns,
+                'loss_patterns': self.loss_patterns,
+                'regime_patterns': self.regime_patterns,
+                'strategy_patterns': self.strategy_patterns,
+                'sequence_patterns': self.sequence_patterns,
+                'correlation_patterns': self.correlation_patterns,
+                'time_patterns': self.time_patterns,
+                'volatility_patterns': self.volatility_patterns,
+                'confidence_memory': self.confidence_memory,
+                'learning_data': self.learning_data,
+                'regime_learning': self.regime_learning,
+                'strategy_learning': self.strategy_learning,
+                'sequence_learning': self.sequence_learning,
+                'correlation_learning': self.correlation_learning,
+                'time_learning': self.time_learning,
+                'volatility_learning': self.volatility_learning,
+                'timestamp': datetime.now().isoformat()
+            }
+            with open('logs/memory_data.pkl', 'wb') as f:
+                pickle.dump(data, f)
+            self._log_debug("Memory saved", "info")
+        except Exception as e:
+            self._log_debug(f"Error saving memory: {str(e)}", "error")
+    
+    def update_market_data(self, market_data: Dict[str, Any]) -> None:
+        """Update market context and trigger learning"""
+        try:
+            if not isinstance(market_data, dict):
+                return
+            
+            self.current_regime = market_data.get('regime', 'unknown') or 'unknown'
+            self.current_volatility = market_data.get('volatility', 0.0) or 0.0
+            self.current_strategy = market_data.get('strategy', 'unknown') or 'unknown'
+            self.current_time = datetime.now()
+            self.current_day = datetime.now().weekday()
+            self.current_hour = datetime.now().hour
+            self.market_context = market_data
+            
+            # Auto-save journal
+            if self.config.auto_save:
+                if (datetime.now() - self.last_journal_save).total_seconds() > self.config.journal_save_interval_minutes * 60:
+                    self._save_journal()
+                    self.last_journal_save = datetime.now()
+            
+            # Auto-prune memory
+            if (datetime.now() - self.last_memory_prune).total_seconds() > self.config.memory_prune_interval_hours * 3600:
+                self._prune_memory()
+                self.last_memory_prune = datetime.now()
+            
+            # Run learning cycle
+            if (datetime.now() - self.last_learning_update).total_seconds() > 300:  # Every 5 minutes
+                self._run_learning_cycle()
+                self.last_learning_update = datetime.now()
+            
+        except Exception as e:
+            self._log_debug(f"Error in update_market_data: {str(e)}", "error")
+    
+    def journal_trade(self, trade_data: Dict[str, Any]) -> None:
+        """
+        Journal a trade - ALL TRADES ARE RECORDED
+        This is the main learning entry point.
+        """
+        try:
+            if not isinstance(trade_data, dict):
+                return
+            
+            self.performance['total_trades_journaled'] += 1
+            
+            # ============================================================
+            # CREATE COMPREHENSIVE JOURNAL ENTRY
+            # ============================================================
+            entry = {
+                'id': trade_data.get('id', f"TRADE_{int(time.time())}_{np.random.randint(1000, 9999)}"),
+                'timestamp': datetime.now().isoformat(),
+                'pair': trade_data.get('pair', 'unknown'),
+                'direction': trade_data.get('direction', 'unknown'),
+                'entry_price': trade_data.get('entry_price', 0.0),
+                'exit_price': trade_data.get('exit_price', 0.0),
+                'pnl': trade_data.get('pnl', 0.0),
+                'won': trade_data.get('pnl', 0.0) > 0,
+                'regime': self.current_regime,
+                'volatility': self.current_volatility,
+                'strategy': trade_data.get('strategy', self.current_strategy),
+                'quality_score': trade_data.get('quality_score', 0.0),
+                'confidence': trade_data.get('confidence', 0.0),
+                'entry_reason': trade_data.get('entry_reason', ''),
+                'exit_reason': trade_data.get('exit_reason', ''),
+                'duration_seconds': trade_data.get('duration_seconds', 0),
+                'risk_reward': trade_data.get('risk_reward', 0.0),
+                'position_size': trade_data.get('position_size', 0.0),
+                'day_of_week': self.current_day,
+                'hour_of_day': self.current_hour,
+                'details': trade_data.get('details', {}),
+                'signals': trade_data.get('signals', {}),
+                'filters_passed': trade_data.get('filters_passed', []),
+                'filters_failed': trade_data.get('filters_failed', [])
+            }
+            
+            # ============================================================
+            # ADD TO ALL JOURNALS
+            # ============================================================
+            self.trade_journal.append(entry)
+            self.all_trades.append(entry)
+            
+            if entry['won']:
+                self.success_journal.append(entry)
+            else:
+                self.failure_journal.append(entry)
+                self._learn_from_failure(entry)
+            
+            # ============================================================
+            # LEARN FROM THIS TRADE (ALL LEARNING SYSTEMS)
+            # ============================================================
+            self._learn_from_trade(entry)
+            
+            # ============================================================
+            # IDENTIFY ALL PATTERNS
+            # ============================================================
+            self._identify_all_patterns(entry)
+            
+            # ============================================================
+            # UPDATE ALL MEMORIES
+            # ============================================================
+            self._update_all_memories(entry)
+            
+            # ============================================================
+            # SEQUENCE LEARNING
+            # ============================================================
+            if self.config.sequence_learning_enabled:
+                self._learn_sequences(entry)
+            
+            # ============================================================
+            # CORRELATION LEARNING
+            # ============================================================
+            if self.config.correlation_learning_enabled:
+                self._learn_correlations(entry)
+            
+            # ============================================================
+            # TIME LEARNING
+            # ============================================================
+            if self.config.time_learning_enabled:
+                self._learn_time_patterns(entry)
+            
+            # ============================================================
+            # VOLATILITY LEARNING
+            # ============================================================
+            if self.config.volatility_learning_enabled:
+                self._learn_volatility_patterns(entry)
+            
+            # ============================================================
+            # MAKE PREDICTIONS
+            # ============================================================
+            if self.config.predictive_learning_enabled:
+                self._make_predictions(entry)
+            
+            # ============================================================
+            # ADAPTIVE LEARNING
+            # ============================================================
+            self._adaptive_learning(entry)
+            
+            self._log_debug(f"Journaled trade: {entry['id']} PnL={entry['pnl']:.2f} {'WON' if entry['won'] else 'LOSS'} | Regime: {entry['regime']}")
+            
+        except Exception as e:
+            self._log_debug(f"Error in journal_trade: {str(e)}", "error")
+    
+    def _learn_from_trade(self, entry: Dict[str, Any]) -> None:
+        """LEARN FROM EVERY TRADE - Comprehensive learning"""
+        try:
+            self.performance['learning_events'] += 1
+            self.learning_iteration += 1
+            
+            # ============================================================
+            # 1. LEARN FROM SUCCESS
+            # ============================================================
+            if entry['won']:
+                key = f"{entry['pair']}_{entry['strategy']}_{entry['regime']}"
+                if key not in self.learning_data:
+                    self.learning_data[key] = {'successes': 0, 'failures': 0, 'total_pnl': 0.0}
+                self.learning_data[key]['successes'] += 1
+                self.learning_data[key]['total_pnl'] += entry['pnl']
+                
+                # Boost confidence for successful pattern
+                pattern_key = self._create_pattern_key(entry)
+                if pattern_key in self.confidence_memory:
+                    self.confidence_memory[pattern_key]['confidence'] = min(1.0, 
+                        self.confidence_memory[pattern_key]['confidence'] * 1.1)
+                self.performance['confidence_adjustments'] += 1
+            
+            # ============================================================
+            # 2. LEARN FROM FAILURE
+            # ============================================================
+            else:
+                key = f"{entry['pair']}_{entry['strategy']}_{entry['regime']}"
+                if key not in self.learning_data:
+                    self.learning_data[key] = {'successes': 0, 'failures': 0, 'total_pnl': 0.0}
+                self.learning_data[key]['failures'] += 1
+                self.learning_data[key]['total_pnl'] += entry['pnl']
+                
+                # Reduce confidence for failing pattern
+                pattern_key = self._create_pattern_key(entry)
+                if pattern_key in self.confidence_memory:
+                    self.confidence_memory[pattern_key]['confidence'] = max(0.1, 
+                        self.confidence_memory[pattern_key]['confidence'] * 0.9)
+                self.performance['confidence_adjustments'] += 1
+            
+            # ============================================================
+            # 3. LEARN REGIME PATTERNS
+            # ============================================================
+            if self.config.regime_learning_enabled:
+                regime_key = f"{entry['regime']}_{entry['pair']}"
+                if regime_key not in self.regime_learning:
+                    self.regime_learning[regime_key] = {'wins': 0, 'losses': 0, 'pnl': 0.0}
+                if entry['won']:
+                    self.regime_learning[regime_key]['wins'] += 1
+                else:
+                    self.regime_learning[regime_key]['losses'] += 1
+                self.regime_learning[regime_key]['pnl'] += entry['pnl']
+                self.performance['regime_learnings'] += 1
+            
+            # ============================================================
+            # 4. LEARN STRATEGY PATTERNS
+            # ============================================================
+            if self.config.strategy_learning_enabled:
+                strategy_key = f"{entry['strategy']}_{entry['pair']}"
+                if strategy_key not in self.strategy_learning:
+                    self.strategy_learning[strategy_key] = {'wins': 0, 'losses': 0, 'pnl': 0.0}
+                if entry['won']:
+                    self.strategy_learning[strategy_key]['wins'] += 1
+                else:
+                    self.strategy_learning[strategy_key]['losses'] += 1
+                self.strategy_learning[strategy_key]['pnl'] += entry['pnl']
+                self.performance['strategy_learnings'] += 1
+            
+            # ============================================================
+            # 5. STORE LEARNING HISTORY
+            # ============================================================
+            self.correction_history.append({
+                'timestamp': datetime.now(),
+                'trade_id': entry['id'],
+                'won': entry['won'],
+                'pnl': entry['pnl'],
+                'learning': self.learning_data.get(key, {}),
+                'regime_learning': self.regime_learning.get(regime_key, {}) if self.config.regime_learning_enabled else {},
+                'strategy_learning': self.strategy_learning.get(strategy_key, {}) if self.config.strategy_learning_enabled else {}
+            })
+            
+        except Exception as e:
+            self._log_debug(f"Error in _learn_from_trade: {str(e)}", "error")
+    
+    def _learn_from_failure(self, entry: Dict[str, Any]) -> None:
+        """DEEP LEARNING FROM FAILURE - Analyze why it failed"""
+        try:
+            # Analyze failure
+            failure_analysis = {
+                'id': entry['id'],
+                'timestamp': entry['timestamp'],
+                'pair': entry['pair'],
+                'pnl': entry['pnl'],
+                'regime': entry['regime'],
+                'volatility': entry['volatility'],
+                'strategy': entry['strategy'],
+                'entry_reason': entry['entry_reason'],
+                'exit_reason': entry['exit_reason'],
+                'quality_score': entry['quality_score'],
+                'confidence': entry['confidence'],
+                'duration_seconds': entry['duration_seconds'],
+                'risk_reward': entry['risk_reward'],
+                'signals': entry.get('signals', {}),
+                'filters_passed': entry.get('filters_passed', []),
+                'filters_failed': entry.get('filters_failed', [])
+            }
+            
+            # Add to failure journal
+            self.failure_journal.append(failure_analysis)
+            
+            # Identify failed signals
+            failed_signals = []
+            for signal, value in entry.get('signals', {}).items():
+                if value > 0 and not entry['won']:
+                    failed_signals.append(signal)
+            
+            if failed_signals:
+                self.failure_patterns[entry['id']] = {
+                    'signals': failed_signals,
+                    'timestamp': datetime.now(),
+                    'recovered': False,
+                    'analysis': failure_analysis
+                }
+            
+            # Store failure learning
+            self.failure_learning[entry['id']] = {
+                'pattern': self._create_pattern_key(entry),
+                'failed_signals': failed_signals,
+                'timestamp': datetime.now(),
+                'learned': False
+            }
+            
+            self._log_debug(f"Deep learning from failure: {entry['id']} (loss: {entry['pnl']:.2f}) - Failed signals: {failed_signals}")
+            
+        except Exception as e:
+            self._log_debug(f"Error in _learn_from_failure: {str(e)}", "error")
+    
+    def _identify_all_patterns(self, entry: Dict[str, Any]) -> None:
+        """IDENTIFY ALL PATTERNS - Comprehensive pattern recognition"""
+        try:
+            self.performance['patterns_identified'] += 1
+            
+            # ============================================================
+            # 1. PATTERN KEY
+            # ============================================================
+            pattern_key = self._create_pattern_key(entry)
+            
+            # ============================================================
+            # 2. PROFIT/LOSS PATTERNS
+            # ============================================================
+            if entry['won']:
+                if pattern_key not in self.profit_patterns:
+                    self.profit_patterns[pattern_key] = {
+                        'count': 0,
+                        'total_pnl': 0.0,
+                        'avg_pnl': 0.0,
+                        'max_pnl': 0.0,
+                        'last_seen': datetime.now(),
+                        'examples': [],
+                        'confidence': 0.0
+                    }
+                self.profit_patterns[pattern_key]['count'] += 1
+                self.profit_patterns[pattern_key]['total_pnl'] += entry['pnl']
+                self.profit_patterns[pattern_key]['avg_pnl'] = self.profit_patterns[pattern_key]['total_pnl'] / self.profit_patterns[pattern_key]['count']
+                self.profit_patterns[pattern_key]['max_pnl'] = max(self.profit_patterns[pattern_key]['max_pnl'], entry['pnl'])
+                self.profit_patterns[pattern_key]['last_seen'] = datetime.now()
+                self.profit_patterns[pattern_key]['confidence'] = min(1.0, self.profit_patterns[pattern_key]['count'] / 10)
+                
+                if len(self.profit_patterns[pattern_key]['examples']) < 10:
+                    self.profit_patterns[pattern_key]['examples'].append(entry)
+            else:
+                if pattern_key not in self.loss_patterns:
+                    self.loss_patterns[pattern_key] = {
+                        'count': 0,
+                        'total_loss': 0.0,
+                        'avg_loss': 0.0,
+                        'max_loss': 0.0,
+                        'last_seen': datetime.now(),
+                        'examples': [],
+                        'confidence': 0.0
+                    }
+                self.loss_patterns[pattern_key]['count'] += 1
+                self.loss_patterns[pattern_key]['total_loss'] += abs(entry['pnl'])
+                self.loss_patterns[pattern_key]['avg_loss'] = self.loss_patterns[pattern_key]['total_loss'] / self.loss_patterns[pattern_key]['count']
+                self.loss_patterns[pattern_key]['max_loss'] = max(self.loss_patterns[pattern_key]['max_loss'], abs(entry['pnl']))
+                self.loss_patterns[pattern_key]['last_seen'] = datetime.now()
+                self.loss_patterns[pattern_key]['confidence'] = min(1.0, self.loss_patterns[pattern_key]['count'] / 10)
+                
+                if len(self.loss_patterns[pattern_key]['examples']) < 10:
+                    self.loss_patterns[pattern_key]['examples'].append(entry)
+            
+            # ============================================================
+            # 3. REGIME PATTERNS
+            # ============================================================
+            if self.config.regime_learning_enabled:
+                regime_key = f"{entry['regime']}_{pattern_key}"
+                if regime_key not in self.regime_patterns:
+                    self.regime_patterns[regime_key] = {
+                        'count': 0,
+                        'wins': 0,
+                        'losses': 0,
+                        'total_pnl': 0.0,
+                        'last_seen': datetime.now(),
+                        'regime': entry['regime']
+                    }
+                self.regime_patterns[regime_key]['count'] += 1
+                if entry['won']:
+                    self.regime_patterns[regime_key]['wins'] += 1
+                else:
+                    self.regime_patterns[regime_key]['losses'] += 1
+                self.regime_patterns[regime_key]['total_pnl'] += entry['pnl']
+                self.regime_patterns[regime_key]['last_seen'] = datetime.now()
+            
+            # ============================================================
+            # 4. STRATEGY PATTERNS
+            # ============================================================
+            if self.config.strategy_learning_enabled:
+                strategy_key = f"{entry['strategy']}_{pattern_key}"
+                if strategy_key not in self.strategy_patterns:
+                    self.strategy_patterns[strategy_key] = {
+                        'count': 0,
+                        'wins': 0,
+                        'losses': 0,
+                        'total_pnl': 0.0,
+                        'last_seen': datetime.now(),
+                        'strategy': entry['strategy']
+                    }
+                self.strategy_patterns[strategy_key]['count'] += 1
+                if entry['won']:
+                    self.strategy_patterns[strategy_key]['wins'] += 1
+                else:
+                    self.strategy_patterns[strategy_key]['losses'] += 1
+                self.strategy_patterns[strategy_key]['total_pnl'] += entry['pnl']
+                self.strategy_patterns[strategy_key]['last_seen'] = datetime.now()
+            
+            # ============================================================
+            # 5. COMBINED PATTERNS
+            # ============================================================
+            combined_key = f"{entry['regime']}_{entry['strategy']}_{pattern_key}"
+            if combined_key not in self.combined_patterns:
+                self.combined_patterns[combined_key] = {
+                    'count': 0,
+                    'wins': 0,
+                    'losses': 0,
+                    'total_pnl': 0.0,
+                    'last_seen': datetime.now(),
+                    'regime': entry['regime'],
+                    'strategy': entry['strategy']
+                }
+            self.combined_patterns[combined_key]['count'] += 1
+            if entry['won']:
+                self.combined_patterns[combined_key]['wins'] += 1
+            else:
+                self.combined_patterns[combined_key]['losses'] += 1
+            self.combined_patterns[combined_key]['total_pnl'] += entry['pnl']
+            self.combined_patterns[combined_key]['last_seen'] = datetime.now()
+            
+        except Exception as e:
+            self._log_debug(f"Error in _identify_all_patterns: {str(e)}", "error")
+    
+    def _learn_sequences(self, entry: Dict[str, Any]) -> None:
+        """SEQUENCE LEARNING - Learn pattern sequences"""
+        try:
+            self.recent_patterns.append(entry['id'])
+            self.performance['sequence_learnings'] += 1
+            
+            if len(self.recent_patterns) >= self.config.sequence_length:
+                sequence_key = "|".join(list(self.recent_patterns)[-self.config.sequence_length:])
+                
+                if sequence_key not in self.sequence_patterns:
+                    self.sequence_patterns[sequence_key] = {
+                        'count': 0,
+                        'wins': 0,
+                        'losses': 0,
+                        'total_pnl': 0.0,
+                        'last_seen': datetime.now()
+                    }
+                self.sequence_patterns[sequence_key]['count'] += 1
+                if entry['won']:
+                    self.sequence_patterns[sequence_key]['wins'] += 1
+                else:
+                    self.sequence_patterns[sequence_key]['losses'] += 1
+                self.sequence_patterns[sequence_key]['total_pnl'] += entry['pnl']
+                self.sequence_patterns[sequence_key]['last_seen'] = datetime.now()
+                
+                self.sequence_learning[sequence_key] = {
+                    'win_rate': self.sequence_patterns[sequence_key]['wins'] / self.sequence_patterns[sequence_key]['count'],
+                    'count': self.sequence_patterns[sequence_key]['count'],
+                    'last_seen': datetime.now()
+                }
+                
+                self.sequence_history.append({
+                    'sequence': sequence_key,
+                    'won': entry['won'],
+                    'pnl': entry['pnl'],
+                    'timestamp': datetime.now()
+                })
+                
+        except Exception as e:
+            self._log_debug(f"Error in _learn_sequences: {str(e)}", "error")
+    
+    def _learn_correlations(self, entry: Dict[str, Any]) -> None:
+        """CORRELATION LEARNING - Learn pair correlations"""
+        try:
+            self.performance['correlation_learnings'] += 1
+            
+            pair = entry.get('pair', 'unknown')
+            if pair not in self.correlation_memory:
+                self.correlation_memory[pair] = {
+                    'trades': [],
+                    'win_rate': 0.0,
+                    'avg_pnl': 0.0
+                }
+            
+            self.correlation_memory[pair]['trades'].append(entry)
+            trades = self.correlation_memory[pair]['trades']
+            wins = sum(1 for t in trades if t.get('won', False))
+            total_pnl = sum(t.get('pnl', 0.0) for t in trades)
+            
+            self.correlation_memory[pair]['win_rate'] = wins / len(trades) if trades else 0
+            self.correlation_memory[pair]['avg_pnl'] = total_pnl / len(trades) if trades else 0
+            
+            # Store correlation learning
+            self.correlation_learning[pair] = {
+                'win_rate': self.correlation_memory[pair]['win_rate'],
+                'avg_pnl': self.correlation_memory[pair]['avg_pnl'],
+                'count': len(trades)
+            }
+            
+        except Exception as e:
+            self._log_debug(f"Error in _learn_correlations: {str(e)}", "error")
+    
+    def _learn_time_patterns(self, entry: Dict[str, Any]) -> None:
+        """TIME LEARNING - Learn time-based patterns"""
+        try:
+            self.performance['time_learnings'] += 1
+            
+            day = entry.get('day_of_week', 0)
+            hour = entry.get('hour_of_day', 0)
+            time_key = f"day_{day}_hour_{hour}"
+            
+            if time_key not in self.time_patterns:
+                self.time_patterns[time_key] = {
+                    'count': 0,
+                    'wins': 0,
+                    'losses': 0,
+                    'total_pnl': 0.0,
+                    'last_seen': datetime.now()
+                }
+            
+            self.time_patterns[time_key]['count'] += 1
+            if entry['won']:
+                self.time_patterns[time_key]['wins'] += 1
+            else:
+                self.time_patterns[time_key]['losses'] += 1
+            self.time_patterns[time_key]['total_pnl'] += entry['pnl']
+            self.time_patterns[time_key]['last_seen'] = datetime.now()
+            
+            self.time_learning[time_key] = {
+                'win_rate': self.time_patterns[time_key]['wins'] / self.time_patterns[time_key]['count'],
+                'count': self.time_patterns[time_key]['count'],
+                'last_seen': datetime.now()
+            }
+            
+        except Exception as e:
+            self._log_debug(f"Error in _learn_time_patterns: {str(e)}", "error")
+    
+    def _learn_volatility_patterns(self, entry: Dict[str, Any]) -> None:
+        """VOLATILITY LEARNING - Learn volatility-based patterns"""
+        try:
+            self.performance['volatility_learnings'] += 1
+            
+            vol = entry.get('volatility', 0.0)
+            vol_range = self._get_volatility_range(vol)
+            vol_key = f"vol_{vol_range}"
+            
+            if vol_key not in self.volatility_patterns:
+                self.volatility_patterns[vol_key] = {
+                    'count': 0,
+                    'wins': 0,
+                    'losses': 0,
+                    'total_pnl': 0.0,
+                    'last_seen': datetime.now()
+                }
+            
+            self.volatility_patterns[vol_key]['count'] += 1
+            if entry['won']:
+                self.volatility_patterns[vol_key]['wins'] += 1
+            else:
+                self.volatility_patterns[vol_key]['losses'] += 1
+            self.volatility_patterns[vol_key]['total_pnl'] += entry['pnl']
+            self.volatility_patterns[vol_key]['last_seen'] = datetime.now()
+            
+            self.volatility_learning[vol_key] = {
+                'win_rate': self.volatility_patterns[vol_key]['wins'] / self.volatility_patterns[vol_key]['count'],
+                'count': self.volatility_patterns[vol_key]['count'],
+                'last_seen': datetime.now()
+            }
+            
+        except Exception as e:
+            self._log_debug(f"Error in _learn_volatility_patterns: {str(e)}", "error")
+    
+    def _create_pattern_key(self, entry: Dict[str, Any]) -> str:
+        """Create a unique pattern key from trade entry"""
+        try:
+            features = {
+                'pair': entry.get('pair', 'unknown'),
+                'regime': entry.get('regime', 'unknown'),
+                'strategy': entry.get('strategy', 'unknown'),
+                'direction': entry.get('direction', 'unknown'),
+                'volatility_range': self._get_volatility_range(entry.get('volatility', 0.0)),
+                'quality_range': self._get_quality_range(entry.get('quality_score', 0.0)),
+                'confidence_range': self._get_confidence_range(entry.get('confidence', 0.0))
+            }
+            
+            feature_str = json.dumps(features, sort_keys=True)
+            return hashlib.md5(feature_str.encode()).hexdigest()[:16]
+            
+        except Exception as e:
+            self._log_debug(f"Error in _create_pattern_key: {str(e)}", "error")
+            return f"pattern_{int(time.time())}"
+    
+    def _get_volatility_range(self, volatility: float) -> str:
+        if volatility < 0.5:
+            return "low"
+        elif volatility < 1.0:
+            return "medium"
+        elif volatility < 2.0:
+            return "high"
+        else:
+            return "extreme"
+    
+    def _get_quality_range(self, quality: float) -> str:
+        if quality < 0.3:
+            return "poor"
+        elif quality < 0.5:
+            return "average"
+        elif quality < 0.7:
+            return "good"
+        else:
+            return "excellent"
+    
+    def _get_confidence_range(self, confidence: float) -> str:
+        if confidence < 0.3:
+            return "low"
+        elif confidence < 0.6:
+            return "medium"
+        else:
+            return "high"
+    
+    def _update_all_memories(self, entry: Dict[str, Any]) -> None:
+        """UPDATE ALL MEMORIES - Comprehensive memory update"""
+        try:
+            pattern_key = self._create_pattern_key(entry)
+            
+            # ============================================================
+            # 1. MAIN MEMORY
+            # ============================================================
+            if pattern_key not in self.memory:
+                self.memory[pattern_key] = {
+                    'entries': [],
+                    'win_rate': 0.0,
+                    'avg_pnl': 0.0,
+                    'total_pnl': 0.0,
+                    'last_updated': datetime.now(),
+                    'strength': 0.0
+                }
+            
+            self.memory[pattern_key]['entries'].append(entry)
+            entries = self.memory[pattern_key]['entries']
+            wins = sum(1 for e in entries if e.get('won', False))
+            total_pnl = sum(e.get('pnl', 0.0) for e in entries)
+            
+            self.memory[pattern_key]['win_rate'] = wins / len(entries) if entries else 0
+            self.memory[pattern_key]['avg_pnl'] = total_pnl / len(entries) if entries else 0
+            self.memory[pattern_key]['total_pnl'] = total_pnl
+            self.memory[pattern_key]['last_updated'] = datetime.now()
+            self.memory[pattern_key]['strength'] = min(1.0, len(entries) / 20)
+            
+            # ============================================================
+            # 2. CONFIDENCE MEMORY
+            # ============================================================
+            confidence = self._calculate_confidence(entries)
+            self.confidence_memory[pattern_key] = {
+                'confidence': confidence,
+                'strength': self.memory[pattern_key]['strength'],
+                'last_updated': datetime.now(),
+                'win_rate': self.memory[pattern_key]['win_rate']
+            }
+            
+            # ============================================================
+            # 3. PATTERN MEMORY
+            # ============================================================
+            if pattern_key not in self.pattern_memory:
+                self.pattern_memory[pattern_key] = {
+                    'type': 'profitable' if entry['won'] else 'losing',
+                    'count': 0,
+                    'last_seen': datetime.now(),
+                    'examples': []
+                }
+            self.pattern_memory[pattern_key]['count'] += 1
+            self.pattern_memory[pattern_key]['last_seen'] = datetime.now()
+            if len(self.pattern_memory[pattern_key]['examples']) < 10:
+                self.pattern_memory[pattern_key]['examples'].append(entry)
+            
+            # ============================================================
+            # 4. REGIME MEMORY
+            # ============================================================
+            regime_key = f"{entry['regime']}_{pattern_key}"
+            if regime_key not in self.regime_memory:
+                self.regime_memory[regime_key] = {
+                    'entries': [],
+                    'win_rate': 0.0,
+                    'avg_pnl': 0.0
+                }
+            self.regime_memory[regime_key]['entries'].append(entry)
+            r_entries = self.regime_memory[regime_key]['entries']
+            r_wins = sum(1 for e in r_entries if e.get('won', False))
+            r_total_pnl = sum(e.get('pnl', 0.0) for e in r_entries)
+            self.regime_memory[regime_key]['win_rate'] = r_wins / len(r_entries) if r_entries else 0
+            self.regime_memory[regime_key]['avg_pnl'] = r_total_pnl / len(r_entries) if r_entries else 0
+            
+            # ============================================================
+            # 5. STRATEGY MEMORY
+            # ============================================================
+            strategy_key = f"{entry['strategy']}_{pattern_key}"
+            if strategy_key not in self.strategy_memory:
+                self.strategy_memory[strategy_key] = {
+                    'entries': [],
+                    'win_rate': 0.0,
+                    'avg_pnl': 0.0
+                }
+            self.strategy_memory[strategy_key]['entries'].append(entry)
+            s_entries = self.strategy_memory[strategy_key]['entries']
+            s_wins = sum(1 for e in s_entries if e.get('won', False))
+            s_total_pnl = sum(e.get('pnl', 0.0) for e in s_entries)
+            self.strategy_memory[strategy_key]['win_rate'] = s_wins / len(s_entries) if s_entries else 0
+            self.strategy_memory[strategy_key]['avg_pnl'] = s_total_pnl / len(s_entries) if s_entries else 0
+            
+        except Exception as e:
+            self._log_debug(f"Error in _update_all_memories: {str(e)}", "error")
+    
+    def _calculate_confidence(self, entries: List[Dict]) -> float:
+        """Calculate confidence score from entries"""
+        try:
+            if not entries:
+                return 0.0
+            
+            wins = sum(1 for e in entries if e.get('won', False))
+            win_rate = wins / len(entries)
+            
+            # Weight by recency
+            recent_entries = entries[-5:] if len(entries) >= 5 else entries
+            recent_wins = sum(1 for e in recent_entries if e.get('won', False))
+            recent_win_rate = recent_wins / len(recent_entries) if recent_entries else win_rate
+            
+            # Weight by pnl
+            avg_pnl = sum(e.get('pnl', 0.0) for e in entries) / len(entries) if entries else 0
+            pnl_factor = min(1.0, max(0.0, avg_pnl / 10 + 0.5))
+            
+            # Combined confidence
+            confidence = (win_rate * 0.4) + (recent_win_rate * 0.3) + (pnl_factor * 0.3)
+            
+            return min(1.0, max(0.0, confidence))
+            
+        except Exception as e:
+            self._log_debug(f"Error in _calculate_confidence: {str(e)}", "error")
+            return 0.0
+    
+    def _make_predictions(self, entry: Dict[str, Any]) -> None:
+        """MAKE PREDICTIONS - Predictive learning"""
+        try:
+            self.performance['predictions_made'] += 1
+            
+            # Predict next trade outcome
+            pattern_key = self._create_pattern_key(entry)
+            
+            if pattern_key in self.memory:
+                memory = self.memory[pattern_key]
+                predicted_win_rate = memory.get('win_rate', 0.5)
+                
+                # Store prediction
+                self.prediction_learning[entry['id']] = {
+                    'pattern': pattern_key,
+                    'predicted_win_rate': predicted_win_rate,
+                    'actual_won': entry['won'],
+                    'confidence': memory.get('strength', 0.5),
+                    'timestamp': datetime.now()
+                }
+                
+                # Check if prediction was correct
+                if (predicted_win_rate > 0.5 and entry['won']) or (predicted_win_rate <= 0.5 and not entry['won']):
+                    self.performance['correct_predictions'] += 1
+            
+        except Exception as e:
+            self._log_debug(f"Error in _make_predictions: {str(e)}", "error")
+    
+    def _adaptive_learning(self, entry: Dict[str, Any]) -> None:
+        """ADAPTIVE LEARNING - Change learning parameters based on results"""
+        try:
+            # Check learning effectiveness
+            if len(self.correction_history) > 50:
+                recent = list(self.correction_history)[-50:]
+                wins = sum(1 for c in recent if c.get('won', False))
+                win_rate = wins / len(recent) if recent else 0
+                
+                # Adjust learning rate
+                if win_rate < 0.4:
+                    self.config.learning_rate = min(0.3, self.config.learning_rate * 1.1)
+                    self._log_debug(f"Learning rate increased to {self.config.learning_rate:.3f} due to low win rate")
+                elif win_rate > 0.6:
+                    self.config.learning_rate = max(0.05, self.config.learning_rate * 0.9)
+                    self._log_debug(f"Learning rate decreased to {self.config.learning_rate:.3f} due to high win rate")
+            
+        except Exception as e:
+            self._log_debug(f"Error in _adaptive_learning: {str(e)}", "error")
+    
+    def _run_learning_cycle(self) -> None:
+        """Run learning cycle - consolidate and improve"""
+        try:
+            self.is_learning = True
+            
+            # Consolidate memory
+            self._consolidate_memory()
+            
+            # Update learning statistics
+            self._update_learning_stats()
+            
+            self.is_learning = False
+            
+        except Exception as e:
+            self._log_debug(f"Error in _run_learning_cycle: {str(e)}", "error")
+            self.is_learning = False
+    
+    def _consolidate_memory(self) -> None:
+        """Consolidate memory - strengthen important patterns"""
+        try:
+            # Strengthen successful patterns
+            for key, pattern in self.profit_patterns.items():
+                if pattern['count'] > 5 and pattern['avg_pnl'] > 0:
+                    if key in self.confidence_memory:
+                        self.confidence_memory[key]['confidence'] = min(1.0, 
+                            self.confidence_memory[key]['confidence'] * 1.05)
+            
+            # Weaken unsuccessful patterns
+            for key, pattern in self.loss_patterns.items():
+                if pattern['count'] > 5 and pattern['avg_loss'] > 0:
+                    if key in self.confidence_memory:
+                        self.confidence_memory[key]['confidence'] = max(0.1, 
+                            self.confidence_memory[key]['confidence'] * 0.95)
+            
+        except Exception as e:
+            self._log_debug(f"Error in _consolidate_memory: {str(e)}", "error")
+    
+    def _update_learning_stats(self) -> None:
+        """Update learning statistics"""
+        try:
+            # Update regime learning stats
+            for key, data in self.regime_learning.items():
+                total = data.get('wins', 0) + data.get('losses', 0)
+                if total > 0:
+                    data['win_rate'] = data['wins'] / total
+            
+            # Update strategy learning stats
+            for key, data in self.strategy_learning.items():
+                total = data.get('wins', 0) + data.get('losses', 0)
+                if total > 0:
+                    data['win_rate'] = data['wins'] / total
+            
+        except Exception as e:
+            self._log_debug(f"Error in _update_learning_stats: {str(e)}", "error")
+    
+    def _save_journal(self) -> None:
+        """Save journal to file"""
+        try:
+            journal_data = {
+                'timestamp': datetime.now().isoformat(),
+                'trades': list(self.trade_journal)[-1000:],  # Last 1000 trades
+                'successes': list(self.success_journal)[-100:],
+                'failures': list(self.failure_journal)[-100:],
+                'patterns': {
+                    'profit': dict(list(self.profit_patterns.items())[-50:]),
+                    'loss': dict(list(self.loss_patterns.items())[-50:]),
+                    'regime': dict(list(self.regime_patterns.items())[-50:]),
+                    'strategy': dict(list(self.strategy_patterns.items())[-50:]),
+                    'sequence': dict(list(self.sequence_patterns.items())[-50:]),
+                    'time': dict(list(self.time_patterns.items())[-50:]),
+                    'volatility': dict(list(self.volatility_patterns.items())[-50:])
+                },
+                'learning': {
+                    'regime': self.regime_learning,
+                    'strategy': self.strategy_learning,
+                    'sequence': self.sequence_learning,
+                    'correlation': self.correlation_learning,
+                    'time': self.time_learning,
+                    'volatility': self.volatility_learning
+                }
+            }
+            
+            with open('logs/trade_journal.json', 'w') as f:
+                json.dump(journal_data, f, default=str, indent=2)
+            
+            self._log_debug("Journal saved", "info")
+            
+        except Exception as e:
+            self._log_debug(f"Error in _save_journal: {str(e)}", "error")
+    
+    def _prune_memory(self) -> None:
+        """Prune old memory entries"""
+        try:
+            self.performance['memory_prunes'] += 1
+            cutoff_time = datetime.now() - timedelta(days=self.config.memory_retention_days)
+            
+            # Prune memory
+            old_entries = 0
+            for key, memory_data in list(self.memory.items()):
+                if memory_data['last_updated'] < cutoff_time:
+                    del self.memory[key]
+                    old_entries += 1
+            
+            # Prune pattern databases
+            for db in [self.profit_patterns, self.loss_patterns, self.regime_patterns, 
+                      self.strategy_patterns, self.sequence_patterns, self.time_patterns, 
+                      self.volatility_patterns]:
+                for key in list(db.keys()):
+                    if db[key]['last_seen'] < cutoff_time:
+                        del db[key]
+            
+            self._save_memory()
+            self._log_debug(f"Memory pruned: {old_entries} entries removed")
+            
+        except Exception as e:
+            self._log_debug(f"Error in _prune_memory: {str(e)}", "error")
+    
+    def match_pattern(self, current_signal: Dict[str, Any]) -> Dict[str, Any]:
+        """Match current signal against ALL remembered patterns"""
+        try:
+            self.performance['patterns_matched'] += 1
+            
+            current_pattern = self._create_pattern_key_from_signal(current_signal)
+            
+            best_match = None
+            best_score = 0.0
+            
+            # Search in all memory systems
+            memory_systems = [
+                ('memory', self.memory),
+                ('profit', self.profit_patterns),
+                ('regime', self.regime_patterns),
+                ('strategy', self.strategy_patterns),
+                ('sequence', self.sequence_patterns),
+                ('time', self.time_patterns),
+                ('volatility', self.volatility_patterns)
+            ]
+            
+            for system_name, memory_data in memory_systems:
+                for pattern_key, data in memory_data.items():
+                    score = self._calculate_match_score(current_pattern, pattern_key, data, system_name)
+                    
+                    if score > best_score and score > self.config.matching_threshold:
+                        best_score = score
+                        best_match = {
+                            'pattern_key': pattern_key,
+                            'system': system_name,
+                            'data': data,
+                            'score': score,
+                            'win_rate': data.get('win_rate', 0.0) if isinstance(data, dict) else 0.0,
+                            'confidence': self.confidence_memory.get(pattern_key, {}).get('confidence', 0.0)
+                        }
+            
+            if best_match:
+                self.performance['successful_matches'] += 1
+                return {
+                    'matched': True,
+                    'match': best_match,
+                    'score': best_score
+                }
+            else:
+                self.performance['failed_matches'] += 1
+                return {'matched': False}
+            
+        except Exception as e:
+            self._log_debug(f"Error in match_pattern: {str(e)}", "error")
+            return {'matched': False, 'error': str(e)}
+    
+    def _create_pattern_key_from_signal(self, signal: Dict[str, Any]) -> str:
+        """Create pattern key from trade signal"""
+        try:
+            features = {
+                'pair': signal.get('pair', 'unknown'),
+                'regime': self.current_regime,
+                'strategy': signal.get('strategy', self.current_strategy),
+                'direction': signal.get('direction', 'unknown'),
+                'volatility_range': self._get_volatility_range(self.current_volatility),
+                'quality_range': self._get_quality_range(signal.get('quality_score', 0.0)),
+                'confidence_range': self._get_confidence_range(signal.get('confidence', 0.0))
+            }
+            
+            feature_str = json.dumps(features, sort_keys=True)
+            return hashlib.md5(feature_str.encode()).hexdigest()[:16]
+            
+        except Exception as e:
+            self._log_debug(f"Error in _create_pattern_key_from_signal: {str(e)}", "error")
+            return f"signal_{int(time.time())}"
+    
+    def _calculate_match_score(self, current_pattern: str, stored_pattern: str, data: Any, system: str) -> float:
+        """Calculate match score between current and stored pattern"""
+        try:
+            if current_pattern == stored_pattern:
+                base_score = 1.0
+            else:
+                common = sum(1 for a, b in zip(current_pattern[:8], stored_pattern[:8]) if a == b)
+                base_score = common / max(len(current_pattern), 1)
+            
+            # Get confidence
+            confidence = self.confidence_memory.get(stored_pattern, {}).get('confidence', 0.0)
+            
+            # Get win rate
+            win_rate = data.get('win_rate', 0.0) if isinstance(data, dict) else 0.0
+            
+            # System bonus
+            system_bonus = {
+                'memory': 1.0,
+                'profit': 1.1,
+                'regime': 1.05,
+                'strategy': 1.05,
+                'sequence': 1.0,
+                'time': 0.9,
+                'volatility': 0.9
+            }.get(system, 1.0)
+            
+            score = (base_score * 0.3) + (confidence * 0.35) + (win_rate * 0.25) + (system_bonus * 0.1)
+            
+            return min(1.0, score)
+            
+        except Exception as e:
+            self._log_debug(f"Error in _calculate_match_score: {str(e)}", "error")
+            return 0.0
+    
+    def get_pattern_stats(self) -> Dict[str, Any]:
+        """Get pattern statistics"""
+        try:
+            return {
+                'profit_patterns': len(self.profit_patterns),
+                'loss_patterns': len(self.loss_patterns),
+                'failure_patterns': len(self.failure_patterns),
+                'regime_patterns': len(self.regime_patterns),
+                'strategy_patterns': len(self.strategy_patterns),
+                'sequence_patterns': len(self.sequence_patterns),
+                'correlation_patterns': len(self.correlation_patterns),
+                'time_patterns': len(self.time_patterns),
+                'volatility_patterns': len(self.volatility_patterns),
+                'total_memory': len(self.memory),
+                'total_journaled': len(self.trade_journal)
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_pattern_stats: {str(e)}", "error")
+            return {'error': str(e)}
+    
+    def get_learning_summary(self) -> Dict[str, Any]:
+        """Get learning summary"""
+        try:
+            return {
+                'regime_learning': self.regime_learning,
+                'strategy_learning': self.strategy_learning,
+                'sequence_learning': self.sequence_learning,
+                'correlation_learning': self.correlation_learning,
+                'time_learning': self.time_learning,
+                'volatility_learning': self.volatility_learning,
+                'patterns_identified': self.performance['patterns_identified'],
+                'learning_events': self.performance['learning_events'],
+                'successful_matches': self.performance['successful_matches'],
+                'failed_matches': self.performance['failed_matches'],
+                'predictions_made': self.performance['predictions_made'],
+                'correct_predictions': self.performance['correct_predictions'],
+                'prediction_accuracy': (self.performance['correct_predictions'] / max(1, self.performance['predictions_made'])) * 100
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_learning_summary: {str(e)}", "error")
+            return {'error': str(e)}
+    
+    def get_status(self) -> Dict[str, Any]:
+        """Get current status"""
+        try:
+            return {
+                'total_trades_journaled': self.performance['total_trades_journaled'],
+                'patterns_identified': self.performance['patterns_identified'],
+                'patterns_matched': self.performance['patterns_matched'],
+                'successful_matches': self.performance['successful_matches'],
+                'failed_matches': self.performance['failed_matches'],
+                'match_success_rate': (self.performance['successful_matches'] / max(1, self.performance['patterns_matched'])) * 100,
+                'learning_events': self.performance['learning_events'],
+                'memory_prunes': self.performance['memory_prunes'],
+                'regime_learnings': self.performance['regime_learnings'],
+                'strategy_learnings': self.performance['strategy_learnings'],
+                'sequence_learnings': self.performance['sequence_learnings'],
+                'correlation_learnings': self.performance['correlation_learnings'],
+                'time_learnings': self.performance['time_learnings'],
+                'volatility_learnings': self.performance['volatility_learnings'],
+                'predictions_made': self.performance['predictions_made'],
+                'correct_predictions': self.performance['correct_predictions'],
+                'prediction_accuracy': (self.performance['correct_predictions'] / max(1, self.performance['predictions_made'])) * 100,
+                'current_regime': self.current_regime,
+                'current_volatility': self.current_volatility,
+                'learning_phase': self.learning_phase,
+                'is_learning': self.is_learning,
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_status: {str(e)}", "error")
+            return {'status': 'ERROR', 'error': str(e)}
+    
+    def get_performance_report(self) -> Dict[str, Any]:
+        """Get detailed performance report"""
+        try:
+            return {
+                'summary': {
+                    'total_trades_journaled': self.performance['total_trades_journaled'],
+                    'patterns_identified': self.performance['patterns_identified'],
+                    'patterns_matched': self.performance['patterns_matched'],
+                    'successful_matches': self.performance['successful_matches'],
+                    'failed_matches': self.performance['failed_matches'],
+                    'match_success_rate': (self.performance['successful_matches'] / max(1, self.performance['patterns_matched'])) * 100,
+                    'learning_events': self.performance['learning_events'],
+                    'memory_prunes': self.performance['memory_prunes']
+                },
+                'learnings': {
+                    'regime': self.regime_learning,
+                    'strategy': self.strategy_learning,
+                    'sequence': self.sequence_learning,
+                    'correlation': self.correlation_learning,
+                    'time': self.time_learning,
+                    'volatility': self.volatility_learning
+                },
+                'patterns': {
+                    'profit': len(self.profit_patterns),
+                    'loss': len(self.loss_patterns),
+                    'failure': len(self.failure_patterns),
+                    'regime': len(self.regime_patterns),
+                    'strategy': len(self.strategy_patterns),
+                    'sequence': len(self.sequence_patterns),
+                    'correlation': len(self.correlation_patterns),
+                    'time': len(self.time_patterns),
+                    'volatility': len(self.volatility_patterns)
+                },
+                'predictions': {
+                    'made': self.performance['predictions_made'],
+                    'correct': self.performance['correct_predictions'],
+                    'accuracy': (self.performance['correct_predictions'] / max(1, self.performance['predictions_made'])) * 100
+                },
+                'memory': {
+                    'total_entries': len(self.memory),
+                    'strong_memories': sum(1 for m in self.memory.values() if m.get('strength', 0) > 0.7)
+                },
+                'journal': {
+                    'total': len(self.trade_journal),
+                    'successes': len(self.success_journal),
+                    'failures': len(self.failure_journal)
+                },
+                'top_profit_patterns': sorted(self.profit_patterns.items(), key=lambda x: x[1]['count'], reverse=True)[:5],
+                'top_loss_patterns': sorted(self.loss_patterns.items(), key=lambda x: x[1]['count'], reverse=True)[:5],
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_performance_report: {str(e)}", "error")
+            return {'error': str(e)}

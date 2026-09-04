@@ -1,28 +1,69 @@
-FROM python:3.11-slim
+# ============================================
+# ESH.TRADE - ULTIMATE DOCKERFILE (OPTIMIZED)
+# ============================================
+# Multi-stage build | Security hardened | Production ready
+
+# ============================================
+# STAGE 1: BUILDER
+# ============================================
+FROM python:3.12-slim AS builder
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+WORKDIR /build
+
+# System dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc g++ libpq-dev libffi-dev libssl-dev curl git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir --user -r requirements.txt
+
+# Copy app code
+COPY backend/ .
+
+# ============================================
+# STAGE 2: FINAL (Slim)
+# ============================================
+FROM python:3.12-slim AS final
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    TZ=UTC \
+    PYTHONPATH=/app
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    curl \
+# Runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq-dev curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements
-COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy from builder
+COPY --from=builder /root/.local /root/.local
+COPY --from=builder /build/app /app/app
+COPY --from=builder /build/data /app/data
 
-# Copy application
-COPY backend/app/ ./app/
-COPY backend/core/ ./core/
-COPY data/ ./data/
-COPY .env .
+# Copy .env
+COPY .env /app/.env
 
-# Create logs directory
-RUN mkdir -p logs
+# Create non-root user
+RUN addgroup --system --gid 1001 appuser && \
+    adduser --system --uid 1001 --gid 1001 appuser && \
+    chown -R appuser:appuser /app && \
+    chmod +x /app
 
-# Expose port
+USER appuser
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
 EXPOSE 8000
 
-# Run application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["gunicorn", "app.main:app", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:8000"]

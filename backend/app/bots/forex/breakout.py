@@ -21,8 +21,9 @@ class BreakoutBot(BaseBot):
 
     def _find_sr(self, df: pd.DataFrame) -> Dict[str, List[float]]:
         try:
-            highs = df['high'].rolling(self.lookback).max().dropna().tolist()
-            lows = df['low'].rolling(self.lookback).min().dropna().tolist()
+            history = df.iloc[:-1]
+            highs = history['high'].rolling(self.lookback).max().dropna().tolist()
+            lows = history['low'].rolling(self.lookback).min().dropna().tolist()
             resistance = sorted(set([round(h, 4) for h in highs]))[-3:]
             support = sorted(set([round(l, 4) for l in lows]))[:3]
             return {'resistance': resistance, 'support': support}
@@ -32,10 +33,12 @@ class BreakoutBot(BaseBot):
     def _is_false_breakout(self, df: pd.DataFrame, level: float, direction: str) -> bool:
         try:
             last3 = df.iloc[-3:]
+            prior_volume = df['volume'].iloc[:-1].tail(20)
+            average_volume = prior_volume.mean()
             if direction == 'BULLISH':
-                return not (last3['close'].iloc[-1] > level and last3['volume'].iloc[-1] > last3['volume'].mean() * self.min_volume_mult)
+                return not (last3['close'].iloc[-1] > level and last3['volume'].iloc[-1] > average_volume * self.min_volume_mult)
             else:
-                return not (last3['close'].iloc[-1] < level and last3['volume'].iloc[-1] > last3['volume'].mean() * self.min_volume_mult)
+                return not (last3['close'].iloc[-1] < level and last3['volume'].iloc[-1] > average_volume * self.min_volume_mult)
         except Exception:
             return True
 

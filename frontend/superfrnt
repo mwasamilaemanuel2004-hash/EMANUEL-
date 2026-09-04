@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -8,124 +9,568 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="ESH TRADE">
-    
+
     <title>ESH TRADE - Advanced Trading Platform</title>
-    
+
     <!-- PWA Manifest (Inline) -->
-    <link rel="manifest" href="data:application/json,{%22name%22:%22ESH%20TRADE%22,%22short_name%22:%22ESH%22,%22start_url%22:%22/%22,%22display%22:%22standalone%22,%22background_color%22:%22%230b1a2e%22,%22theme_color%22:%22%230b1a2e%22,%22icons%22:[{%22src%22:%22data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20512%20512'%3E%3Crect%20width='512'%20height='512'%20fill='%230b1a2e'/%3E%3Ctext%20x='256'%20y='256'%20text-anchor='middle'%20fill='%2300d4ff'%20font-size='200'%20font-family='Arial'%20font-weight='bold'%3EE%3C/text%3E%3C/svg%3E%22,%22sizes%22:%22512x512%22,%22type%22:%22image/svg+xml%22,%22purpose%22:%22any%22}]}">
-    
+    <link rel="manifest"
+        href="data:application/json,{%22name%22:%22ESH%20TRADE%22,%22short_name%22:%22ESH%22,%22start_url%22:%22/%22,%22display%22:%22standalone%22,%22background_color%22:%22%230b1a2e%22,%22theme_color%22:%22%230b1a2e%22,%22icons%22:[{%22src%22:%22data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20512%20512'%3E%3Crect%20width='512'%20height='512'%20fill='%230b1a2e'/%3E%3Ctext%20x='256'%20y='256'%20text-anchor='middle'%20fill='%2300d4ff'%20font-size='200'%20font-family='Arial'%20font-weight='bold'%3EE%3C/text%3E%3C/svg%3E%22,%22sizes%22:%22512x512%22,%22type%22:%22image/svg+xml%22,%22purpose%22:%22any%22}]}">
+
     <style>
         /* ============ THEMES ============ */
-        :root, [data-theme="navy"] {--background:#0b1a2e;--surface:#1a2a3e;--primary:#2563eb;--secondary:#7c3aed;--success:#10b981;--danger:#ef4444;--warning:#f59e0b;--text:#ffffff;--text-secondary:#94a3b8;--border:#2a3a4e;--shadow:0 4px 6px rgba(0,0,0,0.1);--radius:12px;}
-        [data-theme="charcoal"] {--background:#1a1d23;--surface:#2a2d33;--primary:#84cc16;--text:#ffffff;--text-secondary:#9ca3af;--border:#374151;}
-        [data-theme="emerald"] {--background:#064e3b;--surface:#065f46;--primary:#059669;--text:#ffffff;--text-secondary:#6ee7b7;--border:#065f46;}
-        [data-theme="teal"] {--background:#0f3b3b;--surface:#115e59;--primary:#0d9488;--success:#f97316;--text:#ffffff;--text-secondary:#5eead4;--border:#115e59;}
-        [data-theme="plum"] {--background:#3b1f4a;--surface:#5b21b6;--primary:#8b5cf6;--text:#ffffff;--text-secondary:#c4b5d4;--border:#5b21b6;}
-        [data-theme="terracotta"] {--background:#4a2818;--surface:#7c2d12;--primary:#c2410c;--text:#ffffff;--text-secondary:#fbbf8d;--border:#7c2d12;}
-        [data-theme="light"] {--background:#f0f7ff;--surface:#ffffff;--primary:#2563eb;--text:#1a1a1a;--text-secondary:#666666;--border:#dbeafe;}
-        
+        :root,
+        [data-theme="navy"] {
+            --background: #0b1a2e;
+            --surface: #1a2a3e;
+            --primary: #2563eb;
+            --secondary: #7c3aed;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --text: #ffffff;
+            --text-secondary: #94a3b8;
+            --border: #2a3a4e;
+            --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            --radius: 12px;
+        }
+
+        [data-theme="charcoal"] {
+            --background: #1a1d23;
+            --surface: #2a2d33;
+            --primary: #84cc16;
+            --text: #ffffff;
+            --text-secondary: #9ca3af;
+            --border: #374151;
+        }
+
+        [data-theme="emerald"] {
+            --background: #064e3b;
+            --surface: #065f46;
+            --primary: #059669;
+            --text: #ffffff;
+            --text-secondary: #6ee7b7;
+            --border: #065f46;
+        }
+
+        [data-theme="teal"] {
+            --background: #0f3b3b;
+            --surface: #115e59;
+            --primary: #0d9488;
+            --success: #f97316;
+            --text: #ffffff;
+            --text-secondary: #5eead4;
+            --border: #115e59;
+        }
+
+        [data-theme="plum"] {
+            --background: #3b1f4a;
+            --surface: #5b21b6;
+            --primary: #8b5cf6;
+            --text: #ffffff;
+            --text-secondary: #c4b5d4;
+            --border: #5b21b6;
+        }
+
+        [data-theme="terracotta"] {
+            --background: #4a2818;
+            --surface: #7c2d12;
+            --primary: #c2410c;
+            --text: #ffffff;
+            --text-secondary: #fbbf8d;
+            --border: #7c2d12;
+        }
+
+        [data-theme="light"] {
+            --background: #f0f7ff;
+            --surface: #ffffff;
+            --primary: #2563eb;
+            --text: #1a1a1a;
+            --text-secondary: #666666;
+            --border: #dbeafe;
+        }
+
         /* ============ GLOBAL ============ */
-        *{margin:0;padding:0;box-sizing:border-box;}
-        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--background);color:var(--text);transition:all .3s;min-height:100vh;overflow-x:hidden;-webkit-tap-highlight-color:transparent;}
-        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--background);
+            color: var(--text);
+            transition: all .3s;
+            min-height: 100vh;
+            overflow-x: hidden;
+            -webkit-tap-highlight-color: transparent;
+        }
+
         /* ============ OFFLINE BANNER ============ */
-        .offline-banner{position:fixed;top:0;left:0;right:0;background:var(--danger);color:#fff;text-align:center;padding:8px;font-size:13px;font-weight:bold;z-index:10000;display:none;}
-        body.offline-mode .offline-banner{display:block;}
-        
+        .offline-banner {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: var(--danger);
+            color: #fff;
+            text-align: center;
+            padding: 8px;
+            font-size: 13px;
+            font-weight: bold;
+            z-index: 10000;
+            display: none;
+        }
+
+        body.offline-mode .offline-banner {
+            display: block;
+        }
+
         /* ============ HEADER ============ */
-        .header{position:fixed;top:0;left:0;right:0;background:var(--surface);border-bottom:1px solid var(--border);padding:10px 15px;display:flex;justify-content:space-between;align-items:center;z-index:1000;backdrop-filter:blur(10px);}
-        .header h1{font-size:18px;color:var(--primary);}
-        .header-actions{display:flex;gap:6px;}
-        .icon-btn{background:none;border:1px solid var(--border);border-radius:50%;width:35px;height:35px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:all .25s;}
-        .icon-btn:hover{background:var(--primary);transform:translateY(-2px);}
-        
+        .header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 10px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+        }
+
+        .header h1 {
+            font-size: 18px;
+            color: var(--primary);
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 6px;
+        }
+
+        .icon-btn {
+            background: none;
+            border: 1px solid var(--border);
+            border-radius: 50%;
+            width: 35px;
+            height: 35px;
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all .25s;
+        }
+
+        .icon-btn:hover {
+            background: var(--primary);
+            transform: translateY(-2px);
+        }
+
         /* ============ TICKER ============ */
-        .ticker{position:fixed;top:55px;left:0;right:0;background:var(--surface);border-bottom:1px solid var(--border);padding:8px 15px;display:flex;gap:20px;overflow-x:auto;z-index:999;white-space:nowrap;scrollbar-width:none;}
-        .ticker::-webkit-scrollbar{display:none;}
-        .ticker-item{font-size:12px;font-weight:600;}
-        .up{color:var(--success);}.down{color:var(--danger);}
-        
+        .ticker {
+            position: fixed;
+            top: 55px;
+            left: 0;
+            right: 0;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 8px 15px;
+            display: flex;
+            gap: 20px;
+            overflow-x: auto;
+            z-index: 999;
+            white-space: nowrap;
+            scrollbar-width: none;
+        }
+
+        .ticker::-webkit-scrollbar {
+            display: none;
+        }
+
+        .ticker-item {
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .up {
+            color: var(--success);
+        }
+
+        .down {
+            color: var(--danger);
+        }
+
         /* ============ APP ============ */
-        #app{max-width:800px;margin:0 auto;padding:110px 15px 80px;}
-        
+        #app {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 110px 15px 80px;
+        }
+
         /* ============ THEME SWITCHER ============ */
-        .theme-switcher{display:flex;gap:8px;padding:10px;overflow-x:auto;margin-bottom:15px;scrollbar-width:none;}
-        .theme-dot{width:30px;height:30px;border-radius:50%;border:2px solid transparent;cursor:pointer;flex-shrink:0;transition:all .25s;}
-        .theme-dot.active{border-color:#fff;transform:scale(1.2);}
-        .theme-dot[data-theme="navy"]{background:linear-gradient(135deg,#0b1a2e 50%,#2563eb 50%);}
-        .theme-dot[data-theme="charcoal"]{background:linear-gradient(135deg,#1a1d23 50%,#84cc16 50%);}
-        .theme-dot[data-theme="emerald"]{background:linear-gradient(135deg,#064e3b 50%,#059669 50%);}
-        .theme-dot[data-theme="teal"]{background:linear-gradient(135deg,#0f3b3b 50%,#0d9488 50%);}
-        .theme-dot[data-theme="plum"]{background:linear-gradient(135deg,#3b1f4a 50%,#8b5cf6 50%);}
-        .theme-dot[data-theme="terracotta"]{background:linear-gradient(135deg,#4a2818 50%,#c2410c 50%);}
-        
+        .theme-switcher {
+            display: flex;
+            gap: 8px;
+            padding: 10px;
+            overflow-x: auto;
+            margin-bottom: 15px;
+            scrollbar-width: none;
+        }
+
+        .theme-dot {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            border: 2px solid transparent;
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: all .25s;
+        }
+
+        .theme-dot.active {
+            border-color: #fff;
+            transform: scale(1.2);
+        }
+
+        .theme-dot[data-theme="navy"] {
+            background: linear-gradient(135deg, #0b1a2e 50%, #2563eb 50%);
+        }
+
+        .theme-dot[data-theme="charcoal"] {
+            background: linear-gradient(135deg, #1a1d23 50%, #84cc16 50%);
+        }
+
+        .theme-dot[data-theme="emerald"] {
+            background: linear-gradient(135deg, #064e3b 50%, #059669 50%);
+        }
+
+        .theme-dot[data-theme="teal"] {
+            background: linear-gradient(135deg, #0f3b3b 50%, #0d9488 50%);
+        }
+
+        .theme-dot[data-theme="plum"] {
+            background: linear-gradient(135deg, #3b1f4a 50%, #8b5cf6 50%);
+        }
+
+        .theme-dot[data-theme="terracotta"] {
+            background: linear-gradient(135deg, #4a2818 50%, #c2410c 50%);
+        }
+
         /* ============ BOTTOM NAV ============ */
-        .bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);display:flex;justify-content:space-around;padding:8px;z-index:1000;}
-        .bottom-nav button{background:none;border:none;color:var(--text-secondary);cursor:pointer;font-size:10px;display:flex;flex-direction:column;align-items:center;gap:3px;transition:all .25s;padding:5px 10px;border-radius:12px;}
-        .bottom-nav button.active{color:var(--primary);}
-        .bottom-nav button:hover{color:var(--primary);}
-        
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--surface);
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: space-around;
+            padding: 8px;
+            z-index: 1000;
+        }
+
+        .bottom-nav button {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 3px;
+            transition: all .25s;
+            padding: 5px 10px;
+            border-radius: 12px;
+        }
+
+        .bottom-nav button.active {
+            color: var(--primary);
+        }
+
+        .bottom-nav button:hover {
+            color: var(--primary);
+        }
+
         /* ============ PAGES ============ */
-        .page{display:none;animation:fadeUp .3s;}
-        .page.active{display:block;}
-        @keyframes fadeUp{from{opacity:0;transform:translateY(15px);}to{opacity:1;transform:translateY(0);}}
-        
+        .page {
+            display: none;
+            animation: fadeUp .3s;
+        }
+
+        .page.active {
+            display: block;
+        }
+
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(15px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
         /* ============ CARDS ============ */
-        .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:15px;margin-bottom:12px;}
-        .card h3{margin-bottom:10px;font-size:15px;}
-        
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 15px;
+            margin-bottom: 12px;
+        }
+
+        .card h3 {
+            margin-bottom: 10px;
+            font-size: 15px;
+        }
+
         /* ============ BOT CARDS ============ */
-        .bot-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-        .bot-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;transition:all .25s;}
-        .bot-card:hover{transform:translateY(-3px);border-color:var(--primary);}
-        .bot-icon{font-size:24px;margin-bottom:8px;}
-        .bot-name{font-weight:700;font-size:13px;}
-        .bot-desc{font-size:11px;color:var(--text-secondary);margin:5px 0;line-height:1.4;}
-        .bot-status{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;margin-top:5px;}
-        .bot-status.running{background:rgba(16,185,129,.1);color:#10b981;}
-        .bot-status.stopped{background:rgba(239,68,68,.1);color:#ef4444;}
-        .bot-status.idle{background:rgba(245,158,11,.1);color:#f59e0b;}
-        
+        .bot-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .bot-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 12px;
+            transition: all .25s;
+        }
+
+        .bot-card:hover {
+            transform: translateY(-3px);
+            border-color: var(--primary);
+        }
+
+        .bot-icon {
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+
+        .bot-name {
+            font-weight: 700;
+            font-size: 13px;
+        }
+
+        .bot-desc {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin: 5px 0;
+            line-height: 1.4;
+        }
+
+        .bot-status {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: 600;
+            margin-top: 5px;
+        }
+
+        .bot-status.running {
+            background: rgba(16, 185, 129, .1);
+            color: #10b981;
+        }
+
+        .bot-status.stopped {
+            background: rgba(239, 68, 68, .1);
+            color: #ef4444;
+        }
+
+        .bot-status.idle {
+            background: rgba(245, 158, 11, .1);
+            color: #f59e0b;
+        }
+
         /* ============ BUTTONS ============ */
-        .btn{display:inline-block;padding:10px 20px;border:none;border-radius:8px;cursor:pointer;font-weight:bold;font-size:13px;transition:all .25s;}
-        .btn-primary{background:var(--primary);color:#fff;}
-        .btn-success{background:var(--success);color:#fff;}
-        .btn-danger{background:var(--danger);color:#fff;}
-        .btn-outline{background:transparent;border:1px solid var(--border);color:var(--text);}
-        .btn:hover{transform:translateY(-2px);}
-        
+        .btn {
+            display: inline-block;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 13px;
+            transition: all .25s;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: #fff;
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: #fff;
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: #fff;
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
         /* ============ FORMS ============ */
-        .form-group{margin-bottom:12px;}
-        .form-group label{display:block;margin-bottom:5px;color:var(--text-secondary);font-size:12px;}
-        .form-group input,.form-group select{width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--background);color:var(--text);font-size:14px;}
-        
+        .form-group {
+            margin-bottom: 12px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: var(--text-secondary);
+            font-size: 12px;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--background);
+            color: var(--text);
+            font-size: 14px;
+        }
+
         /* ============ TOAST ============ */
-        .toast-container{position:fixed;top:100px;right:15px;z-index:10001;display:flex;flex-direction:column;gap:8px;}
-        .toast{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 15px;font-size:12px;animation:slideIn .3s;min-width:250px;max-width:300px;}
-        @keyframes slideIn{from{transform:translateX(100%);opacity:0;}to{transform:translateX(0);opacity:1;}}
-        
+        .toast-container {
+            position: fixed;
+            top: 100px;
+            right: 15px;
+            z-index: 10001;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .toast {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 12px 15px;
+            font-size: 12px;
+            animation: slideIn .3s;
+            min-width: 250px;
+            max-width: 300px;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
         /* ============ MODAL ============ */
-        .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:10002;display:none;align-items:center;justify-content:center;}
-        .modal-overlay.active{display:flex;}
-        .modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;max-width:400px;width:90%;max-height:80vh;overflow-y:auto;}
-        
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, .7);
+            z-index: 10002;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+            max-width: 400px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
         /* ============ SEARCH ============ */
-        .search-bar{display:flex;gap:8px;margin-bottom:15px;}
-        .search-bar input{flex:1;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;}
-        
+        .search-bar {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+
+        .search-bar input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--surface);
+            color: var(--text);
+            font-size: 14px;
+        }
+
         /* ============ SETTINGS PANEL ============ */
-        .settings-item{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border);}
-        .settings-item:last-child{border-bottom:none;}
-        .settings-label{font-size:13px;font-weight:600;}
-        .settings-desc{font-size:11px;color:var(--text-secondary);}
-        
+        .settings-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .settings-item:last-child {
+            border-bottom: none;
+        }
+
+        .settings-label {
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .settings-desc {
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+
         /* ============ RESPONSIVE ============ */
-        @media(max-width:600px){.bot-grid{grid-template-columns:1fr;}.header h1{font-size:15px;}}
+        @media(max-width:600px) {
+            .bot-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .header h1 {
+                font-size: 15px;
+            }
+        }
     </style>
 </head>
+
 <body>
     <div class="offline-banner" id="offlineBanner">📡 Offline Mode</div>
-    
+
     <header class="header">
         <h1>🚀 ESH TRADE</h1>
         <div class="header-actions">
@@ -136,7 +581,7 @@
             <button class="icon-btn" onclick="toggleSettings()">⚙️</button>
         </div>
     </header>
-    
+
     <div class="ticker" id="ticker">
         <span class="ticker-item">₿ BTC <span id="tickerBTC">$67,234</span> <span class="up">▲</span></span>
         <span class="ticker-item">⟠ ETH <span id="tickerETH">$3,456</span> <span class="up">▲</span></span>
@@ -144,7 +589,7 @@
         <span class="ticker-item">🥇 Gold <span id="tickerGold">$2,345</span> <span class="up">▲</span></span>
         <span class="ticker-item">🛢️ Oil <span id="tickerOil">$82.34</span> <span class="up">▲</span></span>
     </div>
-    
+
     <main id="app">
         <div class="theme-switcher" id="themeSwitcher">
             <button class="theme-dot active" data-theme="navy" onclick="setTheme('navy')"></button>
@@ -154,12 +599,13 @@
             <button class="theme-dot" data-theme="plum" onclick="setTheme('plum')"></button>
             <button class="theme-dot" data-theme="terracotta" onclick="setTheme('terracotta')"></button>
         </div>
-        
+
         <!-- SEARCH BAR -->
         <div class="search-bar" id="searchBar" style="display:none;">
-            <input type="text" id="searchInput" placeholder="Search symbols, bots, markets..." onkeyup="searchItems(this.value)">
+            <input type="text" id="searchInput" placeholder="Search symbols, bots, markets..."
+                onkeyup="searchItems(this.value)">
         </div>
-        
+
         <!-- HOME PAGE -->
         <div class="page active" id="page-home">
             <div class="card">
@@ -170,7 +616,7 @@
                     <button class="btn btn-outline" onclick="showPortfolioDetails()">Details</button>
                 </div>
             </div>
-            
+
             <div class="card">
                 <h3>📊 Portfolio Details</h3>
                 <div id="portfolioDetails">
@@ -180,14 +626,14 @@
                     <div>Active Bots: 4/8</div>
                 </div>
             </div>
-            
+
             <div class="card">
                 <h3>📊 Active Trades</h3>
                 <div id="activeTrades">Loading...</div>
                 <button class="btn btn-success" onclick="showPage('trade')">New Trade</button>
             </div>
         </div>
-        
+
         <!-- BOT PAGE -->
         <div class="page" id="page-bot">
             <h3 style="margin-bottom:10px;">🤖 Active Bots (8 Total)</h3>
@@ -195,7 +641,8 @@
                 <div class="bot-card">
                     <div class="bot-icon">⚡</div>
                     <div class="bot-name">Scalper Bot</div>
-                    <div class="bot-desc">High-frequency trading. Executes quick trades in seconds for small profits.</div>
+                    <div class="bot-desc">High-frequency trading. Executes quick trades in seconds for small profits.
+                    </div>
                     <span class="bot-status running">● Running</span>
                     <div style="font-size:10px;color:var(--text-secondary);margin:5px 0;">+$450 Today | 34 trades</div>
                     <button class="btn btn-danger" onclick="stopBot(this)">Stop</button>
@@ -230,7 +677,7 @@
                 </div>
             </div>
         </div>
-        
+
         <!-- TRADE PAGE -->
         <div class="page" id="page-trade">
             <div class="card">
@@ -238,7 +685,11 @@
                 <div class="form-group">
                     <label>Symbol</label>
                     <select id="tradingSymbol">
-                        <option>BTC/USD</option><option>ETH/USD</option><option>EUR/USD</option><option>GBP/USD</option><option>XAU/USD</option>
+                        <option>BTC/USD</option>
+                        <option>ETH/USD</option>
+                        <option>EUR/USD</option>
+                        <option>GBP/USD</option>
+                        <option>XAU/USD</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -255,13 +706,16 @@
                 <div class="form-group">
                     <label>Timeframe</label>
                     <select id="tradingTimeframe">
-                        <option>1 minute</option><option>5 minutes</option><option>15 minutes</option><option>1 hour</option>
+                        <option>1 minute</option>
+                        <option>5 minutes</option>
+                        <option>15 minutes</option>
+                        <option>1 hour</option>
                     </select>
                 </div>
                 <button class="btn btn-success" onclick="executeTrade()">Execute Trade</button>
             </div>
         </div>
-        
+
         <!-- CHART PAGE -->
         <div class="page" id="page-chart">
             <div class="card">
@@ -274,25 +728,27 @@
                     <button class="btn btn-outline" style="padding:5px 12px;font-size:11px;">4H</button>
                     <button class="btn btn-outline" style="padding:5px 12px;font-size:11px;">1D</button>
                 </div>
-                <div style="height:300px;display:flex;align-items:center;justify-content:center;background:var(--background);border-radius:8px;color:var(--text-secondary);">
+                <div
+                    style="height:300px;display:flex;align-items:center;justify-content:center;background:var(--background);border-radius:8px;color:var(--text-secondary);">
                     📊 Chart Coming Soon
                 </div>
             </div>
         </div>
-        
+
         <!-- CHAT PAGE -->
         <div class="page" id="page-chat">
             <div class="card">
                 <h3>🤖 AI Trading Assistant</h3>
                 <div id="chatMessages" style="height:400px;overflow-y:auto;margin-bottom:10px;"></div>
                 <div style="display:flex;gap:8px;">
-                    <input type="text" id="chatInput" placeholder="Ask about trading..." style="flex:1;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--background);color:var(--text);">
+                    <input type="text" id="chatInput" placeholder="Ask about trading..."
+                        style="flex:1;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--background);color:var(--text);">
                     <button class="btn btn-primary" onclick="sendMessage()">Send</button>
                 </div>
             </div>
         </div>
     </main>
-    
+
     <nav class="bottom-nav">
         <button class="active" onclick="showPage('home')">🏠 Home</button>
         <button onclick="showPage('bot')">🤖 Bot</button>
@@ -300,76 +756,83 @@
         <button onclick="showPage('chart')">📈 Chart</button>
         <button onclick="showPage('chat')">💬 Chat</button>
     </nav>
-    
+
     <div class="toast-container" id="toastContainer"></div>
-    
+
     <div class="modal-overlay" id="modalOverlay">
         <div class="modal">
             <h3 id="modalTitle" style="margin-bottom:15px;">Modal</h3>
             <div id="modalContent"></div>
         </div>
     </div>
-    
+
     <script>
-        (function(){'use strict';
-        var state={theme:localStorage.getItem('eshtrade_theme')||'navy',offlineMode:!navigator.onLine,currentPage:'home'};
-        
-        // THEME
-        window.setTheme=function(t){state.theme=t;document.documentElement.setAttribute('data-theme',t);localStorage.setItem('eshtrade_theme',t);document.querySelectorAll('.theme-dot').forEach(function(d){d.classList.toggle('active',d.dataset.theme===t);});};
-        window.toggleTheme=function(){var themes=['navy','charcoal','emerald','teal','plum','terracotta'];var i=themes.indexOf(state.theme);setTheme(themes[(i+1)%themes.length]);showToast('Theme: '+state.theme,'info');};
-        
-        // NAVIGATION
-        window.showPage=function(p){state.currentPage=p;document.querySelectorAll('.page').forEach(function(pg){pg.classList.remove('active');});var el=document.getElementById('page-'+p);if(el)el.classList.add('active');var btns=document.querySelectorAll('.bottom-nav button');var idx=['home','bot','trade','chart','chat'].indexOf(p);btns.forEach(function(b,i){b.classList.toggle('active',i===idx);});};
-        
-        // TOAST
-        function showToast(m,t){t=t||'info';var c=document.getElementById('toastContainer');var toast=document.createElement('div');toast.className='toast';var colors={success:'#10b981',error:'#ef4444',warning:'#f59e0b',info:'#2563eb'};toast.style.borderLeft='4px solid '+(colors[t]||colors.info);toast.textContent=m;c.appendChild(toast);setTimeout(function(){toast.style.opacity='0';toast.style.transition='opacity .3s';setTimeout(function(){toast.remove();},300);},3000);}
-        
-        // MODAL
-        function showModal(title,content){document.getElementById('modalTitle').textContent=title;document.getElementById('modalContent').innerHTML=content;document.getElementById('modalOverlay').classList.add('active');}
-        window.closeModal=function(){document.getElementById('modalOverlay').classList.remove('active');};
-        document.getElementById('modalOverlay').addEventListener('click',function(e){if(e.target===this)closeModal();});
-        
-        // SEARCH
-        window.toggleSearch=function(){var s=document.getElementById('searchBar');s.style.display=s.style.display==='none'?'flex':'none';};
-        window.searchItems=function(q){q=q.toLowerCase();document.querySelectorAll('.bot-card,.card h3').forEach(function(el){if(el.textContent.toLowerCase().includes(q)){el.style.display='';}else{el.style.display='none';}});};
-        
-        // NOTIFICATIONS
-        window.toggleNotifications=function(){showModal('🔔 Notifications','<div class="settings-item"><div><div class="settings-label">🔴 Trade executed: BTC +$500</div><div class="settings-desc">2 minutes ago</div></div></div><div class="settings-item"><div><div class="settings-label">🟡 Bot started: Scalper</div><div class="settings-desc">1 hour ago</div></div></div><div class="settings-item"><div><div class="settings-label">🔵 Price alert: Gold $2,345</div><div class="settings-desc">3 hours ago</div></div></div>');};
-        
-        // PROFILE
-        window.toggleProfile=function(){showModal('👤 User Profile','<div style="text-align:center;"><div style="font-size:40px;margin-bottom:10px;">👤</div><div style="font-weight:700;">Nadia</div><div style="color:var(--text-secondary);font-size:12px;">estradingmachine@gmail.com</div></div><div class="settings-item"><div class="settings-label">Role</div><div>Trader</div></div><div class="settings-item"><div class="settings-label">Total Trades</div><div>1,234</div></div><div class="settings-item"><div class="settings-label">Win Rate</div><div style="color:var(--success);">68%</div></div><button class="btn btn-danger" style="width:100%;margin-top:10px;" onclick="closeModal()">Close</button>');};
-        
-        // SETTINGS
-        window.toggleSettings=function(){showModal('⚙️ Settings','<div class="settings-item"><div><div class="settings-label">Dark Mode</div><div class="settings-desc">Toggle dark/light theme</div></div><button class="btn btn-outline" onclick="toggleTheme()">Toggle</button></div><div class="settings-item"><div><div class="settings-label">Notifications</div><div class="settings-desc">Enable/disable alerts</div></div><button class="btn btn-outline" onclick="requestNotificationPermission()">Enable</button></div><div class="settings-item"><div><div class="settings-label">API Keys</div><div class="settings-desc">Manage exchange keys</div></div><button class="btn btn-outline">Manage</button></div><div class="settings-item"><div><div class="settings-label">Language</div><div class="settings-desc">Change language</div></div><select style="padding:5px;border-radius:6px;border:1px solid var(--border);background:var(--background);color:var(--text);"><option>English</option><option>Swahili</option></select></div><button class="btn btn-primary" style="width:100%;margin-top:10px;" onclick="closeModal()">Save</button>');};
-        
-        // BOT ACTIONS
-        window.startBot=function(btn){var card=btn.closest('.bot-card');var status=card.querySelector('.bot-status');status.textContent='● Running';status.className='bot-status running';btn.textContent='Stop';btn.className='btn btn-danger';btn.setAttribute('onclick','stopBot(this)');showToast('Bot started','success');};
-        window.stopBot=function(btn){var card=btn.closest('.bot-card');var status=card.querySelector('.bot-status');status.textContent='● Stopped';status.className='bot-status stopped';btn.textContent='Start';btn.className='btn btn-success';btn.setAttribute('onclick','startBot(this)');showToast('Bot stopped','warning');};
-        window.configBot=function(name){showModal('⚙️ Configure '+name,'<div class="form-group"><label>Symbol</label><select><option>BTC/USD</option><option>EUR/USD</option><option>XAU/USD</option></select></div><div class="form-group"><label>Capital ($)</label><input type="number" value="100" min="5"></div><div class="form-group"><label>Risk Level</label><select><option>Low</option><option>Medium</option><option>High</option></select></div><div class="form-group"><label>Stop Loss (%)</label><input type="number" value="2"></div><div class="form-group"><label>Take Profit (%)</label><input type="number" value="4"></div><button class="btn btn-success" style="width:100%;" onclick="closeModal();showToast(\'Saved\',\'success\');">Save</button>');};
-        
-        // TICKER
-        setInterval(function(){document.getElementById('tickerBTC').textContent='$'+(67000+Math.random()*1000).toFixed(0);document.getElementById('tickerETH').textContent='$'+(3400+Math.random()*100).toFixed(0);document.getElementById('tickerEUR').textContent=(1.08+Math.random()*0.01).toFixed(4);document.getElementById('tickerGold').textContent='$'+(2340+Math.random()*10).toFixed(0);document.getElementById('tickerOil').textContent='$'+(82+Math.random()*2).toFixed(2);},3000);
-        
-        // TRADING
-        window.executeTrade=function(){var s=document.getElementById('tradingSymbol').value;var a=document.getElementById('tradingAmount').value;var d=document.getElementById('tradingDirection').value;var tf=document.getElementById('tradingTimeframe').value;showToast('Trade: '+s+' $'+a+' '+d.toUpperCase()+' ('+tf+')','success');};
-        
-        // PORTFOLIO
-        window.loadPortfolio=function(){document.getElementById('portfolioBalance').textContent='$12,304.00';showToast('Portfolio loaded','success');};
-        window.showPortfolioDetails=function(){showModal('💰 Portfolio Details','<div class="settings-item"><div class="settings-label">Total Balance</div><div>$12,304.00</div></div><div class="settings-item"><div class="settings-label">Total P&L</div><div style="color:var(--success);">+$4,230 (8.3%)</div></div><div class="settings-item"><div class="settings-label">Win Rate</div><div>68%</div></div><div class="settings-item"><div class="settings-label">Open Positions</div><div>34</div></div><div class="settings-item"><div class="settings-label">Active Bots</div><div>4/8</div></div>');};
-        
-        // CHAT
-        window.sendMessage=function(){var input=document.getElementById('chatInput');var msg=input.value.trim();if(!msg)return;var messages=document.getElementById('chatMessages');messages.innerHTML+='<div style="text-align:right;margin:8px;"><div style="background:var(--primary);color:#fff;padding:8px 12px;border-radius:12px;display:inline-block;max-width:80%;">'+msg+'</div></div>';input.value='';setTimeout(function(){var responses=['📊 Market shows bullish momentum. BTC approaching $68,000.','🤖 Scalper Bot: +$450 today. Win rate 72%.','📈 Gold up 1.2%. Consider adding to portfolio.','💡 Diversify across Forex, Crypto, and Commodities.','🔔 EURUSD approaching support at 1.0800.','🤖 Grid Bot stopped. Consider restarting in sideways market.'];
-        messages.innerHTML+='<div style="text-align:left;margin:8px;"><div style="background:var(--surface);padding:8px 12px;border-radius:12px;display:inline-block;max-width:80%;">'+responses[Math.floor(Math.random()*responses.length)]+'</div></div>';messages.scrollTop=messages.scrollHeight;},800);};
-        
-        // NOTIFICATIONS PERMISSION
-        window.requestNotificationPermission=async function(){if('Notification' in window){var p=await Notification.requestPermission();showToast('Notification: '+p,'success');}};
-        
-        // UPDATE CHECK
-        window.checkForUpdates=function(){showToast('Checking for updates...','info');};
-        
-        // INIT
-        function init(){setTheme(state.theme);showPage('home');loadPortfolio();document.getElementById('activeTrades').innerHTML='<div style="color:var(--text-secondary);">No active trades right now</div>';window.addEventListener('online',function(){state.offlineMode=false;document.body.classList.remove('offline-mode');});window.addEventListener('offline',function(){state.offlineMode=true;document.body.classList.add('offline-mode');});console.log('%c 🚀 ESH TRADE v4.0 ULTIMATE ','background:linear-gradient(135deg,#0b1a2e,#2563eb); color:#fff; font-size:1.2rem; padding:0.8rem 1.5rem; border-radius:8px; font-weight:bold;');}
-        init();})();
+        (function () {
+            'use strict';
+            var state = { theme: localStorage.getItem('eshtrade_theme') || 'navy', offlineMode: !navigator.onLine, currentPage: 'home' };
+
+            // THEME
+            window.setTheme = function (t) { state.theme = t; document.documentElement.setAttribute('data-theme', t); localStorage.setItem('eshtrade_theme', t); document.querySelectorAll('.theme-dot').forEach(function (d) { d.classList.toggle('active', d.dataset.theme === t); }); };
+            window.toggleTheme = function () { var themes = ['navy', 'charcoal', 'emerald', 'teal', 'plum', 'terracotta']; var i = themes.indexOf(state.theme); setTheme(themes[(i + 1) % themes.length]); showToast('Theme: ' + state.theme, 'info'); };
+
+            // NAVIGATION
+            window.showPage = function (p) { state.currentPage = p; document.querySelectorAll('.page').forEach(function (pg) { pg.classList.remove('active'); }); var el = document.getElementById('page-' + p); if (el) el.classList.add('active'); var btns = document.querySelectorAll('.bottom-nav button'); var idx = ['home', 'bot', 'trade', 'chart', 'chat'].indexOf(p); btns.forEach(function (b, i) { b.classList.toggle('active', i === idx); }); };
+
+            // TOAST
+            function showToast(m, t) { t = t || 'info'; var c = document.getElementById('toastContainer'); var toast = document.createElement('div'); toast.className = 'toast'; var colors = { success: '#10b981', error: '#ef4444', warning: '#f59e0b', info: '#2563eb' }; toast.style.borderLeft = '4px solid ' + (colors[t] || colors.info); toast.textContent = m; c.appendChild(toast); setTimeout(function () { toast.style.opacity = '0'; toast.style.transition = 'opacity .3s'; setTimeout(function () { toast.remove(); }, 300); }, 3000); }
+
+            // MODAL
+            function showModal(title, content) { document.getElementById('modalTitle').textContent = title; document.getElementById('modalContent').innerHTML = content; document.getElementById('modalOverlay').classList.add('active'); }
+            window.closeModal = function () { document.getElementById('modalOverlay').classList.remove('active'); };
+            document.getElementById('modalOverlay').addEventListener('click', function (e) { if (e.target === this) closeModal(); });
+
+            // SEARCH
+            window.toggleSearch = function () { var s = document.getElementById('searchBar'); s.style.display = s.style.display === 'none' ? 'flex' : 'none'; };
+            window.searchItems = function (q) { q = q.toLowerCase(); document.querySelectorAll('.bot-card,.card h3').forEach(function (el) { if (el.textContent.toLowerCase().includes(q)) { el.style.display = ''; } else { el.style.display = 'none'; } }); };
+
+            // NOTIFICATIONS
+            window.toggleNotifications = function () { showModal('🔔 Notifications', '<div class="settings-item"><div><div class="settings-label">🔴 Trade executed: BTC +$500</div><div class="settings-desc">2 minutes ago</div></div></div><div class="settings-item"><div><div class="settings-label">🟡 Bot started: Scalper</div><div class="settings-desc">1 hour ago</div></div></div><div class="settings-item"><div><div class="settings-label">🔵 Price alert: Gold $2,345</div><div class="settings-desc">3 hours ago</div></div></div>'); };
+
+            // PROFILE
+            window.toggleProfile = function () { showModal('👤 User Profile', '<div style="text-align:center;"><div style="font-size:40px;margin-bottom:10px;">👤</div><div style="font-weight:700;">Nadia</div><div style="color:var(--text-secondary);font-size:12px;">estradingmachine@gmail.com</div></div><div class="settings-item"><div class="settings-label">Role</div><div>Trader</div></div><div class="settings-item"><div class="settings-label">Total Trades</div><div>1,234</div></div><div class="settings-item"><div class="settings-label">Win Rate</div><div style="color:var(--success);">68%</div></div><button class="btn btn-danger" style="width:100%;margin-top:10px;" onclick="closeModal()">Close</button>'); };
+
+            // SETTINGS
+            window.toggleSettings = function () { showModal('⚙️ Settings', '<div class="settings-item"><div><div class="settings-label">Dark Mode</div><div class="settings-desc">Toggle dark/light theme</div></div><button class="btn btn-outline" onclick="toggleTheme()">Toggle</button></div><div class="settings-item"><div><div class="settings-label">Notifications</div><div class="settings-desc">Enable/disable alerts</div></div><button class="btn btn-outline" onclick="requestNotificationPermission()">Enable</button></div><div class="settings-item"><div><div class="settings-label">API Keys</div><div class="settings-desc">Manage exchange keys</div></div><button class="btn btn-outline">Manage</button></div><div class="settings-item"><div><div class="settings-label">Language</div><div class="settings-desc">Change language</div></div><select style="padding:5px;border-radius:6px;border:1px solid var(--border);background:var(--background);color:var(--text);"><option>English</option><option>Swahili</option></select></div><button class="btn btn-primary" style="width:100%;margin-top:10px;" onclick="closeModal()">Save</button>'); };
+
+            // BOT ACTIONS
+            window.startBot = function (btn) { var card = btn.closest('.bot-card'); var status = card.querySelector('.bot-status'); status.textContent = '● Running'; status.className = 'bot-status running'; btn.textContent = 'Stop'; btn.className = 'btn btn-danger'; btn.setAttribute('onclick', 'stopBot(this)'); showToast('Bot started', 'success'); };
+            window.stopBot = function (btn) { var card = btn.closest('.bot-card'); var status = card.querySelector('.bot-status'); status.textContent = '● Stopped'; status.className = 'bot-status stopped'; btn.textContent = 'Start'; btn.className = 'btn btn-success'; btn.setAttribute('onclick', 'startBot(this)'); showToast('Bot stopped', 'warning'); };
+            window.configBot = function (name) { showModal('⚙️ Configure ' + name, '<div class="form-group"><label>Symbol</label><select><option>BTC/USD</option><option>EUR/USD</option><option>XAU/USD</option></select></div><div class="form-group"><label>Capital ($)</label><input type="number" value="100" min="5"></div><div class="form-group"><label>Risk Level</label><select><option>Low</option><option>Medium</option><option>High</option></select></div><div class="form-group"><label>Stop Loss (%)</label><input type="number" value="2"></div><div class="form-group"><label>Take Profit (%)</label><input type="number" value="4"></div><button class="btn btn-success" style="width:100%;" onclick="closeModal();showToast(\'Saved\',\'success\');">Save</button>'); };
+
+            // TICKER
+            setInterval(function () { document.getElementById('tickerBTC').textContent = '$' + (67000 + Math.random() * 1000).toFixed(0); document.getElementById('tickerETH').textContent = '$' + (3400 + Math.random() * 100).toFixed(0); document.getElementById('tickerEUR').textContent = (1.08 + Math.random() * 0.01).toFixed(4); document.getElementById('tickerGold').textContent = '$' + (2340 + Math.random() * 10).toFixed(0); document.getElementById('tickerOil').textContent = '$' + (82 + Math.random() * 2).toFixed(2); }, 3000);
+
+            // TRADING
+            window.executeTrade = function () { var s = document.getElementById('tradingSymbol').value; var a = document.getElementById('tradingAmount').value; var d = document.getElementById('tradingDirection').value; var tf = document.getElementById('tradingTimeframe').value; showToast('Trade: ' + s + ' $' + a + ' ' + d.toUpperCase() + ' (' + tf + ')', 'success'); };
+
+            // PORTFOLIO
+            window.loadPortfolio = function () { document.getElementById('portfolioBalance').textContent = '$12,304.00'; showToast('Portfolio loaded', 'success'); };
+            window.showPortfolioDetails = function () { showModal('💰 Portfolio Details', '<div class="settings-item"><div class="settings-label">Total Balance</div><div>$12,304.00</div></div><div class="settings-item"><div class="settings-label">Total P&L</div><div style="color:var(--success);">+$4,230 (8.3%)</div></div><div class="settings-item"><div class="settings-label">Win Rate</div><div>68%</div></div><div class="settings-item"><div class="settings-label">Open Positions</div><div>34</div></div><div class="settings-item"><div class="settings-label">Active Bots</div><div>4/8</div></div>'); };
+
+            // CHAT
+            window.sendMessage = function () {
+                var input = document.getElementById('chatInput'); var msg = input.value.trim(); if (!msg) return; var messages = document.getElementById('chatMessages'); messages.innerHTML += '<div style="text-align:right;margin:8px;"><div style="background:var(--primary);color:#fff;padding:8px 12px;border-radius:12px;display:inline-block;max-width:80%;">' + msg + '</div></div>'; input.value = ''; setTimeout(function () {
+                    var responses = ['📊 Market shows bullish momentum. BTC approaching $68,000.', '🤖 Scalper Bot: +$450 today. Win rate 72%.', '📈 Gold up 1.2%. Consider adding to portfolio.', '💡 Diversify across Forex, Crypto, and Commodities.', '🔔 EURUSD approaching support at 1.0800.', '🤖 Grid Bot stopped. Consider restarting in sideways market.'];
+                    messages.innerHTML += '<div style="text-align:left;margin:8px;"><div style="background:var(--surface);padding:8px 12px;border-radius:12px;display:inline-block;max-width:80%;">' + responses[Math.floor(Math.random() * responses.length)] + '</div></div>'; messages.scrollTop = messages.scrollHeight;
+                }, 800);
+            };
+
+            // NOTIFICATIONS PERMISSION
+            window.requestNotificationPermission = async function () { if ('Notification' in window) { var p = await Notification.requestPermission(); showToast('Notification: ' + p, 'success'); } };
+
+            // UPDATE CHECK
+            window.checkForUpdates = function () { showToast('Checking for updates...', 'info'); };
+
+            // INIT
+            function init() { setTheme(state.theme); showPage('home'); loadPortfolio(); document.getElementById('activeTrades').innerHTML = '<div style="color:var(--text-secondary);">No active trades right now</div>'; window.addEventListener('online', function () { state.offlineMode = false; document.body.classList.remove('offline-mode'); }); window.addEventListener('offline', function () { state.offlineMode = true; document.body.classList.add('offline-mode'); }); console.log('%c 🚀 ESH TRADE v4.0 ULTIMATE ', 'background:linear-gradient(135deg,#0b1a2e,#2563eb); color:#fff; font-size:1.2rem; padding:0.8rem 1.5rem; border-radius:8px; font-weight:bold;'); }
+            init();
+        })();
     </script>
 </body>
+
 </html>

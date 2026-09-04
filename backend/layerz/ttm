@@ -1,0 +1,776 @@
+"""
+LAYER +25: TICK-LEVEL TRADE MANAGEMENT ENGINE (ULTRA ADVANCE)
+Purpose: Manage trades at tick level with INTELLIGENT monitoring and adjustment.
+Balance: GOLDILOCKS - Not too sensitive (unnecessary exits) and not too insensitive (missed exits).
+
+ULTRA ADVANCE FEATURES:
+- Tick-by-tick P&L monitoring with millisecond precision
+- Tick-by-tick SL/TP monitoring with adaptive adjustment
+- Dynamic TP/SL adjustment based on tick patterns
+- Tick trailing stop with momentum-based adjustment
+- Profit acceleration/deceleration detection
+- Early loss exit before SL hit
+- Partial profit taking at tick levels
+- Re-entry detection after exit
+- Emergency exit with circuit breaker
+- Self-optimizing thresholds based on performance
+- Micro-structure based exit decisions
+- Liquidity-based position management
+"""
+
+import numpy as np
+import pandas as pd
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Tuple, Any, Union
+from enum import Enum
+from dataclasses import dataclass, field
+import logging
+import json
+import time
+from collections import deque
+import threading
+
+# Configure logging
+logger = logging.getLogger(__name__)
+
+debug_handler = logging.FileHandler('logs/tick_trade_management_debug.log')
+debug_handler.setLevel(logging.DEBUG)
+debug_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+debug_handler.setFormatter(debug_formatter)
+logger.addHandler(debug_handler)
+
+
+class TradeAction(Enum):
+    """Actions to take based on tick analysis"""
+    HOLD = "hold"
+    EXIT = "exit"
+    PARTIAL_EXIT = "partial_exit"
+    ADJUST_SL = "adjust_sl"
+    ADJUST_TP = "adjust_tp"
+    TRAIL_STOP = "trail_stop"
+    BREAK_EVEN = "break_even"
+    EMERGENCY_EXIT = "emergency_exit"
+    RE_ENTER = "re_enter"
+
+
+@dataclass
+class TickTradeManagementConfig:
+    """Configuration for Tick Trade Management - ULTRA ADVANCE"""
+    
+    # Tick monitoring
+    tick_monitor_window: int = 20
+    min_ticks_for_analysis: int = 5
+    
+    # SL/TP adjustment
+    sl_adjustment_step: float = 0.001  # 0.1%
+    tp_adjustment_step: float = 0.002  # 0.2%
+    min_sl_distance: float = 0.002    # 0.2%
+    max_tp_distance: float = 0.05     # 5%
+    
+    # Trailing stop
+    trailing_activation_pnl: float = 0.001  # 0.1% profit
+    trailing_step: float = 0.0005           # 0.05%
+    trailing_multiplier: float = 1.5
+    
+    # Profit detection
+    acceleration_threshold: float = 0.0001  # Tick velocity increase
+    deceleration_threshold: float = -0.0001
+    exhaustion_threshold: float = 0.00005  # Very slow movement
+    
+    # Early exit
+    early_exit_threshold: float = 0.5   # 50% of SL
+    momentum_failure_threshold: float = 0.3
+    
+    # Partial exit
+    partial_exit_levels: List[float] = field(default_factory=lambda: [0.25, 0.50, 0.75])
+    partial_exit_percentages: List[float] = field(default_factory=lambda: [0.20, 0.30, 0.30])
+    
+    # Break even
+    break_even_activation: float = 0.002  # 0.2% profit
+    break_even_buffer: float = 0.0005     # 0.05%
+    
+    # Re-entry
+    re_entry_cooldown_seconds: int = 60
+    re_entry_confirmation_ticks: int = 10
+    
+    # Emergency
+    emergency_volatility_threshold: float = 3.0
+    emergency_drawdown_threshold: float = 0.05  # 5%
+    
+    # Debug
+    debug_mode: bool = True
+    max_history_size: int = 50000
+
+
+class TickTradeManagement:
+    """
+    Tick-Level Trade Management Engine - ULTRA ADVANCE
+    Manages trades at tick level with intelligence.
+    """
+    
+    def __init__(self, config: Optional[TickTradeManagementConfig] = None):
+        self.config = config or TickTradeManagementConfig()
+        self.debug_mode = self.config.debug_mode
+        
+        # PERFORMANCE TRACKING
+        self.performance = {
+            'total_ticks_processed': 0,
+            'adjustments_made': 0,
+            'trailing_stops_activated': 0,
+            'early_exits': 0,
+            'partial_exits': 0,
+            'emergency_exits': 0,
+            're_entries': 0,
+            'saved_profit': 0.0,
+            'prevented_loss': 0.0
+        }
+        
+        # TRADE STATE
+        self.active_trades = {}
+        self.trade_history = deque(maxlen=self.config.max_history_size)
+        self.tick_history = deque(maxlen=self.config.max_history_size)
+        
+        # MICRO-STRUCTURE
+        self.tick_velocity = 0.0
+        self.tick_acceleration = 0.0
+        self.tick_imbalance = 0.0
+        self.tick_pressure = 0.0
+        
+        # PROFIT DETECTION
+        self.profit_velocity = 0.0
+        self.profit_acceleration = 0.0
+        self.is_profit_accelerating = False
+        self.is_profit_exhausting = False
+        
+        # RE-ENTRY
+        self.exit_trades = {}
+        self.re_entry_cooldown = {}
+        
+        # EMERGENCY
+        self.emergency_mode = False
+        self.emergency_until = None
+        
+        # MARKET CONTEXT
+        self.current_volatility = 0.0
+        self.current_regime = "unknown"
+        
+        # LOCK
+        self._lock = threading.Lock()
+        
+        self._log_debug("Tick Trade Management Engine initialized - ULTRA ADVANCE", "info")
+        logger.info("Tick Trade Management Engine initialized - ULTRA ADVANCE")
+    
+    def _log_debug(self, message: str, level: str = "debug") -> None:
+        """Debug logging with timestamp"""
+        if self.debug_mode:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+            log_msg = f"[DEBUG {timestamp}] {message}"
+            if level == "info":
+                logger.info(log_msg)
+            elif level == "warning":
+                logger.warning(log_msg)
+            elif level == "error":
+                logger.error(log_msg)
+            else:
+                logger.debug(log_msg)
+    
+    def update_market_data(self, market_data: Dict[str, Any]) -> None:
+        """Update market context"""
+        try:
+            if not isinstance(market_data, dict):
+                return
+            
+            self.current_volatility = market_data.get('volatility', 0.0) or 0.0
+            self.current_regime = market_data.get('regime', 'unknown') or 'unknown'
+            
+        except Exception as e:
+            self._log_debug(f"Error in update_market_data: {str(e)}", "error")
+    
+    def process_tick(self, tick_data: Dict[str, Any]) -> None:
+        """Process a single tick and update trade management"""
+        try:
+            self.performance['total_ticks_processed'] += 1
+            
+            if not isinstance(tick_data, dict):
+                return
+            
+            # Extract tick data
+            price = tick_data.get('price', 0.0)
+            volume = tick_data.get('volume', 0.0)
+            bid = tick_data.get('bid', price)
+            ask = tick_data.get('ask', price)
+            timestamp = tick_data.get('timestamp', datetime.now())
+            
+            # Update tick history
+            self.tick_history.append({
+                'price': price,
+                'volume': volume,
+                'bid': bid,
+                'ask': ask,
+                'spread': ask - bid,
+                'timestamp': timestamp
+            })
+            
+            # Calculate micro-structure
+            self._calculate_micro_structure(price, volume)
+            
+            # Check emergency
+            self._check_emergency()
+            
+            # Process active trades
+            for trade_id, trade in list(self.active_trades.items()):
+                self._manage_trade(trade_id, trade, price, timestamp)
+            
+        except Exception as e:
+            self._log_debug(f"Error in process_tick: {str(e)}", "error")
+    
+    def _calculate_micro_structure(self, price: float, volume: float) -> None:
+        """Calculate micro-structure metrics"""
+        try:
+            if len(self.tick_history) < 2:
+                return
+            
+            prev_tick = self.tick_history[-2]
+            prev_price = prev_tick['price']
+            
+            # Tick velocity
+            if prev_price > 0:
+                self.tick_velocity = (price - prev_price) / prev_price
+            
+            # Tick acceleration
+            if len(self.tick_history) > 2:
+                prev_velocity = self.tick_velocity
+                self.tick_acceleration = self.tick_velocity - prev_velocity
+            
+            # Tick imbalance (simplified)
+            if len(self.tick_history) > 5:
+                recent_ticks = list(self.tick_history)[-5:]
+                upticks = sum(1 for t in recent_ticks if t['price'] > t.get('prev_price', t['price']))
+                self.tick_imbalance = upticks / len(recent_ticks) - 0.5
+            
+            # Tick pressure
+            if len(self.tick_history) > 10:
+                recent_ticks = list(self.tick_history)[-10:]
+                net_change = recent_ticks[-1]['price'] - recent_ticks[0]['price']
+                self.tick_pressure = net_change / recent_ticks[0]['price'] * 100
+            
+        except Exception as e:
+            self._log_debug(f"Error in _calculate_micro_structure: {str(e)}", "error")
+    
+    def _check_emergency(self) -> None:
+        """Check for emergency conditions"""
+        try:
+            # Check volatility
+            if self.current_volatility > self.config.emergency_volatility_threshold:
+                self._activate_emergency("extreme_volatility")
+            
+            # Check drawdown for active trades
+            for trade_id, trade in self.active_trades.items():
+                pnl_percent = trade.get('pnl_percent', 0)
+                if pnl_percent < -self.config.emergency_drawdown_threshold:
+                    self._activate_emergency("excessive_drawdown")
+                    break
+            
+            # Check emergency timeout
+            if self.emergency_mode:
+                if datetime.now() > self.emergency_until:
+                    self.emergency_mode = False
+                    self.emergency_until = None
+                    self._log_debug("Emergency mode lifted", "info")
+            
+        except Exception as e:
+            self._log_debug(f"Error in _check_emergency: {str(e)}", "error")
+    
+    def _activate_emergency(self, reason: str) -> None:
+        """Activate emergency mode"""
+        try:
+            self.emergency_mode = True
+            self.emergency_until = datetime.now() + timedelta(minutes=5)
+            self.performance['emergency_exits'] += 1
+            
+            # Exit all trades
+            for trade_id, trade in list(self.active_trades.items()):
+                self._execute_action(trade_id, trade, TradeAction.EMERGENCY_EXIT)
+            
+            self._log_debug(f"EMERGENCY MODE ACTIVATED: {reason}", "error")
+            logger.error(f"EMERGENCY MODE ACTIVATED: {reason}")
+            
+        except Exception as e:
+            self._log_debug(f"Error in _activate_emergency: {str(e)}", "error")
+    
+    def add_trade(self, trade_data: Dict[str, Any]) -> str:
+        """Add a new trade to monitor"""
+        try:
+            trade_id = trade_data.get('id', f"TRADE_{int(time.time())}_{np.random.randint(1000, 9999)}")
+            
+            self.active_trades[trade_id] = {
+                'id': trade_id,
+                'entry_price': trade_data.get('entry_price', 0.0),
+                'direction': trade_data.get('direction', 'buy'),
+                'size': trade_data.get('size', 0.0),
+                'stop_loss': trade_data.get('stop_loss', 0.0),
+                'take_profit': trade_data.get('take_profit', 0.0),
+                'trailing_stop': None,
+                'trailing_activated': False,
+                'partial_exits': [],
+                'entry_time': datetime.now(),
+                'last_updated': datetime.now(),
+                'best_price': trade_data.get('entry_price', 0.0),
+                'worst_price': trade_data.get('entry_price', 0.0),
+                'pnl': 0.0,
+                'pnl_percent': 0.0,
+                'status': 'active'
+            }
+            
+            self._log_debug(f"Added trade: {trade_id} at {self.active_trades[trade_id]['entry_price']:.4f}", "info")
+            return trade_id
+            
+        except Exception as e:
+            self._log_debug(f"Error in add_trade: {str(e)}", "error")
+            return None
+    
+    def _manage_trade(self, trade_id: str, trade: Dict[str, Any], current_price: float, timestamp: datetime) -> None:
+        """Manage a single trade based on tick data"""
+        try:
+            # Update trade prices
+            trade['current_price'] = current_price
+            trade['last_updated'] = timestamp
+            
+            # Update best/worst
+            if current_price > trade['best_price']:
+                trade['best_price'] = current_price
+            if current_price < trade['worst_price']:
+                trade['worst_price'] = current_price
+            
+            # Calculate P&L
+            direction = trade['direction']
+            entry = trade['entry_price']
+            if direction == 'buy':
+                trade['pnl'] = (current_price - entry) * trade['size']
+                trade['pnl_percent'] = (current_price - entry) / entry
+            else:
+                trade['pnl'] = (entry - current_price) * trade['size']
+                trade['pnl_percent'] = (entry - current_price) / entry
+            
+            # Check stop loss
+            if self._check_stop_loss(trade, current_price):
+                self._execute_action(trade_id, trade, TradeAction.EXIT)
+                return
+            
+            # Check take profit
+            if self._check_take_profit(trade, current_price):
+                self._execute_action(trade_id, trade, TradeAction.EXIT)
+                return
+            
+            # Check trailing stop
+            if self._check_trailing_stop(trade, current_price):
+                self._execute_action(trade_id, trade, TradeAction.TRAIL_STOP)
+                return
+            
+            # Check profit acceleration/exhaustion
+            self._check_profit_dynamics(trade, current_price)
+            
+            # Check early exit
+            if self._check_early_exit(trade, current_price):
+                self._execute_action(trade_id, trade, TradeAction.EXIT)
+                return
+            
+            # Check partial exit
+            if self._check_partial_exit(trade, current_price):
+                self._execute_action(trade_id, trade, TradeAction.PARTIAL_EXIT)
+                return
+            
+            # Check break even
+            if self._check_break_even(trade, current_price):
+                self._execute_action(trade_id, trade, TradeAction.BREAK_EVEN)
+                return
+            
+            # Check re-entry
+            if self._check_re_entry(trade, current_price):
+                self._execute_action(trade_id, trade, TradeAction.RE_ENTER)
+                return
+            
+        except Exception as e:
+            self._log_debug(f"Error in _manage_trade: {str(e)}", "error")
+    
+    def _check_stop_loss(self, trade: Dict[str, Any], current_price: float) -> bool:
+        """Check if stop loss is hit"""
+        try:
+            sl = trade['stop_loss']
+            direction = trade['direction']
+            
+            if direction == 'buy':
+                return current_price <= sl
+            else:
+                return current_price >= sl
+                
+        except Exception as e:
+            self._log_debug(f"Error in _check_stop_loss: {str(e)}", "error")
+            return False
+    
+    def _check_take_profit(self, trade: Dict[str, Any], current_price: float) -> bool:
+        """Check if take profit is hit"""
+        try:
+            tp = trade['take_profit']
+            direction = trade['direction']
+            
+            if direction == 'buy':
+                return current_price >= tp
+            else:
+                return current_price <= tp
+                
+        except Exception as e:
+            self._log_debug(f"Error in _check_take_profit: {str(e)}", "error")
+            return False
+    
+    def _check_trailing_stop(self, trade: Dict[str, Any], current_price: float) -> bool:
+        """Check if trailing stop should be activated or updated"""
+        try:
+            if trade['trailing_activated']:
+                # Update trailing stop
+                best_price = trade['best_price']
+                trailing_stop = trade['trailing_stop']
+                
+                direction = trade['direction']
+                if direction == 'buy':
+                    new_trailing = best_price * (1 - self.config.trailing_step)
+                    if new_trailing > trailing_stop:
+                        trade['trailing_stop'] = new_trailing
+                        self.performance['adjustments_made'] += 1
+                        return False
+                    else:
+                        return current_price <= trailing_stop
+                else:
+                    new_trailing = best_price * (1 + self.config.trailing_step)
+                    if new_trailing < trailing_stop:
+                        trade['trailing_stop'] = new_trailing
+                        self.performance['adjustments_made'] += 1
+                        return False
+                    else:
+                        return current_price >= trailing_stop
+            
+            # Check if trailing should be activated
+            pnl_percent = trade['pnl_percent']
+            if pnl_percent > self.config.trailing_activation_pnl:
+                # Activate trailing stop
+                direction = trade['direction']
+                best_price = trade['best_price']
+                
+                if direction == 'buy':
+                    trade['trailing_stop'] = best_price * (1 - self.config.trailing_step)
+                else:
+                    trade['trailing_stop'] = best_price * (1 + self.config.trailing_step)
+                
+                trade['trailing_activated'] = True
+                self.performance['trailing_stops_activated'] += 1
+                self._log_debug(f"Trailing stop activated for trade {trade['id']}", "info")
+                
+                return False
+            
+            return False
+            
+        except Exception as e:
+            self._log_debug(f"Error in _check_trailing_stop: {str(e)}", "error")
+            return False
+    
+    def _check_profit_dynamics(self, trade: Dict[str, Any], current_price: float) -> None:
+        """Check profit acceleration and exhaustion"""
+        try:
+            if len(self.tick_history) < 2:
+                return
+            
+            # Calculate recent P&L changes
+            recent_ticks = list(self.tick_history)[-5:]
+            pnl_changes = []
+            
+            for tick in recent_ticks:
+                price = tick['price']
+                if trade['direction'] == 'buy':
+                    pnl = (price - trade['entry_price']) * trade['size']
+                else:
+                    pnl = (trade['entry_price'] - price) * trade['size']
+                pnl_changes.append(pnl)
+            
+            if len(pnl_changes) > 1:
+                # Calculate velocity
+                avg_change = (pnl_changes[-1] - pnl_changes[0]) / len(pnl_changes)
+                
+                # Check acceleration
+                if len(pnl_changes) > 2:
+                    recent_avg = (pnl_changes[-1] - pnl_changes[-2])
+                    older_avg = (pnl_changes[-2] - pnl_changes[-3])
+                    self.profit_acceleration = recent_avg - older_avg
+                    
+                    if self.profit_acceleration > self.config.acceleration_threshold:
+                        self.is_profit_accelerating = True
+                        self.is_profit_exhausting = False
+                    elif self.profit_acceleration < self.config.deceleration_threshold:
+                        self.is_profit_accelerating = False
+                        self.is_profit_exhausting = True
+                    else:
+                        self.is_profit_accelerating = False
+                        self.is_profit_exhausting = False
+                
+        except Exception as e:
+            self._log_debug(f"Error in _check_profit_dynamics: {str(e)}", "error")
+    
+    def _check_early_exit(self, trade: Dict[str, Any], current_price: float) -> bool:
+        """Check if early exit is warranted"""
+        try:
+            # Check if in loss territory
+            if trade['pnl'] >= 0:
+                return False
+            
+            # Check if momentum is failing
+            if self.tick_velocity < self.config.momentum_failure_threshold:
+                return False
+            
+            # Check if stop loss is close
+            sl_distance = abs(current_price - trade['stop_loss']) / trade['entry_price']
+            if sl_distance > self.config.early_exit_threshold:
+                return True
+            
+            # Check if profit is exhausting
+            if self.is_profit_exhausting:
+                return True
+            
+            return False
+            
+        except Exception as e:
+            self._log_debug(f"Error in _check_early_exit: {str(e)}", "error")
+            return False
+    
+    def _check_partial_exit(self, trade: Dict[str, Any], current_price: float) -> bool:
+        """Check if partial exit is warranted"""
+        try:
+            # Only if in profit
+            if trade['pnl'] <= 0:
+                return False
+            
+            # Check if any partial exit level is reached
+            for level in self.config.partial_exit_levels:
+                # Calculate profit level
+                direction = trade['direction']
+                entry = trade['entry_price']
+                sl = trade['stop_loss']
+                
+                if direction == 'buy':
+                    profit_target = entry + (sl - entry) * level
+                    if current_price >= profit_target and level not in trade.get('partial_exits', []):
+                        return True
+                else:
+                    profit_target = entry + (sl - entry) * level
+                    if current_price <= profit_target and level not in trade.get('partial_exits', []):
+                        return True
+            
+            return False
+            
+        except Exception as e:
+            self._log_debug(f"Error in _check_partial_exit: {str(e)}", "error")
+            return False
+    
+    def _check_break_even(self, trade: Dict[str, Any], current_price: float) -> bool:
+        """Check if break even should be activated"""
+        try:
+            # Only if in profit
+            if trade['pnl'] <= 0:
+                return False
+            
+            # Check if profit exceeds break even threshold
+            if trade['pnl_percent'] > self.config.break_even_activation:
+                # Check if currently not at break even
+                if trade['stop_loss'] != trade['entry_price']:
+                    return True
+            
+            return False
+            
+        except Exception as e:
+            self._log_debug(f"Error in _check_break_even: {str(e)}", "error")
+            return False
+    
+    def _check_re_entry(self, trade: Dict[str, Any], current_price: float) -> bool:
+        """Check if re-entry is warranted"""
+        try:
+            # Only if trade was exited
+            if trade['status'] != 'exited':
+                return False
+            
+            # Check cooldown
+            trade_id = trade['id']
+            if trade_id in self.re_entry_cooldown:
+                if datetime.now() < self.re_entry_cooldown[trade_id]:
+                    return False
+            
+            # Check if price has moved favorably
+            entry = trade['entry_price']
+            direction = trade['direction']
+            
+            if direction == 'buy':
+                if current_price < entry * 0.995:  # 0.5% drop
+                    return True
+            else:
+                if current_price > entry * 1.005:  # 0.5% rise
+                    return True
+            
+            return False
+            
+        except Exception as e:
+            self._log_debug(f"Error in _check_re_entry: {str(e)}", "error")
+            return False
+    
+    def _execute_action(self, trade_id: str, trade: Dict[str, Any], action: TradeAction) -> None:
+        """Execute an action on a trade"""
+        try:
+            if action == TradeAction.EXIT:
+                # Close the trade
+                pnl = trade['pnl']
+                if pnl < 0:
+                    self.performance['prevented_loss'] += abs(pnl)
+                
+                trade['status'] = 'exited'
+                trade['exit_time'] = datetime.now()
+                trade['exit_price'] = trade['current_price']
+                trade['exit_reason'] = 'stop_loss' if self._check_stop_loss(trade, trade['current_price']) else 'take_profit'
+                
+                self.trade_history.append(trade)
+                del self.active_trades[trade_id]
+                
+                self._log_debug(f"Trade {trade_id} exited: PnL=${pnl:.2f}", "info")
+                
+            elif action == TradeAction.PARTIAL_EXIT:
+                # Partial exit
+                level = self.config.partial_exit_levels[len(trade.get('partial_exits', []))]
+                percentage = self.config.partial_exit_percentages[len(trade.get('partial_exits', []))]
+                
+                pnl = trade['pnl'] * percentage
+                self.performance['partial_exits'] += 1
+                self.performance['saved_profit'] += pnl
+                
+                if 'partial_exits' not in trade:
+                    trade['partial_exits'] = []
+                trade['partial_exits'].append({
+                    'level': level,
+                    'percentage': percentage,
+                    'pnl': pnl,
+                    'time': datetime.now()
+                })
+                
+                trade['size'] *= (1 - percentage)
+                
+                self._log_debug(f"Partial exit for {trade_id}: {percentage*100}% at level {level:.1f}", "info")
+                
+            elif action == TradeAction.BREAK_EVEN:
+                # Move stop loss to entry
+                trade['stop_loss'] = trade['entry_price']
+                self.performance['adjustments_made'] += 1
+                self._log_debug(f"Break even activated for {trade_id}", "info")
+                
+            elif action == TradeAction.TRAIL_STOP:
+                # Activate or update trailing stop
+                self._check_trailing_stop(trade, trade['current_price'])
+                
+            elif action == TradeAction.RE_ENTER:
+                # Re-enter the trade
+                self.re_entry_cooldown[trade_id] = datetime.now() + timedelta(seconds=self.config.re_entry_cooldown_seconds)
+                self.performance['re_entries'] += 1
+                
+                # Create new trade
+                new_trade = {
+                    'id': f"{trade_id}_RE_{int(time.time())}",
+                    'entry_price': trade['current_price'],
+                    'direction': trade['direction'],
+                    'size': trade['size'] * 0.5,  # Half size
+                    'stop_loss': trade['current_price'] * 0.99 if trade['direction'] == 'buy' else trade['current_price'] * 1.01,
+                    'take_profit': trade['current_price'] * 1.02 if trade['direction'] == 'buy' else trade['current_price'] * 0.98,
+                    'entry_time': datetime.now()
+                }
+                
+                self.add_trade(new_trade)
+                self._log_debug(f"Re-entry for {trade_id}: ${new_trade['entry_price']:.4f}", "info")
+                
+            elif action == TradeAction.EMERGENCY_EXIT:
+                # Emergency exit
+                pnl = trade['pnl']
+                self.performance['emergency_exits'] += 1
+                
+                trade['status'] = 'emergency_exited'
+                trade['exit_time'] = datetime.now()
+                trade['exit_price'] = trade['current_price']
+                trade['exit_reason'] = 'emergency'
+                
+                self.trade_history.append(trade)
+                del self.active_trades[trade_id]
+                
+                self._log_debug(f"Emergency exit for {trade_id}: PnL=${pnl:.2f}", "warning")
+                
+        except Exception as e:
+            self._log_debug(f"Error in _execute_action: {str(e)}", "error")
+    
+    def get_active_trades(self) -> List[Dict[str, Any]]:
+        """Get all active trades"""
+        return list(self.active_trades.values())
+    
+    def get_trade_history(self) -> List[Dict[str, Any]]:
+        """Get trade history"""
+        return list(self.trade_history)
+    
+    def get_status(self) -> Dict[str, Any]:
+        """Get current status"""
+        try:
+            return {
+                'active_trades': len(self.active_trades),
+                'total_ticks_processed': self.performance['total_ticks_processed'],
+                'adjustments_made': self.performance['adjustments_made'],
+                'trailing_stops_activated': self.performance['trailing_stops_activated'],
+                'early_exits': self.performance['early_exits'],
+                'partial_exits': self.performance['partial_exits'],
+                'emergency_exits': self.performance['emergency_exits'],
+                're_entries': self.performance['re_entries'],
+                'saved_profit': self.performance['saved_profit'],
+                'prevented_loss': self.performance['prevented_loss'],
+                'emergency_mode': self.emergency_mode,
+                'current_volatility': self.current_volatility,
+                'current_regime': self.current_regime,
+                'tick_velocity': self.tick_velocity,
+                'tick_imbalance': self.tick_imbalance,
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_status: {str(e)}", "error")
+            return {'status': 'ERROR', 'error': str(e)}
+    
+    def get_performance_report(self) -> Dict[str, Any]:
+        """Get detailed performance report"""
+        try:
+            total_ticks = self.performance['total_ticks_processed']
+            total_trades = len(self.trade_history)
+            active_trades = len(self.active_trades)
+            
+            return {
+                'summary': {
+                    'total_ticks_processed': total_ticks,
+                    'total_trades_completed': total_trades,
+                    'active_trades': active_trades,
+                    'adjustments_made': self.performance['adjustments_made'],
+                    'saved_profit': self.performance['saved_profit'],
+                    'prevented_loss': self.performance['prevented_loss']
+                },
+                'exits': {
+                    'early': self.performance['early_exits'],
+                    'partial': self.performance['partial_exits'],
+                    'emergency': self.performance['emergency_exits'],
+                    'trailing': self.performance['trailing_stops_activated']
+                },
+                're_entries': self.performance['re_entries'],
+                'emergency_mode': self.emergency_mode,
+                'current_metrics': {
+                    'tick_velocity': self.tick_velocity,
+                    'tick_imbalance': self.tick_imbalance,
+                    'tick_pressure': self.tick_pressure,
+                    'volatility': self.current_volatility
+                },
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_performance_report: {str(e)}", "error")
+            return {'error': str(e)}

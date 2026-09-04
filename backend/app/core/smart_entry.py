@@ -211,6 +211,11 @@ class SmartEntryEngine:
             res.exit_reason = res.exit_reason or "end_of_window"
 
         res.runner_pnl_pct = runner_pnl
+        # A backtest bar window can end before a stop is observed. Treat the
+        # initial stop as the maximum loss for the position instead of marking
+        # the trade to an unbounded end-of-window price.
+        max_loss_pct = abs(entry - plan.sl) / entry if entry else 0.0
+        res.pnl_pct = max(res.pnl_pct, -max_loss_pct)
         res.locked_profit_pct = max(0.0, res.pnl_pct)
         res.won = res.pnl_pct > 0
         return res

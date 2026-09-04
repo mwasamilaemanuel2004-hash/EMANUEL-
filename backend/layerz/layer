@@ -1,0 +1,1032 @@
+"""
+LAYERS +7, +8, +15, +20: PROFIT OPTIMIZER (ULTIMATE UPGRADE)
+Purpose: Maximize profits while managing risk, locking profits, and generating capital.
+Balance: GOLDILOCKS - Not too aggressive (risky) and not too passive (missed profits).
+
+NEW FEATURES:
+- USER SELECTABLE WIN RATE: 55%, 60%, 80%, or AUTO-ADAPT
+- AUTO-ADAPT MODE: System automatically finds optimal win rate
+- SMART MODE SWITCHING: Changes based on market conditions
+- SELF-CORRECTING: Learns from past trades and adjusts
+"""
+
+import numpy as np
+import pandas as pd
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Tuple, Any, Union
+from enum import Enum
+from dataclasses import dataclass, field
+import logging
+import json
+import time
+from collections import deque
+import threading
+
+# Configure logging
+logger = logging.getLogger(__name__)
+
+debug_handler = logging.FileHandler('logs/profit_optimizer_debug.log')
+debug_handler.setLevel(logging.DEBUG)
+debug_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+debug_handler.setFormatter(debug_formatter)
+logger.addHandler(debug_handler)
+
+
+class ProfitMode(Enum):
+    """Profit modes for optimization"""
+    AGGRESSIVE = "aggressive"      # Maximize profit, higher risk
+    BALANCED = "balanced"          # Balanced profit and risk (DEFAULT)
+    CONSERVATIVE = "conservative"  # Protect capital, steady profit
+    AUTO = "auto"                  # Auto-detect based on conditions
+
+
+class WinRateMode(Enum):
+    """User selectable win rate modes"""
+    WIN_55 = "win_55"          # 55% win rate (realistic, balanced)
+    WIN_60 = "win_60"          # 60% win rate (good performance)
+    WIN_80 = "win_80"          # 80% win rate (very strict, fewer trades)
+    AUTO_ADAPT = "auto_adapt"  # System auto-adapts win rate
+    SIMPLE = "simple"          # Simple mode - no optimization
+
+
+@dataclass
+class ProfitOptimizerConfig:
+    """Configuration for Profit Optimizer - ULTIMATE UPGRADE"""
+    
+    # Win Rate Modes (User Selectable)
+    win_rate_mode: str = "WIN_55"  # WIN_55, WIN_60, WIN_80, AUTO_ADAPT, SIMPLE
+    
+    # Win Rate Parameters (Auto-calculated based on mode)
+    target_win_rate: float = 0.55
+    min_win_rate: float = 0.45
+    max_win_rate: float = 0.80
+    
+    # Risk-Reward (BALANCED)
+    min_rr_ratio: float = 1.2
+    max_rr_ratio: float = 4.0
+    default_rr_ratio: float = 2.0
+    
+    # Position sizing (BALANCED)
+    max_position_size: float = 1.5
+    min_position_size: float = 0.2
+    default_position_size: float = 0.8
+    
+    # Profit lock (BALANCED)
+    profit_lock_level1: float = 8.0
+    profit_lock_level2: float = 16.0
+    profit_lock_level3: float = 25.0
+    
+    # Reinvestment (BALANCED)
+    reinvestment_ratio: float = 0.35
+    max_reinvestment: float = 3.0
+    
+    # Capital generation
+    capital_generation_target: float = 0.15
+    
+    # Adaptive parameters
+    adaptive_optimization: bool = True
+    adaptive_interval_minutes: int = 30
+    
+    # Safety limits
+    max_optimization_level: float = 1.3
+    min_optimization_level: float = 0.7
+    optimization_step: float = 0.02
+    
+    # Debug mode
+    debug_mode: bool = True
+    max_history_size: int = 5000
+
+
+class ProfitOptimizer:
+    """
+    Combined Profit Optimizer Engine - ULTIMATE UPGRADE
+    User selectable win rate + auto-adapt
+    """
+    
+    def __init__(self, config: Optional[ProfitOptimizerConfig] = None):
+        self.config = config or ProfitOptimizerConfig()
+        self.debug_mode = self.config.debug_mode
+        
+        # Set win rate mode
+        self.win_rate_mode = self.config.win_rate_mode
+        self._apply_win_rate_mode(self.win_rate_mode)
+        
+        # Performance tracking
+        self.performance = {
+            'total_trades_optimized': 0,
+            'total_profit_generated': 0.0,
+            'total_loss_prevented': 0.0,
+            'capital_generated': 0.0,
+            'avg_profit_per_trade': 0.0,
+            'avg_rr_ratio_used': 2.0,
+            'avg_position_size': 0.8,
+            'profit_lock_events': 0,
+            'reinvestment_events': 0,
+            'optimization_events': 0,
+            'mode_changes': 0,
+            'auto_corrections': 0,
+            'win_rate_adjustments': 0,
+            'trades_rejected_low_rr': 0,
+            'trades_rejected_high_risk': 0,
+            'trades_rejected_win_rate': 0
+        }
+        
+        # Trade history
+        self.trade_history = deque(maxlen=self.config.max_history_size)
+        self.optimization_history = deque(maxlen=1000)
+        
+        # Capital tracking
+        self.initial_capital = 0.0
+        self.current_capital = 0.0
+        self.locked_profits = 0.0
+        self.capital_reserve = 0.0
+        self.peak_equity = 0.0
+        
+        # Mode
+        self.mode = ProfitMode.BALANCED
+        self.current_optimization_level = 1.0
+        
+        # Market data
+        self.current_regime = "unknown"
+        self.current_volatility = 0.0
+        self.current_adx = 0.0
+        
+        # Performance metrics
+        self.recent_win_rate = 0.55
+        self.recent_profit_factor = 1.8
+        self.consecutive_losses = 0
+        self.consecutive_wins = 0
+        self.rolling_win_rates = deque(maxlen=50)
+        
+        # Lock for thread safety
+        self._lock = threading.Lock()
+        
+        self._log_debug(f"Profit Optimizer initialized with WIN_RATE_MODE={self.win_rate_mode}, target={self.config.target_win_rate*100:.0f}%")
+        logger.info(f"Profit Optimizer initialized with WIN_RATE_MODE={self.win_rate_mode}, target={self.config.target_win_rate*100:.0f}%")
+    
+    def _log_debug(self, message: str, level: str = "debug") -> None:
+        """Debug logging with timestamp"""
+        if self.debug_mode:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+            log_msg = f"[DEBUG {timestamp}] {message}"
+            if level == "info":
+                logger.info(log_msg)
+            elif level == "warning":
+                logger.warning(log_msg)
+            elif level == "error":
+                logger.error(log_msg)
+            else:
+                logger.debug(log_msg)
+    
+    def set_win_rate_mode(self, mode: str) -> bool:
+        """
+        User can change win rate mode at any time.
+        Modes: WIN_55, WIN_60, WIN_80, AUTO_ADAPT, SIMPLE
+        """
+        try:
+            if mode not in ['WIN_55', 'WIN_60', 'WIN_80', 'AUTO_ADAPT', 'SIMPLE']:
+                self._log_debug(f"Invalid win rate mode: {mode}", "warning")
+                return False
+            
+            self.win_rate_mode = mode
+            self._apply_win_rate_mode(mode)
+            self.performance['win_rate_adjustments'] += 1
+            
+            self._log_debug(f"Win rate mode changed to: {mode}, target={self.config.target_win_rate*100:.0f}%", "info")
+            logger.info(f"Win rate mode changed to: {mode}, target={self.config.target_win_rate*100:.0f}%")
+            return True
+            
+        except Exception as e:
+            self._log_debug(f"Error in set_win_rate_mode: {str(e)}", "error")
+            return False
+    
+    def _apply_win_rate_mode(self, mode: str) -> None:
+        """Apply win rate mode parameters"""
+        try:
+            if mode == "WIN_55":
+                self.config.target_win_rate = 0.55
+                self.config.min_win_rate = 0.45
+                self.config.max_win_rate = 0.65
+                self.config.min_rr_ratio = 1.2
+                self.config.max_rr_ratio = 3.5
+                self.config.default_rr_ratio = 1.8
+                self.config.max_position_size = 1.5
+                self.config.default_position_size = 0.9
+                self._log_debug("WIN_55: Balanced realistic mode")
+                
+            elif mode == "WIN_60":
+                self.config.target_win_rate = 0.60
+                self.config.min_win_rate = 0.50
+                self.config.max_win_rate = 0.70
+                self.config.min_rr_ratio = 1.5
+                self.config.max_rr_ratio = 4.0
+                self.config.default_rr_ratio = 2.5
+                self.config.max_position_size = 1.2
+                self.config.default_position_size = 0.7
+                self._log_debug("WIN_60: Good performance mode")
+                
+            elif mode == "WIN_80":
+                self.config.target_win_rate = 0.80
+                self.config.min_win_rate = 0.70
+                self.config.max_win_rate = 0.90
+                self.config.min_rr_ratio = 1.8
+                self.config.max_rr_ratio = 2.5
+                self.config.default_rr_ratio = 2.0
+                self.config.max_position_size = 0.8
+                self.config.default_position_size = 0.5
+                self.config.profit_lock_level1 = 5.0
+                self.config.profit_lock_level2 = 10.0
+                self.config.profit_lock_level3 = 15.0
+                self._log_debug("WIN_80: Strict quality mode - fewer trades, higher win rate")
+                
+            elif mode == "AUTO_ADAPT":
+                self.config.target_win_rate = 0.55  # Start at 55%
+                self.config.min_win_rate = 0.40
+                self.config.max_win_rate = 0.85
+                self.config.min_rr_ratio = 1.2
+                self.config.max_rr_ratio = 4.0
+                self.config.default_rr_ratio = 2.0
+                self.config.max_position_size = 1.5
+                self.config.default_position_size = 0.8
+                self._log_debug("AUTO_ADAPT: System will auto-adapt win rate")
+                
+            elif mode == "SIMPLE":
+                self.config.target_win_rate = 0.50
+                self.config.min_win_rate = 0.40
+                self.config.max_win_rate = 0.60
+                self.config.min_rr_ratio = 1.0
+                self.config.max_rr_ratio = 2.5
+                self.config.default_rr_ratio = 1.5
+                self.config.max_position_size = 1.0
+                self.config.default_position_size = 0.5
+                self._log_debug("SIMPLE: Simple mode - no complex optimization")
+                
+        except Exception as e:
+            self._log_debug(f"Error in _apply_win_rate_mode: {str(e)}", "error")
+    
+    def set_capital(self, capital: float) -> None:
+        """Set initial capital"""
+        try:
+            self.initial_capital = capital
+            self.current_capital = capital
+            self.peak_equity = capital
+            self._log_debug(f"Capital set to ${capital:.2f}")
+        except Exception as e:
+            self._log_debug(f"Error in set_capital: {str(e)}", "error")
+    
+    def update_market_data(self, market_data: Dict[str, Any]) -> None:
+        """Update market data and adapt optimization"""
+        try:
+            if not isinstance(market_data, dict):
+                return
+            
+            self.current_regime = market_data.get('regime', 'unknown') or 'unknown'
+            self.current_volatility = market_data.get('volatility', 0.0) or 0.0
+            self.current_adx = market_data.get('adx', 0.0) or 0.0
+            
+            # Auto-adapt win rate if in AUTO_ADAPT mode
+            if self.win_rate_mode == "AUTO_ADAPT":
+                self._auto_adapt_win_rate()
+            
+            # Adapt mode if auto
+            if self.mode == ProfitMode.AUTO:
+                self._adapt_mode()
+            else:
+                self._adjust_optimization_level()
+            
+            # Run optimization if needed
+            if self.config.adaptive_optimization:
+                self._run_adaptive_optimization()
+            
+            self._log_debug(f"Market data updated: regime={self.current_regime}, volatility={self.current_volatility:.2f}")
+            
+        except Exception as e:
+            self._log_debug(f"Error in update_market_data: {str(e)}", "error")
+    
+    def _auto_adapt_win_rate(self) -> None:
+        """Auto-adapt win rate based on market conditions and performance"""
+        try:
+            if len(self.trade_history) < 20:
+                return
+            
+            # Get recent trades
+            recent_trades = list(self.trade_history)[-30:]
+            if not recent_trades:
+                return
+            
+            # Calculate current win rate
+            wins = sum(1 for t in recent_trades if t.get('pnl', 0) > 0)
+            current_win_rate = wins / len(recent_trades) if recent_trades else 0.5
+            
+            self.rolling_win_rates.append(current_win_rate)
+            avg_win_rate = sum(self.rolling_win_rates) / len(self.rolling_win_rates) if self.rolling_win_rates else 0.5
+            
+            # Calculate profit factor
+            total_profit = sum(t.get('pnl', 0) for t in recent_trades if t.get('pnl', 0) > 0)
+            total_loss = abs(sum(t.get('pnl', 0) for t in recent_trades if t.get('pnl', 0) < 0))
+            profit_factor = total_profit / total_loss if total_loss > 0 else 10.0
+            
+            # Determine optimal win rate based on market conditions
+            if self.current_volatility > 2.0:
+                optimal_win_rate = 0.60  # Higher win rate in volatile markets
+            elif self.current_adx > 40:
+                optimal_win_rate = 0.70  # Higher win rate in strong trends
+            elif self.current_adx < 20:
+                optimal_win_rate = 0.50  # Lower win rate in ranging markets
+            else:
+                optimal_win_rate = 0.55  # Default
+            
+            # Adjust based on profit factor
+            if profit_factor > 2.5:
+                optimal_win_rate = min(optimal_win_rate + 0.05, 0.85)
+            elif profit_factor < 1.5:
+                optimal_win_rate = max(optimal_win_rate - 0.05, 0.40)
+            
+            # Smooth changes
+            current_target = self.config.target_win_rate
+            new_target = current_target + (optimal_win_rate - current_target) * 0.1  # 10% adjustment per step
+            
+            # Ensure limits
+            new_target = max(self.config.min_win_rate, min(self.config.max_win_rate, new_target))
+            
+            # Apply change
+            if abs(new_target - current_target) > 0.01:
+                self.config.target_win_rate = new_target
+                self.performance['win_rate_adjustments'] += 1
+                self._log_debug(f"AUTO_ADAPT: Win rate adjusted to {new_target*100:.0f}% (market: {self.current_regime}, PF: {profit_factor:.2f})")
+            
+        except Exception as e:
+            self._log_debug(f"Error in _auto_adapt_win_rate: {str(e)}", "error")
+    
+    def _adapt_mode(self) -> None:
+        """Adapt profit mode based on market conditions"""
+        try:
+            if self.current_volatility > 2.5:
+                new_mode = ProfitMode.CONSERVATIVE
+                reason = "high volatility"
+            elif self.current_volatility < 0.3:
+                new_mode = ProfitMode.AGGRESSIVE
+                reason = "low volatility"
+            elif self.current_adx > 40:
+                new_mode = ProfitMode.AGGRESSIVE
+                reason = "strong trend"
+            elif self.current_adx < 20:
+                new_mode = ProfitMode.CONSERVATIVE
+                reason = "ranging market"
+            else:
+                new_mode = ProfitMode.BALANCED
+                reason = "normal conditions"
+            
+            if self.mode != new_mode:
+                self.mode = new_mode
+                self.performance['mode_changes'] += 1
+                self._log_debug(f"Mode changed to {self.mode.value} due to {reason}")
+                
+        except Exception as e:
+            self._log_debug(f"Error in _adapt_mode: {str(e)}", "error")
+    
+    def _adjust_optimization_level(self) -> None:
+        """Adjust optimization level based on recent performance"""
+        try:
+            if len(self.trade_history) < 10:
+                return
+            
+            recent_trades = list(self.trade_history)[-20:]
+            if not recent_trades:
+                return
+            
+            wins = sum(1 for t in recent_trades if t.get('pnl', 0) > 0)
+            win_rate = wins / len(recent_trades) if recent_trades else 0.5
+            
+            total_profit = sum(t.get('pnl', 0) for t in recent_trades if t.get('pnl', 0) > 0)
+            total_loss = abs(sum(t.get('pnl', 0) for t in recent_trades if t.get('pnl', 0) < 0))
+            profit_factor = total_profit / total_loss if total_loss > 0 else 10.0
+            
+            self.recent_win_rate = win_rate
+            self.recent_profit_factor = profit_factor
+            
+            adjustment = 0.0
+            
+            # Check if we're hitting target win rate
+            if win_rate >= self.config.target_win_rate and profit_factor > 2.0:
+                adjustment = self.config.optimization_step
+            elif win_rate < self.config.target_win_rate * 0.8 or profit_factor < 1.5:
+                adjustment = -self.config.optimization_step
+            
+            if win_rate > self.config.target_win_rate * 1.2 and profit_factor > 3.0:
+                adjustment = self.config.optimization_step * 2
+            elif win_rate < self.config.target_win_rate * 0.6 or profit_factor < 1.2:
+                adjustment = -self.config.optimization_step * 2
+            
+            new_level = self.current_optimization_level + adjustment
+            self.current_optimization_level = max(
+                self.config.min_optimization_level,
+                min(self.config.max_optimization_level, new_level)
+            )
+            
+            self.performance['optimization_events'] += 1
+            
+        except Exception as e:
+            self._log_debug(f"Error in _adjust_optimization_level: {str(e)}", "error")
+    
+    def _run_adaptive_optimization(self) -> None:
+        """Run adaptive optimization with self-correction"""
+        try:
+            if len(self.trade_history) < 20:
+                return
+            
+            recent_trades = list(self.trade_history)[-50:]
+            if not recent_trades:
+                return
+            
+            wins = sum(1 for t in recent_trades if t.get('pnl', 0) > 0)
+            win_rate = wins / len(recent_trades) if recent_trades else 0
+            
+            total_profit = sum(t.get('pnl', 0) for t in recent_trades if t.get('pnl', 0) > 0)
+            total_loss = abs(sum(t.get('pnl', 0) for t in recent_trades if t.get('pnl', 0) < 0))
+            profit_factor = total_profit / total_loss if total_loss > 0 else 10.0
+            
+            # Self-correction
+            if win_rate < self.config.target_win_rate * 0.7 and profit_factor < 1.3:
+                self.performance['auto_corrections'] += 1
+                self.current_optimization_level = max(
+                    self.config.min_optimization_level,
+                    self.current_optimization_level * 0.95
+                )
+                self._log_debug(f"SELF-CORRECTION: Reduced optimization to {self.current_optimization_level:.2f}", "warning")
+            
+            elif win_rate > self.config.target_win_rate * 1.2 and profit_factor > 2.5:
+                self.current_optimization_level = min(
+                    self.config.max_optimization_level,
+                    self.current_optimization_level * 1.02
+                )
+                self._log_debug(f"Excellent performance: Increased optimization to {self.current_optimization_level:.2f}")
+            
+            self.performance['optimization_events'] += 1
+            
+        except Exception as e:
+            self._log_debug(f"Error in _run_adaptive_optimization: {str(e)}", "error")
+    
+    def optimize_trade(self, trade_signal: Dict[str, Any]) -> Dict[str, Any]:
+        """Optimize a trade based on current win rate mode"""
+        try:
+            self.performance['total_trades_optimized'] += 1
+            
+            if not isinstance(trade_signal, dict):
+                return {'take_trade': False, 'reason': 'Invalid trade signal'}
+            
+            entry_price = trade_signal.get('entry_price', 0.0)
+            if entry_price <= 0:
+                return {'take_trade': False, 'reason': 'Invalid entry price'}
+            
+            direction = trade_signal.get('direction', 'buy')
+            if direction not in ['buy', 'sell']:
+                return {'take_trade': False, 'reason': 'Invalid direction'}
+            
+            confidence = trade_signal.get('confidence', 0.5)
+            
+            # --- WIN RATE BASED CHECKS ---
+            
+            # 1. Simple mode - minimal checks
+            if self.win_rate_mode == "SIMPLE":
+                return self._optimize_simple(trade_signal)
+            
+            # 2. Win rate based filtering
+            target_wr = self.config.target_win_rate
+            
+            # Calculate required confidence based on target win rate
+            required_confidence = 0.4 + (target_wr - 0.4) * 0.5  # 0.4-0.8 range
+            if confidence < required_confidence:
+                self.performance['trades_rejected_win_rate'] += 1
+                return {'take_trade': False, 'reason': f'Confidence {confidence:.2f} < {required_confidence:.2f} for {target_wr*100:.0f}% win rate'}
+            
+            # 3. Market condition check
+            if self.current_volatility > 3.0:
+                return {'take_trade': False, 'reason': 'Extreme volatility - pausing'}
+            
+            # --- CALCULATE OPTIMIZED PARAMETERS ---
+            
+            position_size = self._calculate_position_size(trade_signal)
+            rr_ratio = self._calculate_rr_ratio(trade_signal)
+            
+            # RR based checks
+            if rr_ratio < self.config.min_rr_ratio:
+                self.performance['trades_rejected_low_rr'] += 1
+                return {'take_trade': False, 'reason': f'RR too low: {rr_ratio:.1f}'}
+            if rr_ratio > self.config.max_rr_ratio:
+                self.performance['trades_rejected_high_risk'] += 1
+                return {'take_trade': False, 'reason': f'RR too high: {rr_ratio:.1f} (unrealistic)'}
+            
+            sl, tp = self._calculate_sl_tp(entry_price, direction, rr_ratio)
+            expected_profit = self._calculate_expected_profit(trade_signal, position_size, rr_ratio)
+            
+            if not self._should_take_trade(expected_profit):
+                return {'take_trade': False, 'reason': 'Low expected profit'}
+            
+            profit_locks = self._calculate_profit_locks(entry_price, direction, tp)
+            
+            result = {
+                'take_trade': True,
+                'entry_price': entry_price,
+                'direction': direction,
+                'position_size': position_size,
+                'rr_ratio': rr_ratio,
+                'stop_loss': sl,
+                'take_profit': tp,
+                'expected_profit': expected_profit,
+                'profit_locks': profit_locks,
+                'mode': self.mode.value,
+                'win_rate_mode': self.win_rate_mode,
+                'target_win_rate': self.config.target_win_rate,
+                'optimization_level': self.current_optimization_level,
+                'confidence': confidence,
+                'confidence_level': self._get_confidence_level(confidence),
+                'risk_category': self._get_risk_category(position_size, rr_ratio),
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            self.performance['avg_rr_ratio_used'] = (self.performance['avg_rr_ratio_used'] * (self.performance['total_trades_optimized'] - 1) + rr_ratio) / self.performance['total_trades_optimized']
+            self.performance['avg_position_size'] = (self.performance['avg_position_size'] * (self.performance['total_trades_optimized'] - 1) + position_size) / self.performance['total_trades_optimized']
+            
+            self._log_debug(f"Trade optimized: size={position_size:.2f}%, RR={rr_ratio:.1f}, WR={self.config.target_win_rate*100:.0f}%")
+            return result
+            
+        except Exception as e:
+            self._log_debug(f"Error in optimize_trade: {str(e)}", "error")
+            return {'take_trade': False, 'reason': str(e)}
+    
+    def _optimize_simple(self, trade_signal: Dict[str, Any]) -> Dict[str, Any]:
+        """Simple mode - minimal optimization"""
+        try:
+            entry_price = trade_signal.get('entry_price', 0.0)
+            direction = trade_signal.get('direction', 'buy')
+            confidence = trade_signal.get('confidence', 0.5)
+            
+            if confidence < 0.3:
+                return {'take_trade': False, 'reason': 'Low confidence'}
+            
+            position_size = 0.5  # Fixed 0.5%
+            rr_ratio = 1.5  # Fixed 1.5
+            
+            sl, tp = self._calculate_sl_tp(entry_price, direction, rr_ratio)
+            
+            return {
+                'take_trade': True,
+                'entry_price': entry_price,
+                'direction': direction,
+                'position_size': position_size,
+                'rr_ratio': rr_ratio,
+                'stop_loss': sl,
+                'take_profit': tp,
+                'mode': 'SIMPLE',
+                'win_rate_mode': 'SIMPLE',
+                'confidence': confidence,
+                'timestamp': datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            return {'take_trade': False, 'reason': str(e)}
+    
+    def _calculate_position_size(self, trade_signal: Dict[str, Any]) -> float:
+        """Calculate position size based on win rate mode"""
+        try:
+            confidence = max(0.3, min(0.9, trade_signal.get('confidence', 0.5)))
+            quality_score = max(0.3, min(0.9, trade_signal.get('quality_score', 0.5)))
+            
+            # Base size
+            base_size = self.config.default_position_size
+            
+            # Mode multiplier
+            if self.mode == ProfitMode.AGGRESSIVE:
+                mode_multiplier = 1.2
+            elif self.mode == ProfitMode.CONSERVATIVE:
+                mode_multiplier = 0.7
+            else:
+                mode_multiplier = 1.0
+            
+            # Adjust based on win rate mode
+            if self.win_rate_mode == "WIN_80":
+                base_size *= 0.6  # Smaller positions for high win rate
+            elif self.win_rate_mode == "WIN_55":
+                base_size *= 1.2  # Larger positions for balanced
+            elif self.win_rate_mode == "WIN_60":
+                base_size *= 0.9  # Medium positions
+            
+            # Confidence and quality
+            confidence_multiplier = 0.7 + (confidence * 0.3)
+            quality_multiplier = 0.7 + (quality_score * 0.3)
+            
+            # Market multiplier
+            if self.current_volatility > 2.0:
+                market_multiplier = 0.6
+            elif self.current_volatility < 0.3:
+                market_multiplier = 1.2
+            else:
+                market_multiplier = 1.0
+            
+            # Consecutive losses adjustment
+            if self.consecutive_losses >= 2:
+                loss_multiplier = 1.0 - (self.consecutive_losses * 0.1)
+                loss_multiplier = max(0.5, loss_multiplier)
+            else:
+                loss_multiplier = 1.0
+            
+            position_size = base_size * mode_multiplier * confidence_multiplier * quality_multiplier * market_multiplier * loss_multiplier
+            
+            # Ensure limits
+            position_size = max(self.config.min_position_size, min(position_size, self.config.max_position_size))
+            
+            return position_size
+            
+        except Exception as e:
+            self._log_debug(f"Error in _calculate_position_size: {str(e)}", "error")
+            return self.config.default_position_size
+    
+    def _calculate_rr_ratio(self, trade_signal: Dict[str, Any]) -> float:
+        """Calculate RR ratio based on win rate mode"""
+        try:
+            confidence = max(0.3, min(0.9, trade_signal.get('confidence', 0.5)))
+            quality_score = max(0.3, min(0.9, trade_signal.get('quality_score', 0.5)))
+            
+            base_rr = self.config.default_rr_ratio
+            
+            # Adjust based on win rate mode
+            if self.win_rate_mode == "WIN_80":
+                base_rr = 2.0  # Balanced RR for high win rate
+            elif self.win_rate_mode == "WIN_55":
+                base_rr = 2.5  # Higher RR for balanced
+            elif self.win_rate_mode == "WIN_60":
+                base_rr = 2.2  # Medium RR
+            
+            # Mode multiplier
+            if self.mode == ProfitMode.AGGRESSIVE:
+                mode_multiplier = 1.15
+            elif self.mode == ProfitMode.CONSERVATIVE:
+                mode_multiplier = 0.85
+            else:
+                mode_multiplier = 1.0
+            
+            confidence_multiplier = 0.8 + (confidence * 0.2)
+            quality_multiplier = 0.8 + (quality_score * 0.2)
+            
+            if self.current_volatility > 2.0:
+                market_multiplier = 0.8
+            elif "trend" in self.current_regime.lower():
+                market_multiplier = 1.15
+            else:
+                market_multiplier = 1.0
+            
+            rr_ratio = base_rr * mode_multiplier * confidence_multiplier * quality_multiplier * market_multiplier
+            
+            rr_ratio = max(self.config.min_rr_ratio, min(rr_ratio, self.config.max_rr_ratio))
+            
+            return rr_ratio
+            
+        except Exception as e:
+            self._log_debug(f"Error in _calculate_rr_ratio: {str(e)}", "error")
+            return self.config.default_rr_ratio
+    
+    def _calculate_sl_tp(self, entry_price: float, direction: str, rr_ratio: float) -> Tuple[float, float]:
+        """Calculate stop loss and take profit levels"""
+        try:
+            if entry_price <= 0:
+                return 0.0, 0.0
+            
+            sl_percentage = 0.005 + (self.current_volatility * 0.002)
+            sl_percentage = max(0.003, min(0.015, sl_percentage))
+            
+            sl_distance = entry_price * sl_percentage
+            
+            if direction == 'buy':
+                sl = entry_price - sl_distance
+                tp = entry_price + (sl_distance * rr_ratio)
+            else:
+                sl = entry_price + sl_distance
+                tp = entry_price - (sl_distance * rr_ratio)
+            
+            # Safety
+            if direction == 'buy':
+                if sl > entry_price * 0.95:
+                    sl = entry_price * 0.97
+                if tp < entry_price * 1.005:
+                    tp = entry_price * 1.01
+            else:
+                if sl < entry_price * 1.05:
+                    sl = entry_price * 1.03
+                if tp > entry_price * 0.995:
+                    tp = entry_price * 0.99
+            
+            return sl, tp
+            
+        except Exception as e:
+            self._log_debug(f"Error in _calculate_sl_tp: {str(e)}", "error")
+            return 0.0, 0.0
+    
+    def _calculate_expected_profit(self, trade_signal: Dict[str, Any], position_size: float, rr_ratio: float) -> float:
+        """Calculate expected profit"""
+        try:
+            capital = self.current_capital
+            risk_amount = capital * (position_size / 100)
+            expected_profit = risk_amount * rr_ratio
+            
+            confidence = min(1.0, trade_signal.get('confidence', 0.5))
+            expected_profit *= (0.5 + (confidence * 0.5))
+            
+            if self.current_volatility > 2.0:
+                expected_profit *= 0.8
+            elif "trend" in self.current_regime.lower():
+                expected_profit *= 1.1
+            
+            if self.recent_profit_factor < 1.5:
+                expected_profit *= 0.85
+            elif self.recent_profit_factor > 2.5:
+                expected_profit *= 1.05
+            
+            # Adjust based on win rate mode
+            if self.win_rate_mode == "WIN_80":
+                expected_profit *= 0.8  # Lower expectations for high win rate
+            elif self.win_rate_mode == "WIN_55":
+                expected_profit *= 1.1  # Higher expectations for balanced
+            
+            return max(0.01, expected_profit)
+            
+        except Exception as e:
+            self._log_debug(f"Error in _calculate_expected_profit: {str(e)}", "error")
+            return 0.01
+    
+    def _should_take_trade(self, expected_profit: float) -> bool:
+        """Determine if trade should be taken"""
+        try:
+            min_profit = max(0.01, self.current_capital * 0.0002)
+            
+            if expected_profit < min_profit:
+                return False
+            
+            if self.consecutive_losses >= 3:
+                return False
+            
+            daily_loss = self._calculate_daily_loss()
+            if abs(daily_loss) > self.current_capital * 0.03:
+                return False
+            
+            return True
+            
+        except Exception as e:
+            self._log_debug(f"Error in _should_take_trade: {str(e)}", "error")
+            return False
+    
+    def _calculate_daily_loss(self) -> float:
+        """Calculate daily loss"""
+        try:
+            today = datetime.now().date()
+            daily_trades = [t for t in self.trade_history 
+                           if t.get('timestamp', '').startswith(today.strftime('%Y-%m-%d'))]
+            daily_loss = sum(t.get('pnl', 0) for t in daily_trades if t.get('pnl', 0) < 0)
+            return daily_loss
+        except Exception:
+            return 0.0
+    
+    def _calculate_profit_locks(self, entry_price: float, direction: str, tp: float) -> Dict[str, Any]:
+        """Calculate profit locking levels"""
+        try:
+            if entry_price <= 0 or tp <= 0:
+                return {}
+            
+            if direction == 'buy':
+                profit_range = tp - entry_price
+                level1 = entry_price + (profit_range * 0.3)
+                level2 = entry_price + (profit_range * 0.6)
+                level3 = entry_price + (profit_range * 0.9)
+            else:
+                profit_range = entry_price - tp
+                level1 = entry_price - (profit_range * 0.3)
+                level2 = entry_price - (profit_range * 0.6)
+                level3 = entry_price - (profit_range * 0.9)
+            
+            return {
+                'level1': {'price': level1, 'percentage': 30, 'status': 'pending'},
+                'level2': {'price': level2, 'percentage': 30, 'status': 'pending'},
+                'level3': {'price': level3, 'percentage': 40, 'status': 'pending'}
+            }
+            
+        except Exception as e:
+            self._log_debug(f"Error in _calculate_profit_locks: {str(e)}", "error")
+            return {}
+    
+    def update_trade_result(self, trade_result: Dict[str, Any]) -> None:
+        """Update optimizer with trade result"""
+        try:
+            if not isinstance(trade_result, dict):
+                return
+            
+            pnl = trade_result.get('pnl', 0.0)
+            won = pnl > 0
+            
+            self.trade_history.append(trade_result)
+            
+            if won:
+                self.consecutive_wins += 1
+                self.consecutive_losses = 0
+            else:
+                self.consecutive_losses += 1
+                self.consecutive_wins = 0
+            
+            self.current_capital += pnl
+            
+            if pnl > 0:
+                self.performance['total_profit_generated'] += pnl
+                self._lock_profits(pnl)
+            else:
+                self.performance['total_loss_prevented'] += abs(pnl)
+                if self.consecutive_losses >= 2:
+                    self._handle_loss_streak()
+            
+            if self.current_capital > self.peak_equity:
+                self.peak_equity = self.current_capital
+            
+            total_trades = self.performance['total_trades_optimized']
+            self.performance['avg_profit_per_trade'] = (self.performance['avg_profit_per_trade'] * (total_trades - 1) + pnl) / total_trades
+            
+            capital_growth = (self.current_capital - self.initial_capital) / self.initial_capital
+            if capital_growth >= self.config.capital_generation_target:
+                self._generate_capital()
+            
+            self._log_debug(f"Trade result: PnL=${pnl:.2f}, Capital=${self.current_capital:.2f}")
+            
+        except Exception as e:
+            self._log_debug(f"Error in update_trade_result: {str(e)}", "error")
+    
+    def _handle_loss_streak(self) -> None:
+        """Handle loss streak"""
+        try:
+            self._log_debug(f"Loss streak detected: {self.consecutive_losses} losses", "warning")
+            
+            reduction = min(0.3, self.consecutive_losses * 0.05)
+            self.current_optimization_level = max(
+                self.config.min_optimization_level,
+                self.current_optimization_level * (1 - reduction)
+            )
+            
+            self.config.min_rr_ratio = min(1.5, self.config.min_rr_ratio + 0.1)
+            
+            self.performance['auto_corrections'] += 1
+            
+        except Exception as e:
+            self._log_debug(f"Error in _handle_loss_streak: {str(e)}", "error")
+    
+    def _lock_profits(self, profit: float) -> None:
+        """Lock profits"""
+        try:
+            if self.mode == ProfitMode.AGGRESSIVE:
+                lock_percentage = 0.25
+            elif self.mode == ProfitMode.CONSERVATIVE:
+                lock_percentage = 0.60
+            else:
+                lock_percentage = 0.40
+            
+            locked_amount = profit * lock_percentage
+            self.locked_profits += locked_amount
+            self.performance['profit_lock_events'] += 1
+            
+        except Exception as e:
+            self._log_debug(f"Error in _lock_profits: {str(e)}", "error")
+    
+    def _generate_capital(self) -> None:
+        """Generate additional capital"""
+        try:
+            growth = (self.current_capital - self.initial_capital) / self.initial_capital
+            
+            generated = self.current_capital * 0.015
+            self.capital_reserve += generated
+            self.performance['capital_generated'] += generated
+            self.performance['reinvestment_events'] += 1
+            
+            self.initial_capital = self.current_capital
+            
+        except Exception as e:
+            self._log_debug(f"Error in _generate_capital: {str(e)}", "error")
+    
+    def _get_confidence_level(self, confidence: float) -> str:
+        if confidence >= 0.8:
+            return "HIGH"
+        elif confidence >= 0.6:
+            return "MEDIUM"
+        else:
+            return "LOW"
+    
+    def _get_risk_category(self, position_size: float, rr_ratio: float) -> str:
+        risk_score = (position_size / self.config.default_position_size) * (rr_ratio / self.config.default_rr_ratio)
+        if risk_score > 1.5:
+            return "HIGH RISK"
+        elif risk_score > 1.0:
+            return "MEDIUM RISK"
+        else:
+            return "LOW RISK"
+    
+    def get_available_win_rate_modes(self) -> List[str]:
+        """Get list of available win rate modes"""
+        return ['WIN_55', 'WIN_60', 'WIN_80', 'AUTO_ADAPT', 'SIMPLE']
+    
+    def get_current_win_rate_mode(self) -> str:
+        """Get current win rate mode"""
+        return self.win_rate_mode
+    
+    def get_status(self) -> Dict[str, Any]:
+        """Get current status"""
+        try:
+            return {
+                'win_rate_mode': self.win_rate_mode,
+                'target_win_rate': self.config.target_win_rate,
+                'actual_win_rate': self.recent_win_rate,
+                'mode': self.mode.value,
+                'optimization_level': self.current_optimization_level,
+                'initial_capital': self.initial_capital,
+                'current_capital': self.current_capital,
+                'peak_equity': self.peak_equity,
+                'capital_generated': self.performance['capital_generated'],
+                'locked_profits': self.locked_profits,
+                'total_trades_optimized': self.performance['total_trades_optimized'],
+                'total_profit_generated': self.performance['total_profit_generated'],
+                'avg_profit_per_trade': self.performance['avg_profit_per_trade'],
+                'avg_rr_ratio_used': self.performance['avg_rr_ratio_used'],
+                'profit_lock_events': self.performance['profit_lock_events'],
+                'reinvestment_events': self.performance['reinvestment_events'],
+                'auto_corrections': self.performance['auto_corrections'],
+                'win_rate_adjustments': self.performance['win_rate_adjustments'],
+                'recent_profit_factor': self.recent_profit_factor,
+                'consecutive_losses': self.consecutive_losses,
+                'consecutive_wins': self.consecutive_wins,
+                'current_regime': self.current_regime,
+                'current_volatility': self.current_volatility,
+                'available_modes': self.get_available_win_rate_modes(),
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_status: {str(e)}", "error")
+            return {'status': 'ERROR', 'error': str(e)}
+    
+    def get_performance_report(self) -> Dict[str, Any]:
+        """Get detailed performance report"""
+        try:
+            total_trades = self.performance['total_trades_optimized']
+            total_profit = self.performance['total_profit_generated']
+            total_loss = self.performance['total_loss_prevented']
+            
+            return {
+                'win_rate_mode': self.win_rate_mode,
+                'target_win_rate': self.config.target_win_rate,
+                'summary': {
+                    'total_trades': total_trades,
+                    'total_profit': total_profit,
+                    'total_loss': total_loss,
+                    'net_profit': total_profit - total_loss,
+                    'profit_factor': total_profit / total_loss if total_loss > 0 else float('inf'),
+                    'avg_profit_per_trade': self.performance['avg_profit_per_trade'],
+                    'avg_rr_ratio': self.performance['avg_rr_ratio_used'],
+                    'avg_position_size': self.performance['avg_position_size']
+                },
+                'capital': {
+                    'initial': self.initial_capital,
+                    'current': self.current_capital,
+                    'peak': self.peak_equity,
+                    'growth': ((self.current_capital - self.initial_capital) / self.initial_capital * 100) if self.initial_capital > 0 else 0,
+                    'locked_profits': self.locked_profits,
+                    'capital_generated': self.performance['capital_generated']
+                },
+                'mode': self.mode.value,
+                'available_modes': self.get_available_win_rate_modes(),
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_performance_report: {str(e)}", "error")
+            return {'error': str(e)}
+    
+    def set_mode(self, mode: str) -> None:
+        """Manually set optimization mode"""
+        try:
+            mode_map = {
+                'aggressive': ProfitMode.AGGRESSIVE,
+                'balanced': ProfitMode.BALANCED,
+                'conservative': ProfitMode.CONSERVATIVE,
+                'auto': ProfitMode.AUTO
+            }
+            
+            new_mode = mode_map.get(mode.lower(), ProfitMode.BALANCED)
+            if new_mode != self.mode:
+                self.mode = new_mode
+                self.performance['mode_changes'] += 1
+                self._log_debug(f"Mode manually set to {self.mode.value}")
+                
+        except Exception as e:
+            self._log_debug(f"Error in set_mode: {str(e)}", "error")
+    
+    def reset_capital(self) -> None:
+        """Reset capital tracking"""
+        try:
+            self.initial_capital = self.current_capital
+            self.peak_equity = self.current_capital
+            self.locked_profits = 0.0
+            self.capital_reserve = 0.0
+            self._log_debug("Capital tracking reset")
+        except Exception as e:
+            self._log_debug(f"Error in reset_capital: {str(e)}", "error")

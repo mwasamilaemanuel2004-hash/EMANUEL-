@@ -1,5 +1,6 @@
+# -*- coding: cp1252 -*-
 """
-Analysis & Results API — endpoints for the frontend pages.
+Analysis & Results API � endpoints for the frontend pages.
 
 GET /api/analysis          -> full analysis (tokenization + risk)
 GET /api/analysis?symbol=BTC -> single symbol analysis
@@ -11,7 +12,7 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
 from ..core.token_analyzer import (
-    TOKEN_UNIVERSE_FALLBACK, compute_token_score, estimate_timing_quality,
+    compute_token_score, compute_enhanced_token_score, estimate_timing_quality,
     RegulatoryStatus, NetworkPhase, TokenMetrics,
 )
 
@@ -28,6 +29,13 @@ TOKEN_UNIVERSE: Dict[str, TokenMetrics] = {
         staking_etf_available=True, net_capital_flow_30d=15.0,
         cycle_phase=NetworkPhase.BULL_RUN,
         active_addresses_30d_pct=5.0, real_usage_score=90,
+        circulating_supply=19_700_000, total_supply=19_700_000, max_supply=21_000_000,
+        annual_inflation_pct=0.8, unlock_30d_pct=0.0, unlock_90d_pct=0.0,
+        team_investor_pct=0.0, top10_holder_pct=5.0,
+        annual_fees_usd=1_200_000_000, annual_revenue_usd=800_000_000,
+        annual_burn_usd=0, staking_yield_pct=0.0, daily_volume_usd=25_000_000_000,
+        price=65000, mcap_usd=1_280_000_000_000, fdv_usd=1_365_000_000_000,
+        price_ath=73750, price_200d_avg=55000, active_addresses=900000,
     ),
     "ETH": TokenMetrics(
         symbol="ETH", regulatory_status=RegulatoryStatus.COMPLIANT,
@@ -37,6 +45,13 @@ TOKEN_UNIVERSE: Dict[str, TokenMetrics] = {
         staking_etf_available=True, net_capital_flow_30d=10.0,
         cycle_phase=NetworkPhase.UPGRADE_CATALYST,
         active_addresses_30d_pct=4.0, real_usage_score=95,
+        circulating_supply=120_000_000, total_supply=120_000_000, max_supply=0,
+        annual_inflation_pct=0.5, unlock_30d_pct=0.0, unlock_90d_pct=0.0,
+        team_investor_pct=0.0, top10_holder_pct=8.0,
+        annual_fees_usd=2_500_000_000, annual_revenue_usd=1_800_000_000,
+        annual_burn_usd=500_000_000, staking_yield_pct=3.5, daily_volume_usd=15_000_000_000,
+        price=3500, mcap_usd=420_000_000_000, fdv_usd=420_000_000_000,
+        price_ath=4878, price_200d_avg=2800, active_addresses=500000,
     ),
     "SOL": TokenMetrics(
         symbol="SOL", regulatory_status=RegulatoryStatus.PENDING,
@@ -46,6 +61,13 @@ TOKEN_UNIVERSE: Dict[str, TokenMetrics] = {
         staking_etf_available=True, net_capital_flow_30d=20.0,
         cycle_phase=NetworkPhase.UPGRADE_CATALYST,
         active_addresses_30d_pct=10.0, real_usage_score=85,
+        circulating_supply=440_000_000, total_supply=580_000_000, max_supply=0,
+        annual_inflation_pct=5.0, unlock_30d_pct=2.0, unlock_90d_pct=5.0,
+        team_investor_pct=20.0, top10_holder_pct=25.0,
+        annual_fees_usd=150_000_000, annual_revenue_usd=100_000_000,
+        annual_burn_usd=30_000_000, staking_yield_pct=6.5, daily_volume_usd=3_000_000_000,
+        price=150, mcap_usd=66_000_000_000, fdv_usd=87_000_000_000,
+        price_ath=260, price_200d_avg=120, active_addresses=1_200_000,
     ),
     "ONDO": TokenMetrics(
         symbol="ONDO", regulatory_status=RegulatoryStatus.COMPLIANT,
@@ -55,6 +77,13 @@ TOKEN_UNIVERSE: Dict[str, TokenMetrics] = {
         staking_etf_available=False, net_capital_flow_30d=25.0,
         cycle_phase=NetworkPhase.BULL_RUN,
         active_addresses_30d_pct=15.0, real_usage_score=75,
+        circulating_supply=1_400_000_000, total_supply=10_000_000_000, max_supply=10_000_000_000,
+        annual_inflation_pct=15.0, unlock_30d_pct=5.0, unlock_90d_pct=12.0,
+        team_investor_pct=35.0, top10_holder_pct=45.0,
+        annual_fees_usd=20_000_000, annual_revenue_usd=15_000_000,
+        annual_burn_usd=0, staking_yield_pct=0.0, daily_volume_usd=200_000_000,
+        price=0.85, mcap_usd=1_190_000_000, fdv_usd=8_500_000_000,
+        price_ath=1.50, price_200d_avg=0.70, active_addresses=50000,
     ),
 }
 
@@ -62,6 +91,13 @@ TOKEN_UNIVERSE: Dict[str, TokenMetrics] = {
 class AnalysisResponse(BaseModel):
     symbol: str
     token_score: float
+    enhanced_score: float = 0.0
+    base_score: float = 0.0
+    dilution_score: float = 0.0
+    capture_score: float = 0.0
+    valuation_grade: str = ""
+    upside_potential_pct: float = 0.0
+    risk_reward_ratio: float = 0.0
     timing_quality: float
     recommendation: str
     regulatory: str
@@ -77,53 +113,82 @@ class AnalysisResponse(BaseModel):
     breakdown: Dict[str, float]
     regulatory_multiplier: float
     factors: List[Dict[str, Any]]
+    fundamentals: Dict[str, Any] = {}
 
 
 def _analyze_symbol(symbol: str) -> AnalysisResponse:
     m = TOKEN_UNIVERSE.get(symbol.upper())
     if m is None:
         return AnalysisResponse(
-            symbol=symbol, token_score=0.0, timing_quality=0.0,
-            recommendation="UNKNOWN",
+            symbol=symbol, token_score=0.0, enhanced_score=0.0, base_score=0.0,
+            dilution_score=0.0, capture_score=0.0, valuation_grade="",
+            upside_potential_pct=0.0, risk_reward_ratio=0.0,
+            timing_quality=0.0, recommendation="UNKNOWN",
             regulatory="unknown", rwa_tvl_usd=0, rwa_growth_30d_pct=0,
             ecosystem_score=0, macro_liquidity_score=0,
             network_upgrade_score=0, staking_etf_available=False,
             capital_flow_30d=0, cycle_phase="unknown", real_usage_score=0,
-            breakdown={}, regulatory_multiplier=1.0, factors=[],
+            breakdown={}, regulatory_multiplier=1.0, factors=[], fundamentals={},
         )
-    result = compute_token_score(m)
+    # Enhanced score with dilution, capture, valuation
+    result = compute_enhanced_token_score(m)
     token_score = result['total']
+    base_score = result['base_score']
+    dilution_score = result['dilution_score']
+    capture_score = result['capture_score']
+    valuation_grade = result['valuation_grade']
+    upside_potential = result['upside_potential_pct']
+    risk_reward = result['risk_reward_ratio']
     timing = estimate_timing_quality(m)
-    if token_score >= 70 and timing >= 0.55:
-        rec = "TRADE"
-    elif token_score >= 60:
-        rec = "WATCH"
+    
+    if token_score >= 75 and timing >= 0.55 and risk_reward > 2:
+        rec = "STRONG_BUY"
+    elif token_score >= 65 and timing >= 0.45:
+        rec = "BUY"
+    elif token_score >= 50:
+        rec = "HOLD"
+    elif token_score >= 35:
+        rec = "SELL"
     else:
-        rec = "SKIP"
+        rec = "AVOID"
+    
     factors = [
-        {"name": "Regulatory Clarity", "weight": "gate", "score": result['breakdown']['regulatory'],
-         "value": m.regulatory_status.value, "multiplier": result['regulatory_multiplier']},
-        {"name": "RWA Growth (30d)", "weight": 0.15, "score": result['breakdown']['rwa_growth'],
+        {"name": "Regulatory Clarity", "weight": "gate", "score": result['breakdown']['base']['breakdown']['regulatory'],
+         "value": m.regulatory_status.value, "multiplier": result['breakdown']['base']['regulatory_multiplier']},
+        {"name": "RWA Growth (30d)", "weight": 0.15, "score": result['breakdown']['base']['breakdown']['rwa_growth'],
          "value": f"{m.rwa_growth_30d_pct:+.1f}%"},
-        {"name": "Product Launches", "weight": 0.10, "score": result['breakdown']['product_launches'],
+        {"name": "Product Launches", "weight": 0.10, "score": result['breakdown']['base']['breakdown']['product_launches'],
          "value": f"{m.recent_product_launches} launches"},
-        {"name": "Ecosystem Adoption", "weight": 0.12, "score": result['breakdown']['ecosystem'],
+        {"name": "Ecosystem Adoption", "weight": 0.12, "score": result['breakdown']['base']['breakdown']['ecosystem'],
          "value": f"{m.ecosystem_score}/100"},
-        {"name": "Macro Liquidity", "weight": 0.10, "score": result['breakdown']['macro_liquidity'],
+        {"name": "Macro Liquidity", "weight": 0.10, "score": result['breakdown']['base']['breakdown']['macro_liquidity'],
          "value": f"{m.macro_liquidity_score}/100"},
-        {"name": "Network Upgrades", "weight": 0.08, "score": result['breakdown']['network_upgrade'],
+        {"name": "Network Upgrades", "weight": 0.08, "score": result['breakdown']['base']['breakdown']['network_upgrade'],
          "value": f"{m.network_upgrade_score}/100"},
-        {"name": "Staking / ETFs", "weight": 0.08, "score": result['breakdown']['staking_etf'],
+        {"name": "Staking / ETFs", "weight": 0.08, "score": result['breakdown']['base']['breakdown']['staking_etf'],
          "value": "Available" if m.staking_etf_available else "Not available"},
-        {"name": "Capital Flow (30d)", "weight": 0.12, "score": result['breakdown']['capital_flow'],
+        {"name": "Capital Flow (30d)", "weight": 0.12, "score": result['breakdown']['base']['breakdown']['capital_flow'],
          "value": f"{m.net_capital_flow_30d:+.1f}%"},
-        {"name": "Market Cycle", "weight": 0.10, "score": result['breakdown']['cycle'],
+        {"name": "Market Cycle", "weight": 0.10, "score": result['breakdown']['base']['breakdown']['cycle'],
          "value": m.cycle_phase.value},
-        {"name": "Real Usage", "weight": 0.15, "score": result['breakdown']['real_usage'],
+        {"name": "Real Usage", "weight": 0.15, "score": result['breakdown']['base']['breakdown']['real_usage'],
          "value": f"{m.real_usage_score}/100"},
+        {"name": "Dilution Risk", "weight": "enhanced", "score": dilution_score,
+         "value": result['breakdown']['dilution']['dilution_risk_grade']},
+        {"name": "Token Capture", "weight": "enhanced", "score": capture_score,
+         "value": result['breakdown']['token_capture']['value_accrual_grade']},
+        {"name": "Valuation", "weight": "enhanced", "score": min(100, max(0, 50 + upside_potential / 2)),
+         "value": valuation_grade},
+        {"name": "Upside Potential", "weight": "enhanced", "score": min(100, max(0, 50 + upside_potential / 2)),
+         "value": f"{upside_potential:+.0f}%"},
+        {"name": "Risk/Reward", "weight": "enhanced", "score": min(100, risk_reward * 25),
+         "value": f"{risk_reward:.1f}x"},
     ]
     return AnalysisResponse(
-        symbol=symbol, token_score=token_score, timing_quality=round(timing, 3),
+        symbol=symbol, token_score=token_score, enhanced_score=token_score,
+        base_score=base_score, dilution_score=dilution_score, capture_score=capture_score,
+        valuation_grade=valuation_grade, upside_potential_pct=upside_potential,
+        risk_reward_ratio=risk_reward, timing_quality=round(timing, 3),
         recommendation=rec, regulatory=m.regulatory_status.value,
         rwa_tvl_usd=m.rwa_tvl_usd, rwa_growth_30d_pct=m.rwa_growth_30d_pct,
         ecosystem_score=m.ecosystem_score,
@@ -132,9 +197,15 @@ def _analyze_symbol(symbol: str) -> AnalysisResponse:
         staking_etf_available=m.staking_etf_available,
         capital_flow_30d=m.net_capital_flow_30d,
         cycle_phase=m.cycle_phase.value, real_usage_score=m.real_usage_score,
-        breakdown=result['breakdown'],
-        regulatory_multiplier=result['regulatory_multiplier'],
+        breakdown=result['breakdown']['base']['breakdown'],
+        regulatory_multiplier=result['breakdown']['base']['regulatory_multiplier'],
         factors=factors,
+        fundamentals={
+            'dilution': result['breakdown']['dilution'],
+            'token_capture': result['breakdown']['token_capture'],
+            'valuation': result['breakdown']['valuation'],
+            'upside': result['breakdown']['upside'],
+        },
     )
 
 

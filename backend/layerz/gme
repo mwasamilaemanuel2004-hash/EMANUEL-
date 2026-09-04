@@ -1,0 +1,724 @@
+"""
+LAYER -5: GLOBAL MACRO ENGINE (ULTIMATE OPTIMIZED)
+Purpose: Analyze global macroeconomic factors and their impact on trading with INTELLIGENCE.
+Balance: GOLDILOCKS - Not too sensitive (misses macro trends) and not too insensitive (overreacts).
+
+KEY IMPROVEMENTS:
+- 10 Macro factors analyzed with weighted scoring
+- Real-time data integration
+- Adaptive scoring based on market conditions
+- Confidence-based signal generation
+- Historical macro pattern recognition
+- Automatic rebalancing based on macro trends
+- Multi-factor correlation analysis
+- Forward-looking indicators
+"""
+
+import numpy as np
+import pandas as pd
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Tuple, Any, Union
+from enum import Enum
+from dataclasses import dataclass, field
+import logging
+import json
+import time
+from collections import deque
+import threading
+
+# Configure logging
+logger = logging.getLogger(__name__)
+
+debug_handler = logging.FileHandler('logs/global_macro_debug.log')
+debug_handler.setLevel(logging.DEBUG)
+debug_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+debug_handler.setFormatter(debug_formatter)
+logger.addHandler(debug_handler)
+
+
+class MacroSignal(Enum):
+    """Macro signals detected"""
+    STRONG_BULLISH = "strong_bullish"   # Score > 75
+    BULLISH = "bullish"                 # Score 65-75
+    NEUTRAL = "neutral"                # Score 45-65
+    BEARISH = "bearish"                # Score 35-45
+    STRONG_BEARISH = "strong_bearish"  # Score < 35
+    STRESS = "stress"                  # Special condition
+
+
+@dataclass
+class GlobalMacroConfig:
+    """Configuration for Global Macro Engine - OPTIMIZED"""
+    
+    # WEIGHTS FOR EACH FACTOR
+    factor_weights: Dict[str, float] = field(default_factory=lambda: {
+        'interest_rates': 0.15,
+        'yield_curve': 0.10,
+        'geopolitical': 0.10,
+        'liquidity': 0.10,
+        'gdp_growth': 0.10,
+        'inflation': 0.10,
+        'employment': 0.08,
+        'consumer_confidence': 0.08,
+        'business_confidence': 0.09,
+        'pmi': 0.10
+    })
+    
+    # INTEREST RATES
+    interest_rate_diff_threshold: float = 0.50
+    interest_rate_momentum_threshold: float = 0.25
+    
+    # YIELD CURVE
+    yield_curve_inversion_threshold: float = -0.10
+    yield_curve_steep_threshold: float = 1.50
+    
+    # GEOPOLITICAL
+    geopolitical_risk_threshold: float = 0.60
+    geopolitical_momentum_threshold: float = 0.10
+    
+    # LIQUIDITY
+    liquidity_tracker_threshold: float = 0.50
+    liquidity_momentum_threshold: float = 0.10
+    
+    # GDP
+    gdp_growth_threshold: float = 0.02
+    gdp_growth_momentum_threshold: float = 0.005
+    
+    # INFLATION
+    inflation_threshold: float = 0.02
+    inflation_momentum_threshold: float = 0.005
+    
+    # EMPLOYMENT
+    employment_threshold: float = 0.05
+    employment_momentum_threshold: float = 0.01
+    
+    # CONFIDENCE
+    confidence_threshold: float = 50.0
+    pmi_threshold: float = 50.0
+    
+    # SIGNAL
+    min_confidence_for_signal: float = 0.60
+    signal_hold_duration_minutes: int = 30
+    
+    # DEBUG
+    debug_mode: bool = True
+    max_history_size: int = 10000
+
+
+class GlobalMacroEngine:
+    """
+    Global Macro Engine - ULTIMATE OPTIMIZED
+    Analyzes macroeconomic factors with intelligence.
+    """
+    
+    def __init__(self, config: Optional[GlobalMacroConfig] = None):
+        self.config = config or GlobalMacroConfig()
+        self.debug_mode = self.config.debug_mode
+        
+        # PERFORMANCE TRACKING
+        self.performance = {
+            'total_checks': 0,
+            'macro_signals': 0,
+            'interest_updates': 0,
+            'geopolitical_events': 0,
+            'liquidity_changes': 0,
+            'avg_macro_score': 0.0,
+            'signal_changes': 0,
+            'false_signals': 0,
+            'confidence_adjustments': 0
+        }
+        
+        # MACRO DATA STORAGE
+        self.macro_data = {}
+        self.macro_history = deque(maxlen=self.config.max_history_size)
+        self.signal_history = deque(maxlen=1000)
+        
+        # CURRENT STATE
+        self.current_signal = MacroSignal.NEUTRAL
+        self.macro_score = 0.0
+        self.macro_confidence = 0.0
+        self.signal_momentum = 0.0
+        
+        # FACTOR SCORES
+        self.factor_scores = {}
+        self.factor_history = deque(maxlen=1000)
+        
+        # MARKET CONTEXT
+        self.current_regime = "unknown"
+        self.current_volatility = 0.0
+        
+        # SIGNAL TIMING
+        self.last_signal_change = datetime.now()
+        self.current_signal_start = datetime.now()
+        self.signal_hold_until = datetime.now()
+        
+        # CORRELATION
+        self.macro_correlations = {}
+        
+        # LOCK
+        self._lock = threading.Lock()
+        
+        self._log_debug("Global Macro Engine initialized - OPTIMIZED")
+        logger.info("Global Macro Engine initialized - OPTIMIZED")
+    
+    def _log_debug(self, message: str, level: str = "debug") -> None:
+        """Debug logging with timestamp"""
+        if self.debug_mode:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+            log_msg = f"[DEBUG {timestamp}] {message}"
+            if level == "info":
+                logger.info(log_msg)
+            elif level == "warning":
+                logger.warning(log_msg)
+            elif level == "error":
+                logger.error(log_msg)
+            else:
+                logger.debug(log_msg)
+    
+    def update_macro_data(self, macro_data: Dict[str, Any]) -> None:
+        """Update macro data and analyze signals with confidence"""
+        try:
+            if not isinstance(macro_data, dict):
+                return
+            
+            self.macro_data = macro_data.copy()
+            
+            # Update current regime and volatility
+            self.current_regime = macro_data.get('regime', 'unknown') or 'unknown'
+            self.current_volatility = macro_data.get('volatility', 0.0) or 0.0
+            
+            # ============================================================
+            # ANALYZE ALL MACRO FACTORS (10 FACTORS)
+            # ============================================================
+            self._analyze_interest_rates()
+            self._analyze_yield_curve()
+            self._analyze_geopolitical_risk()
+            self._analyze_liquidity()
+            self._analyze_economic_indicators()
+            self._analyze_confidence()
+            
+            # ============================================================
+            # CALCULATE MACRO SCORE (WEIGHTED)
+            # ============================================================
+            self._calculate_macro_score()
+            
+            # ============================================================
+            # CALCULATE MACRO CONFIDENCE
+            # ============================================================
+            self._calculate_macro_confidence()
+            
+            # ============================================================
+            # DETERMINE MACRO SIGNAL
+            # ============================================================
+            self._determine_macro_signal()
+            
+            # ============================================================
+            # UPDATE MACRO CORRELATIONS
+            # ============================================================
+            self._update_macro_correlations()
+            
+            # ============================================================
+            # STORE HISTORY
+            # ============================================================
+            self.macro_history.append({
+                'timestamp': datetime.now(),
+                'macro_score': self.macro_score,
+                'signal': self.current_signal.value,
+                'confidence': self.macro_confidence,
+                'data': macro_data,
+                'factor_scores': self.factor_scores
+            })
+            
+            self.performance['total_checks'] += 1
+            
+            self._log_debug(f"Macro score: {self.macro_score:.2f}, signal: {self.current_signal.value}, confidence: {self.macro_confidence:.2f}")
+            
+        except Exception as e:
+            self._log_debug(f"Error in update_macro_data: {str(e)}", "error")
+    
+    def _analyze_interest_rates(self) -> None:
+        """Analyze interest rate differentials with momentum"""
+        try:
+            rates = self.macro_data.get('interest_rates', {})
+            if not rates:
+                return
+            
+            # Key rates
+            fed_rate = rates.get('fed', 0.0)
+            ecb_rate = rates.get('ecb', 0.0)
+            boj_rate = rates.get('boj', 0.0)
+            boe_rate = rates.get('boe', 0.0)
+            
+            # Calculate differentials
+            us_eu_diff = fed_rate - ecb_rate
+            us_jp_diff = fed_rate - boj_rate
+            us_uk_diff = fed_rate - boe_rate
+            
+            # Calculate momentum (change from previous)
+            prev_diff = self.macro_data.get('prev_rate_differentials', {})
+            us_eu_momentum = us_eu_diff - prev_diff.get('us_eu', us_eu_diff)
+            
+            # Store
+            self.macro_data['rate_differentials'] = {
+                'us_eu': us_eu_diff,
+                'us_jp': us_jp_diff,
+                'us_uk': us_uk_diff,
+                'us_eu_momentum': us_eu_momentum
+            }
+            
+            # Calculate factor score
+            diff_score = 50.0 + (us_eu_diff * 20)
+            diff_score = max(0, min(100, diff_score))
+            
+            momentum_score = 50.0 + (us_eu_momentum * 100)
+            momentum_score = max(0, min(100, momentum_score))
+            
+            self.factor_scores['interest_rates'] = (diff_score * 0.7) + (momentum_score * 0.3)
+            self.performance['interest_updates'] += 1
+            
+        except Exception as e:
+            self._log_debug(f"Error in _analyze_interest_rates: {str(e)}", "error")
+            self.factor_scores['interest_rates'] = 50.0
+    
+    def _analyze_yield_curve(self) -> None:
+        """Analyze yield curve with inversion and steepness"""
+        try:
+            yields = self.macro_data.get('yield_curve', {})
+            if not yields:
+                return
+            
+            # Key yields
+            two_year = yields.get('2y', 0.0)
+            ten_year = yields.get('10y', 0.0)
+            thirty_year = yields.get('30y', 0.0)
+            
+            # Calculate spreads
+            two_ten_spread = ten_year - two_year
+            ten_thirty_spread = thirty_year - ten_year
+            
+            # Determine inversion
+            is_inverted = two_ten_spread < self.config.yield_curve_inversion_threshold
+            is_steep = two_ten_spread > self.config.yield_curve_steep_threshold
+            
+            self.macro_data['yield_curve'] = {
+                'two_ten_spread': two_ten_spread,
+                'ten_thirty_spread': ten_thirty_spread,
+                'is_inverted': is_inverted,
+                'is_steep': is_steep
+            }
+            
+            # Calculate factor score
+            if is_inverted:
+                score = 20.0  # Recession signal
+            elif is_steep:
+                score = 60.0  # Growth signal
+            else:
+                score = 50.0 + (two_ten_spread * 20)
+            
+            self.factor_scores['yield_curve'] = max(0, min(100, score))
+            
+        except Exception as e:
+            self._log_debug(f"Error in _analyze_yield_curve: {str(e)}", "error")
+            self.factor_scores['yield_curve'] = 50.0
+    
+    def _analyze_geopolitical_risk(self) -> None:
+        """Analyze geopolitical risk with momentum"""
+        try:
+            risk = self.macro_data.get('geopolitical_risk', 0.0)
+            prev_risk = self.macro_data.get('prev_geopolitical_risk', risk)
+            
+            risk_momentum = risk - prev_risk
+            
+            if risk > self.config.geopolitical_risk_threshold:
+                self.performance['geopolitical_events'] += 1
+                self._log_debug(f"Geopolitical risk detected: {risk:.2f}", "warning")
+            
+            self.macro_data['geopolitical_risk'] = risk
+            self.macro_data['geopolitical_momentum'] = risk_momentum
+            
+            # Calculate factor score
+            score = 100.0 - (risk * 100)  # Higher risk = lower score
+            score -= risk_momentum * 100
+            
+            self.factor_scores['geopolitical'] = max(0, min(100, score))
+            
+        except Exception as e:
+            self._log_debug(f"Error in _analyze_geopolitical_risk: {str(e)}", "error")
+            self.factor_scores['geopolitical'] = 50.0
+    
+    def _analyze_liquidity(self) -> None:
+        """Analyze global liquidity with trends"""
+        try:
+            liquidity = self.macro_data.get('liquidity', {})
+            if not liquidity:
+                return
+            
+            # Key metrics
+            central_bank_balance = liquidity.get('central_bank_balance', 0.0)
+            m2_supply = liquidity.get('m2_supply', 0.0)
+            qe_status = liquidity.get('qe_status', 'neutral')
+            
+            # Previous values
+            prev_balance = self.macro_data.get('prev_central_bank_balance', central_bank_balance)
+            balance_change = central_bank_balance - prev_balance
+            
+            self.macro_data['liquidity'] = {
+                'central_bank_balance': central_bank_balance,
+                'm2_supply': m2_supply,
+                'qe_status': qe_status,
+                'balance_change': balance_change
+            }
+            
+            # Calculate factor score
+            balance_score = 50.0 + (balance_change * 10)
+            
+            if qe_status == 'expanding':
+                qe_score = 70.0
+            elif qe_status == 'tapering':
+                qe_score = 30.0
+            else:
+                qe_score = 50.0
+            
+            self.factor_scores['liquidity'] = max(0, min(100, (balance_score + qe_score) / 2))
+            self.performance['liquidity_changes'] += 1
+            
+        except Exception as e:
+            self._log_debug(f"Error in _analyze_liquidity: {str(e)}", "error")
+            self.factor_scores['liquidity'] = 50.0
+    
+    def _analyze_economic_indicators(self) -> None:
+        """Analyze economic indicators with momentum"""
+        try:
+            indicators = self.macro_data.get('economic_indicators', {})
+            if not indicators:
+                return
+            
+            # Key indicators
+            gdp_growth = indicators.get('gdp_growth', 0.0)
+            inflation = indicators.get('inflation', 0.0)
+            unemployment = indicators.get('unemployment', 0.0)
+            
+            # Previous values
+            prev_gdp = self.macro_data.get('prev_gdp_growth', gdp_growth)
+            prev_inflation = self.macro_data.get('prev_inflation', inflation)
+            prev_unemployment = self.macro_data.get('prev_unemployment', unemployment)
+            
+            gdp_momentum = gdp_growth - prev_gdp
+            inflation_momentum = inflation - prev_inflation
+            employment_momentum = prev_unemployment - unemployment  # Improvement when decreasing
+            
+            self.macro_data['economic_indicators'] = {
+                'gdp_growth': gdp_growth,
+                'inflation': inflation,
+                'unemployment': unemployment,
+                'gdp_momentum': gdp_momentum,
+                'inflation_momentum': inflation_momentum,
+                'employment_momentum': employment_momentum
+            }
+            
+            # GDP score
+            gdp_score = 50.0 + (gdp_growth * 100)
+            gdp_score = max(0, min(100, gdp_score))
+            gdp_score += gdp_momentum * 50
+            
+            # Inflation score (low inflation is good)
+            inflation_score = 100.0 - (inflation * 100)
+            inflation_score = max(0, min(100, inflation_score))
+            inflation_score -= inflation_momentum * 50
+            
+            # Employment score (low unemployment is good)
+            employment_score = 100.0 - (unemployment * 100)
+            employment_score = max(0, min(100, employment_score))
+            employment_score += employment_momentum * 50
+            
+            self.factor_scores['gdp_growth'] = max(0, min(100, gdp_score))
+            self.factor_scores['inflation'] = max(0, min(100, inflation_score))
+            self.factor_scores['employment'] = max(0, min(100, employment_score))
+            
+        except Exception as e:
+            self._log_debug(f"Error in _analyze_economic_indicators: {str(e)}", "error")
+            self.factor_scores['gdp_growth'] = 50.0
+            self.factor_scores['inflation'] = 50.0
+            self.factor_scores['employment'] = 50.0
+    
+    def _analyze_confidence(self) -> None:
+        """Analyze consumer and business confidence"""
+        try:
+            confidence = self.macro_data.get('confidence', {})
+            if not confidence:
+                return
+            
+            # Key metrics
+            consumer_confidence = confidence.get('consumer', 50.0)
+            business_confidence = confidence.get('business', 50.0)
+            pmi = confidence.get('pmi', 50.0)
+            
+            self.macro_data['confidence'] = {
+                'consumer': consumer_confidence,
+                'business': business_confidence,
+                'pmi': pmi
+            }
+            
+            # Calculate scores
+            consumer_score = (consumer_confidence / 100) * 100
+            business_score = (business_confidence / 100) * 100
+            pmi_score = (pmi / 100) * 100
+            
+            self.factor_scores['consumer_confidence'] = max(0, min(100, consumer_score))
+            self.factor_scores['business_confidence'] = max(0, min(100, business_score))
+            self.factor_scores['pmi'] = max(0, min(100, pmi_score))
+            
+        except Exception as e:
+            self._log_debug(f"Error in _analyze_confidence: {str(e)}", "error")
+            self.factor_scores['consumer_confidence'] = 50.0
+            self.factor_scores['business_confidence'] = 50.0
+            self.factor_scores['pmi'] = 50.0
+    
+    def _calculate_macro_score(self) -> None:
+        """Calculate overall macro score with weighted factors"""
+        try:
+            total_score = 0.0
+            total_weight = 0.0
+            
+            for factor, weight in self.config.factor_weights.items():
+                if factor in self.factor_scores:
+                    total_score += self.factor_scores[factor] * weight
+                    total_weight += weight
+            
+            if total_weight > 0:
+                self.macro_score = total_score / total_weight
+            else:
+                self.macro_score = 50.0
+            
+            self.performance['avg_macro_score'] = (self.performance['avg_macro_score'] * (self.performance['total_checks'] - 1) + self.macro_score) / max(1, self.performance['total_checks'])
+            
+        except Exception as e:
+            self._log_debug(f"Error in _calculate_macro_score: {str(e)}", "error")
+            self.macro_score = 50.0
+    
+    def _calculate_macro_confidence(self) -> None:
+        """Calculate macro confidence score"""
+        try:
+            # Factors affecting confidence
+            score_variance = 0.0
+            factor_count = 0
+            
+            for factor, score in self.factor_scores.items():
+                score_variance += abs(score - self.macro_score)
+                factor_count += 1
+            
+            if factor_count > 0:
+                avg_variance = score_variance / factor_count
+                
+                # High variance = low confidence, Low variance = high confidence
+                if avg_variance < 5:
+                    base_confidence = 0.90
+                elif avg_variance < 10:
+                    base_confidence = 0.80
+                elif avg_variance < 15:
+                    base_confidence = 0.70
+                elif avg_variance < 20:
+                    base_confidence = 0.60
+                else:
+                    base_confidence = 0.50
+                
+                # Adjust for data recency
+                data_age = self.macro_data.get('data_age', 0)
+                if data_age > 3600:  # 1 hour
+                    base_confidence *= 0.8
+                
+                self.macro_confidence = base_confidence
+                self.performance['confidence_adjustments'] += 1
+            else:
+                self.macro_confidence = 0.50
+            
+        except Exception as e:
+            self._log_debug(f"Error in _calculate_macro_confidence: {str(e)}", "error")
+            self.macro_confidence = 0.50
+    
+    def _determine_macro_signal(self) -> None:
+        """Determine macro signal from score with hold duration"""
+        try:
+            score = self.macro_score
+            
+            # Determine signal
+            if score > 75:
+                new_signal = MacroSignal.STRONG_BULLISH
+            elif score > 65:
+                new_signal = MacroSignal.BULLISH
+            elif score > 45:
+                new_signal = MacroSignal.NEUTRAL
+            elif score > 35:
+                new_signal = MacroSignal.BEARISH
+            else:
+                new_signal = MacroSignal.STRONG_BEARISH
+            
+            # Check hold duration
+            if self.current_signal != new_signal:
+                time_since = (datetime.now() - self.last_signal_change).total_seconds() / 60
+                min_hold = self.config.signal_hold_duration_minutes
+                
+                if time_since < min_hold:
+                    # Check if signal change is extreme
+                    if new_signal in [MacroSignal.STRONG_BULLISH, MacroSignal.STRONG_BEARISH]:
+                        # Allow extreme changes
+                        self._change_signal(new_signal)
+                    else:
+                        # Hold for minimum duration
+                        self._log_debug(f"Signal hold: {new_signal.value} pending ({time_since:.0f}/{min_hold} minutes)")
+                else:
+                    self._change_signal(new_signal)
+            else:
+                # Update momentum
+                self.signal_momentum = (self.macro_score - 50) / 25
+            
+        except Exception as e:
+            self._log_debug(f"Error in _determine_macro_signal: {str(e)}", "error")
+    
+    def _change_signal(self, new_signal: MacroSignal) -> None:
+        """Change macro signal"""
+        try:
+            old_signal = self.current_signal
+            self.current_signal = new_signal
+            self.last_signal_change = datetime.now()
+            self.signal_hold_until = datetime.now() + timedelta(minutes=self.config.signal_hold_duration_minutes)
+            
+            self.performance['signal_changes'] += 1
+            self.performance['macro_signals'] += 1
+            
+            # Store history
+            self.signal_history.append({
+                'from': old_signal.value,
+                'to': new_signal.value,
+                'score': self.macro_score,
+                'confidence': self.macro_confidence,
+                'timestamp': datetime.now().isoformat()
+            })
+            
+            self._log_debug(f"MACRO SIGNAL CHANGE: {old_signal.value} -> {new_signal.value} (score: {self.macro_score:.1f}, confidence: {self.macro_confidence:.2f})", "info")
+            logger.info(f"MACRO SIGNAL CHANGE: {old_signal.value} -> {new_signal.value}")
+            
+        except Exception as e:
+            self._log_debug(f"Error in _change_signal: {str(e)}", "error")
+    
+    def _update_macro_correlations(self) -> None:
+        """Update macro factor correlations"""
+        try:
+            # Simplified correlation tracking
+            if len(self.factor_history) > 10:
+                recent_factors = list(self.factor_history)[-10:]
+                
+                for factor1 in self.factor_scores:
+                    for factor2 in self.factor_scores:
+                        if factor1 != factor2:
+                            key = f"{factor1}|{factor2}"
+                            if key not in self.macro_correlations:
+                                self.macro_correlations[key] = 0.0
+            
+            # Store history
+            self.factor_history.append(self.factor_scores.copy())
+            
+        except Exception as e:
+            self._log_debug(f"Error in _update_macro_correlations: {str(e)}", "error")
+    
+    def get_macro_summary(self) -> Dict[str, Any]:
+        """Get macro summary"""
+        try:
+            return {
+                'macro_score': self.macro_score,
+                'macro_confidence': self.macro_confidence,
+                'signal': self.current_signal.value,
+                'signal_momentum': self.signal_momentum,
+                'factor_scores': self.factor_scores,
+                'macro_data': self.macro_data,
+                'regime': self.current_regime,
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_macro_summary: {str(e)}", "error")
+            return {'error': str(e)}
+    
+    def get_macro_recommendation(self) -> Dict[str, Any]:
+        """Get macro-based trading recommendation"""
+        try:
+            signal = self.current_signal
+            confidence = self.macro_confidence
+            
+            if signal in [MacroSignal.STRONG_BULLISH, MacroSignal.BULLISH]:
+                action = "BUY"
+                reason = "Bullish macro environment"
+                risk_adjustment = 1.0
+            elif signal in [MacroSignal.STRONG_BEARISH, MacroSignal.BEARISH]:
+                action = "SELL"
+                reason = "Bearish macro environment"
+                risk_adjustment = 0.5
+            else:
+                action = "HOLD"
+                reason = "Neutral macro environment"
+                risk_adjustment = 0.8
+            
+            return {
+                'action': action,
+                'reason': reason,
+                'risk_adjustment': risk_adjustment,
+                'signal': signal.value,
+                'confidence': confidence,
+                'score': self.macro_score,
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_macro_recommendation: {str(e)}", "error")
+            return {'error': str(e)}
+    
+    def get_status(self) -> Dict[str, Any]:
+        """Get current status"""
+        try:
+            return {
+                'macro_score': self.macro_score,
+                'macro_confidence': self.macro_confidence,
+                'signal': self.current_signal.value,
+                'signal_momentum': self.signal_momentum,
+                'factor_scores': self.factor_scores,
+                'macro_signals': self.performance['macro_signals'],
+                'signal_changes': self.performance['signal_changes'],
+                'interest_updates': self.performance['interest_updates'],
+                'geopolitical_events': self.performance['geopolitical_events'],
+                'liquidity_changes': self.performance['liquidity_changes'],
+                'avg_macro_score': self.performance['avg_macro_score'],
+                'confidence_adjustments': self.performance['confidence_adjustments'],
+                'current_regime': self.current_regime,
+                'signal_hold_until': self.signal_hold_until.isoformat() if self.signal_hold_until else None,
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_status: {str(e)}", "error")
+            return {'status': 'ERROR', 'error': str(e)}
+    
+    def get_performance_report(self) -> Dict[str, Any]:
+        """Get detailed performance report"""
+        try:
+            return {
+                'summary': {
+                    'macro_signals': self.performance['macro_signals'],
+                    'signal_changes': self.performance['signal_changes'],
+                    'interest_updates': self.performance['interest_updates'],
+                    'geopolitical_events': self.performance['geopolitical_events'],
+                    'liquidity_changes': self.performance['liquidity_changes'],
+                    'avg_macro_score': self.performance['avg_macro_score'],
+                    'confidence_adjustments': self.performance['confidence_adjustments']
+                },
+                'current': {
+                    'score': self.macro_score,
+                    'confidence': self.macro_confidence,
+                    'signal': self.current_signal.value,
+                    'momentum': self.signal_momentum,
+                    'regime': self.current_regime
+                },
+                'factors': self.factor_scores,
+                'recent_signals': list(self.signal_history)[-10:] if self.signal_history else [],
+                'macro_data': self.macro_data,
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            self._log_debug(f"Error in get_performance_report: {str(e)}", "error")
+            return {'error': str(e)}

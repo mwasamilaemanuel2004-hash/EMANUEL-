@@ -1,14 +1,21 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#0b1a2e" />
     <title>ESH TRADE · Time Dashboard</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800;14..32,900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800;14..32,900&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+        rel="stylesheet" />
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
         body {
             font-family: 'Inter', sans-serif;
@@ -21,91 +28,217 @@
 
         /* THEMES */
         body {
-            --bg-body: #f0f7ff; --bg-card: #ffffff; --bg-sidebar: #0b1a2e;
-            --text-primary: #0b1a2e; --text-secondary: #475569; --text-sidebar: #94a3b8;
-            --border: #dbeafe; --accent: #2563eb; --accent-light: #dbeafe; --accent-hover: #1d4ed8;
-            --shadow: 0 4px 24px rgba(37,99,235,0.08); --shadow-hover: 0 8px 32px rgba(37,99,235,0.15);
-            --positive: #22c55e; --negative: #ef4444; --warning: #f59e0b;
-            --gradient-start: #2563eb; --gradient-end: #0b1a2e;
+            --bg-body: #f0f7ff;
+            --bg-card: #ffffff;
+            --bg-sidebar: #0b1a2e;
+            --text-primary: #0b1a2e;
+            --text-secondary: #475569;
+            --text-sidebar: #94a3b8;
+            --border: #dbeafe;
+            --accent: #2563eb;
+            --accent-light: #dbeafe;
+            --accent-hover: #1d4ed8;
+            --shadow: 0 4px 24px rgba(37, 99, 235, 0.08);
+            --shadow-hover: 0 8px 32px rgba(37, 99, 235, 0.15);
+            --positive: #22c55e;
+            --negative: #ef4444;
+            --warning: #f59e0b;
+            --gradient-start: #2563eb;
+            --gradient-end: #0b1a2e;
         }
 
         body.theme-charcoal {
-            --bg-body: #eef0f2; --bg-card: #ffffff; --bg-sidebar: #1a1d23;
-            --text-primary: #1a1d23; --text-secondary: #4b5563; --text-sidebar: #9ca3af;
-            --border: #d1d5db; --accent: #84cc16; --accent-light: #e5f4d0; --accent-hover: #65a30d;
-            --shadow: 0 4px 24px rgba(132,204,22,0.08); --gradient-start: #84cc16; --gradient-end: #1a1d23;
+            --bg-body: #eef0f2;
+            --bg-card: #ffffff;
+            --bg-sidebar: #1a1d23;
+            --text-primary: #1a1d23;
+            --text-secondary: #4b5563;
+            --text-sidebar: #9ca3af;
+            --border: #d1d5db;
+            --accent: #84cc16;
+            --accent-light: #e5f4d0;
+            --accent-hover: #65a30d;
+            --shadow: 0 4px 24px rgba(132, 204, 22, 0.08);
+            --gradient-start: #84cc16;
+            --gradient-end: #1a1d23;
         }
 
         body.theme-emerald {
-            --bg-body: #ecfdf5; --bg-card: #ffffff; --bg-sidebar: #064e3b;
-            --text-primary: #064e3b; --text-secondary: #065f46; --text-sidebar: #6ee7b7;
-            --border: #a7f3d0; --accent: #059669; --accent-light: #d1fae5; --accent-hover: #047857;
-            --shadow: 0 4px 24px rgba(5,150,105,0.08); --gradient-start: #059669; --gradient-end: #064e3b;
+            --bg-body: #ecfdf5;
+            --bg-card: #ffffff;
+            --bg-sidebar: #064e3b;
+            --text-primary: #064e3b;
+            --text-secondary: #065f46;
+            --text-sidebar: #6ee7b7;
+            --border: #a7f3d0;
+            --accent: #059669;
+            --accent-light: #d1fae5;
+            --accent-hover: #047857;
+            --shadow: 0 4px 24px rgba(5, 150, 105, 0.08);
+            --gradient-start: #059669;
+            --gradient-end: #064e3b;
         }
 
         body.theme-teal {
-            --bg-body: #f0fdfa; --bg-card: #ffffff; --bg-sidebar: #0f3b3b;
-            --text-primary: #0f3b3b; --text-secondary: #115e59; --text-sidebar: #5eead4;
-            --border: #99f6e4; --accent: #0d9488; --accent-light: #ccfbf1; --accent-hover: #0f766e;
-            --shadow: 0 4px 24px rgba(13,148,136,0.08); --positive: #f97316; --gradient-start: #0d9488; --gradient-end: #0f3b3b;
+            --bg-body: #f0fdfa;
+            --bg-card: #ffffff;
+            --bg-sidebar: #0f3b3b;
+            --text-primary: #0f3b3b;
+            --text-secondary: #115e59;
+            --text-sidebar: #5eead4;
+            --border: #99f6e4;
+            --accent: #0d9488;
+            --accent-light: #ccfbf1;
+            --accent-hover: #0f766e;
+            --shadow: 0 4px 24px rgba(13, 148, 136, 0.08);
+            --positive: #f97316;
+            --gradient-start: #0d9488;
+            --gradient-end: #0f3b3b;
         }
 
         body.theme-plum {
-            --bg-body: #faf5ff; --bg-card: #ffffff; --bg-sidebar: #3b1f4a;
-            --text-primary: #3b1f4a; --text-secondary: #5b21b6; --text-sidebar: #c4b5d4;
-            --border: #e9d5ff; --accent: #8b5cf6; --accent-light: #ede9fe; --accent-hover: #7c3aed;
-            --shadow: 0 4px 24px rgba(139,92,246,0.08); --gradient-start: #8b5cf6; --gradient-end: #3b1f4a;
+            --bg-body: #faf5ff;
+            --bg-card: #ffffff;
+            --bg-sidebar: #3b1f4a;
+            --text-primary: #3b1f4a;
+            --text-secondary: #5b21b6;
+            --text-sidebar: #c4b5d4;
+            --border: #e9d5ff;
+            --accent: #8b5cf6;
+            --accent-light: #ede9fe;
+            --accent-hover: #7c3aed;
+            --shadow: 0 4px 24px rgba(139, 92, 246, 0.08);
+            --gradient-start: #8b5cf6;
+            --gradient-end: #3b1f4a;
         }
 
         body.theme-terracotta {
-            --bg-body: #fef6f0; --bg-card: #ffffff; --bg-sidebar: #4a2818;
-            --text-primary: #4a2818; --text-secondary: #7c2d12; --text-sidebar: #fbbf8d;
-            --border: #fed7aa; --accent: #c2410c; --accent-light: #fee2d6; --accent-hover: #9a3412;
-            --shadow: 0 4px 24px rgba(194,65,12,0.08); --gradient-start: #c2410c; --gradient-end: #4a2818;
+            --bg-body: #fef6f0;
+            --bg-card: #ffffff;
+            --bg-sidebar: #4a2818;
+            --text-primary: #4a2818;
+            --text-secondary: #7c2d12;
+            --text-sidebar: #fbbf8d;
+            --border: #fed7aa;
+            --accent: #c2410c;
+            --accent-light: #fee2d6;
+            --accent-hover: #9a3412;
+            --shadow: 0 4px 24px rgba(194, 65, 12, 0.08);
+            --gradient-start: #c2410c;
+            --gradient-end: #4a2818;
         }
 
         /* LAYOUT */
-        .layout { display: flex; min-height: 100vh; }
+        .layout {
+            display: flex;
+            min-height: 100vh;
+        }
 
         /* SIDEBAR */
         .sidebar {
-            width: 260px; background: var(--bg-sidebar);
-            position: fixed; top: 0; left: 0; bottom: 0;
-            display: flex; flex-direction: column; padding: 1.5rem 1rem; gap: 1.2rem;
-            z-index: 100; overflow-y: auto;
+            width: 260px;
+            background: var(--bg-sidebar);
+            position: fixed;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            display: flex;
+            flex-direction: column;
+            padding: 1.5rem 1rem;
+            gap: 1.2rem;
+            z-index: 100;
+            overflow-y: auto;
         }
+
         .sidebar-brand {
-            display: flex; align-items: center; gap: 0.6rem;
-            color: #fff; font-size: 1.3rem; font-weight: 800;
-            padding: 0 0.5rem 1rem; border-bottom: 1px solid rgba(255,255,255,0.08);
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            color: #fff;
+            font-size: 1.3rem;
+            font-weight: 800;
+            padding: 0 0.5rem 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
             text-decoration: none;
         }
-        .sidebar-brand i { color: var(--accent); font-size: 1.5rem; }
-        .sidebar-nav { display: flex; flex-direction: column; gap: 0.2rem; flex: 1; }
+
+        .sidebar-brand i {
+            color: var(--accent);
+            font-size: 1.5rem;
+        }
+
+        .sidebar-nav {
+            display: flex;
+            flex-direction: column;
+            gap: 0.2rem;
+            flex: 1;
+        }
+
         .nav-label {
-            font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.1em;
-            color: var(--text-sidebar); opacity: 0.4; padding: 0.8rem 0.8rem 0.3rem; font-weight: 600;
+            font-size: 0.6rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-sidebar);
+            opacity: 0.4;
+            padding: 0.8rem 0.8rem 0.3rem;
+            font-weight: 600;
         }
+
         .sidebar-nav a {
-            display: flex; align-items: center; gap: 0.8rem;
-            padding: 0.7rem 0.8rem; border-radius: 12px;
-            color: var(--text-sidebar); text-decoration: none;
-            font-size: 0.85rem; font-weight: 500; cursor: pointer; transition: all 0.25s;
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+            padding: 0.7rem 0.8rem;
+            border-radius: 12px;
+            color: var(--text-sidebar);
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.25s;
         }
-        .sidebar-nav a:hover { background: rgba(255,255,255,0.06); color: #fff; }
-        .sidebar-nav a.active { background: var(--accent); color: #fff; }
-        .sidebar-nav a i { width: 20px; text-align: center; }
+
+        .sidebar-nav a:hover {
+            background: rgba(255, 255, 255, 0.06);
+            color: #fff;
+        }
+
+        .sidebar-nav a.active {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        .sidebar-nav a i {
+            width: 20px;
+            text-align: center;
+        }
 
         /* MAIN */
-        .main { flex: 1; margin-left: 260px; padding: 1.5rem; }
+        .main {
+            flex: 1;
+            margin-left: 260px;
+            padding: 1.5rem;
+        }
 
         /* HEADER */
         .header {
-            display: flex; align-items: center; justify-content: space-between;
-            flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
         }
-        .header h1 { font-size: 1.8rem; font-weight: 900; color: var(--text-primary); }
-        .header h1 i { color: var(--accent); }
+
+        .header h1 {
+            font-size: 1.8rem;
+            font-weight: 900;
+            color: var(--text-primary);
+        }
+
+        .header h1 i {
+            color: var(--accent);
+        }
 
         /* CLOCK */
         .clock-container {
@@ -116,20 +249,23 @@
             margin-bottom: 1.5rem;
             color: #fff;
         }
+
         .clock-time {
             font-size: 3.5rem;
             font-weight: 900;
             font-family: 'JetBrains Mono', monospace;
             letter-spacing: 0.05em;
         }
+
         .clock-date {
             font-size: 1rem;
             opacity: 0.8;
             margin-top: 0.3rem;
         }
+
         .clock-session {
             display: inline-block;
-            background: rgba(255,255,255,0.15);
+            background: rgba(255, 255, 255, 0.15);
             padding: 0.3rem 1rem;
             border-radius: 20px;
             font-size: 0.75rem;
@@ -143,6 +279,7 @@
             gap: 0.75rem;
             margin-bottom: 1.5rem;
         }
+
         .world-clock {
             background: var(--bg-card);
             border: 1px solid var(--border);
@@ -151,9 +288,26 @@
             text-align: center;
             box-shadow: var(--shadow);
         }
-        .world-clock .city { font-size: 0.7rem; color: var(--text-secondary); font-weight: 600; }
-        .world-clock .time { font-size: 1.2rem; font-weight: 800; color: var(--text-primary); font-family: 'JetBrains Mono', monospace; margin-top: 0.3rem; }
-        .world-clock .session { font-size: 0.6rem; color: var(--accent); margin-top: 0.2rem; }
+
+        .world-clock .city {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        .world-clock .time {
+            font-size: 1.2rem;
+            font-weight: 800;
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', monospace;
+            margin-top: 0.3rem;
+        }
+
+        .world-clock .session {
+            font-size: 0.6rem;
+            color: var(--accent);
+            margin-top: 0.2rem;
+        }
 
         /* MARKET SESSIONS */
         .sessions-grid {
@@ -162,6 +316,7 @@
             gap: 0.75rem;
             margin-bottom: 1.5rem;
         }
+
         .session-card {
             background: var(--bg-card);
             border: 1px solid var(--border);
@@ -169,8 +324,18 @@
             padding: 1rem;
             box-shadow: var(--shadow);
         }
-        .session-card.active { border-color: var(--accent); box-shadow: var(--shadow-hover); }
-        .session-name { font-weight: 700; color: var(--text-primary); font-size: 0.85rem; }
+
+        .session-card.active {
+            border-color: var(--accent);
+            box-shadow: var(--shadow-hover);
+        }
+
+        .session-name {
+            font-weight: 700;
+            color: var(--text-primary);
+            font-size: 0.85rem;
+        }
+
         .session-status {
             display: inline-block;
             padding: 0.1rem 0.6rem;
@@ -179,9 +344,22 @@
             font-weight: 600;
             margin-top: 0.3rem;
         }
-        .session-status.open { background: rgba(34,197,94,0.1); color: #22c55e; }
-        .session-status.closed { background: rgba(239,68,68,0.1); color: #ef4444; }
-        .session-time { font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.3rem; }
+
+        .session-status.open {
+            background: rgba(34, 197, 94, 0.1);
+            color: #22c55e;
+        }
+
+        .session-status.closed {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+        }
+
+        .session-time {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            margin-top: 0.3rem;
+        }
 
         /* TIMEFRAME SELECTOR */
         .timeframe-selector {
@@ -190,6 +368,7 @@
             flex-wrap: wrap;
             margin-bottom: 1rem;
         }
+
         .tf-btn {
             padding: 0.4rem 1rem;
             border-radius: 20px;
@@ -202,8 +381,18 @@
             transition: all 0.25s;
             font-family: inherit;
         }
-        .tf-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
-        .tf-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+        .tf-btn:hover {
+            background: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+        }
+
+        .tf-btn.active {
+            background: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+        }
 
         /* CHART PLACEHOLDER */
         .chart-container {
@@ -213,6 +402,7 @@
             padding: 1rem;
             margin-bottom: 1.5rem;
         }
+
         .chart-placeholder {
             height: 300px;
             display: flex;
@@ -224,18 +414,40 @@
         }
 
         @media (max-width: 1024px) {
-            .world-clocks { grid-template-columns: 1fr 1fr; }
-            .sessions-grid { grid-template-columns: 1fr; }
+            .world-clocks {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .sessions-grid {
+                grid-template-columns: 1fr;
+            }
         }
+
         @media (max-width: 768px) {
-            .sidebar { transform: translateX(-100%); }
-            .main { margin-left: 0; padding: 1rem; }
-            .world-clocks { grid-template-columns: 1fr; }
-            .clock-time { font-size: 2.5rem; }
-            .header h1 { font-size: 1.3rem; }
+            .sidebar {
+                transform: translateX(-100%);
+            }
+
+            .main {
+                margin-left: 0;
+                padding: 1rem;
+            }
+
+            .world-clocks {
+                grid-template-columns: 1fr;
+            }
+
+            .clock-time {
+                font-size: 2.5rem;
+            }
+
+            .header h1 {
+                font-size: 1.3rem;
+            }
         }
     </style>
 </head>
+
 <body>
 
     <div class="layout">
@@ -260,12 +472,18 @@
             <div class="header">
                 <h1><i class="fas fa-clock"></i> Time Dashboard</h1>
                 <div style="display:flex; gap:0.3rem;">
-                    <button class="theme-btn" data-theme="navy" style="width:22px;height:22px;border-radius:50%;border:2px solid transparent;cursor:pointer;background:linear-gradient(135deg,#0b1a2e 50%,#2563eb 50%);"></button>
-                    <button class="theme-btn" data-theme="charcoal" style="width:22px;height:22px;border-radius:50%;border:2px solid transparent;cursor:pointer;background:linear-gradient(135deg,#1a1d23 50%,#84cc16 50%);"></button>
-                    <button class="theme-btn" data-theme="emerald" style="width:22px;height:22px;border-radius:50%;border:2px solid transparent;cursor:pointer;background:linear-gradient(135deg,#064e3b 50%,#059669 50%);"></button>
-                    <button class="theme-btn" data-theme="teal" style="width:22px;height:22px;border-radius:50%;border:2px solid transparent;cursor:pointer;background:linear-gradient(135deg,#0f3b3b 50%,#0d9488 50%);"></button>
-                    <button class="theme-btn" data-theme="plum" style="width:22px;height:22px;border-radius:50%;border:2px solid transparent;cursor:pointer;background:linear-gradient(135deg,#3b1f4a 50%,#8b5cf6 50%);"></button>
-                    <button class="theme-btn" data-theme="terracotta" style="width:22px;height:22px;border-radius:50%;border:2px solid transparent;cursor:pointer;background:linear-gradient(135deg,#4a2818 50%,#c2410c 50%);"></button>
+                    <button class="theme-btn" data-theme="navy"
+                        style="width:22px;height:22px;border-radius:50%;border:2px solid transparent;cursor:pointer;background:linear-gradient(135deg,#0b1a2e 50%,#2563eb 50%);"></button>
+                    <button class="theme-btn" data-theme="charcoal"
+                        style="width:22px;height:22px;border-radius:50%;border:2px solid transparent;cursor:pointer;background:linear-gradient(135deg,#1a1d23 50%,#84cc16 50%);"></button>
+                    <button class="theme-btn" data-theme="emerald"
+                        style="width:22px;height:22px;border-radius:50%;border:2px solid transparent;cursor:pointer;background:linear-gradient(135deg,#064e3b 50%,#059669 50%);"></button>
+                    <button class="theme-btn" data-theme="teal"
+                        style="width:22px;height:22px;border-radius:50%;border:2px solid transparent;cursor:pointer;background:linear-gradient(135deg,#0f3b3b 50%,#0d9488 50%);"></button>
+                    <button class="theme-btn" data-theme="plum"
+                        style="width:22px;height:22px;border-radius:50%;border:2px solid transparent;cursor:pointer;background:linear-gradient(135deg,#3b1f4a 50%,#8b5cf6 50%);"></button>
+                    <button class="theme-btn" data-theme="terracotta"
+                        style="width:22px;height:22px;border-radius:50%;border:2px solid transparent;cursor:pointer;background:linear-gradient(135deg,#4a2818 50%,#c2410c 50%);"></button>
                 </div>
             </div>
 
@@ -346,18 +564,18 @@
     </div>
 
     <script>
-        (function() {
+        (function () {
             'use strict';
 
             // ===== THEME =====
             var themeBtns = document.querySelectorAll('.theme-btn');
             function setTheme(theme) {
-                document.body.className = document.body.className.split(' ').filter(function(c) { return c.indexOf('theme-') !== 0; }).join(' ');
+                document.body.className = document.body.className.split(' ').filter(function (c) { return c.indexOf('theme-') !== 0; }).join(' ');
                 if (theme !== 'navy') document.body.classList.add('theme-' + theme);
-                themeBtns.forEach(function(btn) { btn.classList.toggle('active', btn.dataset.theme === theme); });
+                themeBtns.forEach(function (btn) { btn.classList.toggle('active', btn.dataset.theme === theme); });
                 localStorage.setItem('esh_theme', theme);
             }
-            themeBtns.forEach(function(btn) { btn.addEventListener('click', function() { setTheme(this.dataset.theme); }); });
+            themeBtns.forEach(function (btn) { btn.addEventListener('click', function () { setTheme(this.dataset.theme); }); });
             setTheme(localStorage.getItem('esh_theme') || 'navy');
 
             // ===== CLOCK =====
@@ -411,7 +629,7 @@
             function updateSession(session, isActive) {
                 var card = document.getElementById(session + 'SessionCard');
                 var status = document.getElementById(session + 'Status');
-                
+
                 if (card) card.classList.toggle('active', isActive);
                 if (status) {
                     status.textContent = isActive ? '● Open' : '● Closed';
@@ -421,9 +639,9 @@
 
             // ===== TIMEFRAME BUTTONS =====
             var tfBtns = document.querySelectorAll('.tf-btn');
-            tfBtns.forEach(function(btn) {
-                btn.addEventListener('click', function() {
-                    tfBtns.forEach(function(b) { b.classList.remove('active'); });
+            tfBtns.forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    tfBtns.forEach(function (b) { b.classList.remove('active'); });
                     this.classList.add('active');
                 });
             });
@@ -437,4 +655,5 @@
     </script>
 
 </body>
+
 </html>
