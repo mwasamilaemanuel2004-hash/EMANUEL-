@@ -311,8 +311,9 @@ class ScalperConfig:
 
     # Position limits
     max_position_size: float = 1000.0
-    min_position_size: float = 5.0
+    min_position_size: float = 0.0
     max_concurrent_positions: int = 3
+    fee_rate: float = 0.0004
 
     # ============================================================
     # USER CONTROLS (on/off + dynamic/adaptive + smart risk)
@@ -429,6 +430,12 @@ class UltimateScalperBot:
             target_win_rate=config.get('target_win_rate', 0.60),
             adaptation_speed=config.get('adaptation_speed', 0.1)
         )
+        self.scalper_config.min_position_size = float(
+            config.get('min_position_size', self.scalper_config.min_position_size))
+        self.scalper_config.max_position_size = float(
+            config.get('max_position_size', self.scalper_config.max_position_size))
+        self.scalper_config.fee_rate = max(0.0, float(
+            config.get('fee_rate', self.scalper_config.fee_rate)))
 
         # ============================================================
         # USER CONTROLS & TICK FEED STATE (upgrade v12.1)
@@ -1055,7 +1062,10 @@ class UltimateScalperBot:
         )
 
         # Calculate position size
-        position_size = self._calculate_position_size(action, current_price, micro_analysis)
+        position_size = self._calculate_position_size(
+            action, current_price, stop_loss, micro_analysis)
+        if action != TradeSide.HOLD and position_size <= 0:
+            return None
 
         # Determine strength and quality
         if quality > 0.8:
@@ -1181,6 +1191,7 @@ class UltimateScalperBot:
         return stop_loss, take_profit
 
     def _calculate_position_size(self, action: TradeSide, current_price: float,
+                               stop_loss: float,
                                micro_analysis: MicrostructureAnalysis) -> float:
         """Calculate position size"""
         risk_per_scalp = self.scalper_config.risk_per_scalp
@@ -1222,18 +1233,14 @@ class UltimateScalperBot:
             if self.scalper_config.adaptive_enabled and total_closed < 25:
                 smart_risk_factor = min(smart_risk_factor, 0.85)
 
-        # Calculate position value
-        position_value = self.capital * risk_per_scalp * mode_multiplier * streak_multiplier * smart_risk_factor
-
-        # Apply leverage for scalping (10x)
-        position_value *= 10
-
-        # Calculate quantity
-        quantity = position_value / current_price if current_price > 0 else 0
+        risk_budget = self.capital * risk_per_scalp * mode_multiplier * streak_multiplier * smart_risk_factor
+        risk_per_unit = abs(current_price - stop_loss)
+        quantity = risk_budget / risk_per_unit if risk_per_unit > 0 else 0.0
 
         # Apply limits
-        quantity = max(self.scalper_config.min_position_size,
-                      min(quantity, self.scalper_config.max_position_size))
+        quantity = min(quantity, self.scalper_config.max_position_size)
+        if 0 < quantity < self.scalper_config.min_position_size:
+            return 0.0
 
         return quantity
 
@@ -1356,9 +1363,11 @@ class UltimateScalperBot:
             position.current_price = price
 
             if position.side == TradeSide.BUY:
-                position.realized_pnl = (price - position.entry_price) * position.quantity
+                gross_pnl = (price - position.entry_price) * position.quantity
             else:
-                position.realized_pnl = (position.entry_price - price) * position.quantity
+                gross_pnl = (position.entry_price - price) * position.quantity
+            fees = (position.entry_price + price) * position.quantity * self.scalper_config.fee_rate
+            position.realized_pnl = gross_pnl - fees
 
             # Update streaks
             if position.realized_pnl > 0:

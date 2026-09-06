@@ -4,7 +4,12 @@ import sys
 sys.path.insert(0, "backend")
 
 from app.bots.forex.forex_scapler import ForexScalperBot
-from app.bots.crypto.scalper_bot import CryptoScalperBot
+from app.bots.crypto.scalper_bot import (
+    CryptoScalperBot,
+    MarketMicrostructure,
+    MicrostructureAnalysis,
+    TradeSide,
+)
 
 
 def main() -> None:
@@ -23,6 +28,19 @@ def main() -> None:
                                      "start_background_tasks": False})
     assert maximum_risk.scalper_config.risk_per_scalp == 0.05
     maximum_risk.stop_scalping()
+
+    market = MicrostructureAnalysis(
+        state=MarketMicrostructure.HIGH_LIQUIDITY,
+        imbalance=0.0,
+        spread=0.0002,
+        liquidity=1000.0,
+        volume_ratio=1.0,
+        tick_velocity=0.0,
+        volume_spike=False,
+    )
+    sized = crypto._calculate_position_size(TradeSide.BUY, 50000.0, 49850.0, market)
+    assert 0 < sized <= crypto.capital * crypto.scalper_config.risk_per_scalp / 150.0
+    assert crypto.scalper_config.min_position_size == 0.0
 
     print("scalper_config=ok")
 

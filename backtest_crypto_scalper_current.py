@@ -82,6 +82,7 @@ async def run_timeframe(timeframe: str) -> dict:
         entry = float(signal.entry)
         stop = float(signal.stop_loss)
         target = float(signal.take_profit)
+        fee_rate = 0.0004
         if signal.side == "BUY":
             stop_hit = future["low"].le(stop)
             target_hit = future["high"].ge(target)
@@ -90,13 +91,18 @@ async def run_timeframe(timeframe: str) -> dict:
                 continue
             target_reward = abs(target - entry) / risk
             if stop_hit.any() and target_hit.any():
-                value = -1.0 if stop_hit.idxmax() <= target_hit.idxmax() else target_reward
+                stop_first = stop_hit.idxmax() <= target_hit.idxmax()
+                exit_price = stop if stop_first else target
+                value = -1.0 if stop_first else target_reward
             elif stop_hit.any():
+                exit_price = stop
                 value = -1.0
             elif target_hit.any():
+                exit_price = target
                 value = target_reward
             else:
-                value = (float(future["close"].iloc[-1]) - entry) / risk
+                exit_price = float(future["close"].iloc[-1])
+                value = (exit_price - entry) / risk
         else:
             stop_hit = future["high"].ge(stop)
             target_hit = future["low"].le(target)
@@ -105,13 +111,19 @@ async def run_timeframe(timeframe: str) -> dict:
                 continue
             target_reward = abs(target - entry) / risk
             if stop_hit.any() and target_hit.any():
-                value = -1.0 if stop_hit.idxmax() <= target_hit.idxmax() else target_reward
+                stop_first = stop_hit.idxmax() <= target_hit.idxmax()
+                exit_price = stop if stop_first else target
+                value = -1.0 if stop_first else target_reward
             elif stop_hit.any():
+                exit_price = stop
                 value = -1.0
             elif target_hit.any():
+                exit_price = target
                 value = target_reward
             else:
-                value = (entry - float(future["close"].iloc[-1])) / risk
+                exit_price = float(future["close"].iloc[-1])
+                value = (entry - exit_price) / risk
+        value -= ((entry + exit_price) * fee_rate) / risk
         outcomes.append(float(value))
 
     wins = [value for value in outcomes if value > 0]
@@ -133,6 +145,7 @@ async def run_timeframe(timeframe: str) -> dict:
         "expectancy_R": round(sum(outcomes) / len(outcomes), 4) if outcomes else None,
         "max_drawdown_R": round(drawdown, 4),
         "risk_per_trade_pct": 1.0,
+        "fee_rate": fee_rate,
         "validated_at_utc": datetime.now(timezone.utc).isoformat(),
     }
 
