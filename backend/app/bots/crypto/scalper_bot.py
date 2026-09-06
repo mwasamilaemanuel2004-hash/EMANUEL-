@@ -1540,27 +1540,24 @@ class UltimateScalperBot:
             risk_distance = max(abs(current['close'] * 0.003), 1.0)
             volatility_ok = (current['high'] - current['low']) / current['close'] < 0.02
 
-            # Check order flow imbalance
-            order_flow = self._calculate_order_flow_imbalance(
-                [(current['high'], current['volume'])],
-                [(current['low'], current['volume'])]
-            )
+            candle_range = max(float(current['high'] - current['low']), 1e-12)
+            candle_pressure = float(current['close'] - current['open']) / candle_range
 
             side = None
             entry = current['close']
             stop_loss = entry
             take_profit = entry
 
-            if current['close'] > prev['close'] and abs(order_flow) > 0.02 and volatility_ok:
+            if current['close'] > prev['close'] and abs(candle_pressure) > 0.02 and volatility_ok:
                 side = "BUY"
                 stop_loss = entry - risk_distance
                 take_profit = entry + risk_distance * 2.5
-                reason = f"Scalp BUY {entry:.4f} OF-imbalance, low vol"
-            elif current['close'] < prev['close'] and abs(order_flow) > 0.02 and volatility_ok:
+                reason = f"Scalp BUY {entry:.4f} candle pressure, low vol"
+            elif current['close'] < prev['close'] and abs(candle_pressure) > 0.02 and volatility_ok:
                 side = "SELL"
                 stop_loss = entry + risk_distance
                 take_profit = entry - risk_distance * 2.5
-                reason = f"Scalp SELL {entry:.4f} OF-imbalance, low vol"
+                reason = f"Scalp SELL {entry:.4f} candle pressure, low vol"
 
             if side and score and getattr(score, 'total_score', 0.65) >= 0.6:
                 class Signal:
