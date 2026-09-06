@@ -67,7 +67,8 @@ async def run_timeframe(timeframe: str) -> dict:
         "risk_per_trade_pct": 1.0,
         "start_background_tasks": False,
         "debug_errors": True,
-        "reward_risk": 1.25,
+        "reward_risk": 1.0,
+        "pressure_threshold": 0.10,
     })
     outcomes = []
     signals = 0

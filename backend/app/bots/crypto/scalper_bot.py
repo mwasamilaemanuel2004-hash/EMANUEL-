@@ -1539,6 +1539,7 @@ class UltimateScalperBot:
 
             risk_distance = max(abs(current['close'] * 0.003), 1.0)
             reward_risk = float(self.config.get('reward_risk', 2.5))
+            pressure_threshold = float(self.config.get('pressure_threshold', 0.02))
             volatility_ok = (current['high'] - current['low']) / current['close'] < 0.02
 
             candle_range = max(float(current['high'] - current['low']), 1e-12)
@@ -1549,12 +1550,12 @@ class UltimateScalperBot:
             stop_loss = entry
             take_profit = entry
 
-            if current['close'] > prev['close'] and abs(candle_pressure) > 0.02 and volatility_ok:
+            if current['close'] > prev['close'] and abs(candle_pressure) > pressure_threshold and volatility_ok:
                 side = "BUY"
                 stop_loss = entry - risk_distance
                 take_profit = entry + risk_distance * reward_risk
                 reason = f"Scalp BUY {entry:.4f} candle pressure, low vol"
-            elif current['close'] < prev['close'] and abs(candle_pressure) > 0.02 and volatility_ok:
+            elif current['close'] < prev['close'] and abs(candle_pressure) > pressure_threshold and volatility_ok:
                 side = "SELL"
                 stop_loss = entry + risk_distance
                 take_profit = entry - risk_distance * reward_risk
