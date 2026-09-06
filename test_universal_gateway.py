@@ -24,8 +24,8 @@ class FakeAdapter:
 
 
 def main() -> None:
-    gateway = ExecutionGateway(FakeAdapter(), max_order_value=1000)
-    result = asyncio.run(gateway.submit(OrderRequest("btc-usdt", "BUY", amount=0.05, price=100)))
+    gateway = ExecutionGateway(FakeAdapter(), max_order_value=1000, max_order_risk=2)
+    result = asyncio.run(gateway.submit(OrderRequest("btc-usdt", "BUY", amount=0.01, price=100)))
     assert result.dry_run is True
     assert result.status == "dry_run"
     assert result.symbol == "BTC/USDT"
@@ -53,11 +53,13 @@ def main() -> None:
         raise AssertionError("notional limit must reject oversized orders")
 
     try:
-        asyncio.run(gateway.submit(OrderRequest("BTC/USDT", "buy", amount=0.01)))
+        asyncio.run(gateway.submit(OrderRequest(
+            "BTC/USDT", "buy", amount=0.05, price=100, stop_loss=0
+        )))
     except GatewayError:
         pass
     else:
-        raise AssertionError("market notional below $5 must be rejected")
+        raise AssertionError("stop-loss risk above gateway limit must be rejected")
 
     print("universal_gateway=ok")
 

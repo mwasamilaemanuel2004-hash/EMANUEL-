@@ -58,11 +58,13 @@ class ExecutionGateway:
 
     def __init__(self, adapter: BrokerAdapter, *, live_trading: bool = False,
                  max_order_value: float = 0.0,
-                 min_order_value: float = 5.0) -> None:
+                 min_order_value: float = 0.0,
+                 max_order_risk: float = 0.0) -> None:
         self.adapter = adapter
         self.live_trading = live_trading
         self.max_order_value = max(0.0, float(max_order_value))
         self.min_order_value = max(0.0, float(min_order_value))
+        self.max_order_risk = max(0.0, float(max_order_risk))
 
     async def ticker(self, symbol: str) -> Dict[str, Any]:
         return await self.adapter.fetch_ticker(self.normalize_symbol(symbol))
@@ -116,6 +118,10 @@ class ExecutionGateway:
             raise GatewayError(f"order value must be at least {self.min_order_value:g}")
         if self.max_order_value and notional and notional > self.max_order_value:
                 raise GatewayError("order exceeds gateway notional limit")
+        if self.max_order_risk and request.price is not None and request.stop_loss is not None:
+            risk_value = abs(request.price - request.stop_loss) * request.amount
+            if risk_value > self.max_order_risk:
+                raise GatewayError("order stop-loss risk exceeds gateway limit")
         return OrderRequest(
             symbol=symbol, side=side, order_type=order_type,
             amount=float(request.amount), price=request.price,
