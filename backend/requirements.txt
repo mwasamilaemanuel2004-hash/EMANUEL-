@@ -7,6 +7,7 @@ pydantic-settings==2.1.0
 # Database
 sqlalchemy==2.0.23
 alembic==1.13.0
+psycopg2-binary==2.9.9  # PostgreSQL driver (stored procedures support)
 
 # Security & Encryption
 cryptography==41.0.7
@@ -16,6 +17,9 @@ python-multipart==0.0.6
 pyotp==2.9.0
 qrcode==7.4.2
 Pillow==10.1.0
+passlib==1.7.4
+bcrypt==4.1.0
+email-validator==2.1.0
 
 # API & HTTP
 requests==2.31.0
@@ -35,6 +39,7 @@ transformers==4.35.2
 
 # Technical Analysis
 ta-lib==0.4.28
+pandas-ta==0.3.14b0  # CS Indicator Library: candles + support/resistance + composite signals
 yfinance==0.2.32
 
 # Exchange APIs

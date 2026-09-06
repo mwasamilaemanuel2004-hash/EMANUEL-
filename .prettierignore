@@ -1,0 +1,36 @@
+# Generated / dependency files
+node_modules/
+dist/
+build/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.eggs/
+*.egg-info/
+
+# Data & logs (generated at runtime)
+data/
+logs/
+backend/logs/
+*.log
+pack_run.log
+system_pack_run.log
+
+# Git
+.git/
+.github/
+
+# Vendor / imported projects
+mt5_live_trading_bot-main/
+.kilo/
+
+# Local scratch files
+_*.txt
+.swp
+*.tmp
