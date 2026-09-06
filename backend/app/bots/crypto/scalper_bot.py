@@ -1538,6 +1538,7 @@ class UltimateScalperBot:
             score = self.gate.score_signal(df, "NEUTRAL")
 
             risk_distance = max(abs(current['close'] * 0.003), 1.0)
+            reward_risk = float(self.config.get('reward_risk', 2.5))
             volatility_ok = (current['high'] - current['low']) / current['close'] < 0.02
 
             candle_range = max(float(current['high'] - current['low']), 1e-12)
@@ -1551,15 +1552,18 @@ class UltimateScalperBot:
             if current['close'] > prev['close'] and abs(candle_pressure) > 0.02 and volatility_ok:
                 side = "BUY"
                 stop_loss = entry - risk_distance
-                take_profit = entry + risk_distance * 2.5
+                take_profit = entry + risk_distance * reward_risk
                 reason = f"Scalp BUY {entry:.4f} candle pressure, low vol"
             elif current['close'] < prev['close'] and abs(candle_pressure) > 0.02 and volatility_ok:
                 side = "SELL"
                 stop_loss = entry + risk_distance
-                take_profit = entry - risk_distance * 2.5
+                take_profit = entry - risk_distance * reward_risk
                 reason = f"Scalp SELL {entry:.4f} candle pressure, low vol"
 
             if side and score and getattr(score, 'total_score', 0.65) >= 0.6:
+                signal_timeframe = self.timeframe
+                signal_risk_pct = self.scalper_config.risk_per_scalp * 100
+
                 class Signal:
                     def __init__(self):
                         self.side = side
@@ -1568,8 +1572,8 @@ class UltimateScalperBot:
                         self.take_profit = take_profit
                         self.reason = reason
                         self.tags = ['order_flow', 'liquidity', 'micro_price']
-                        self.metadata = {'pair': str(getattr(current, 'name', 'pair')), 'tf': self.timeframe,
-                                         'risk_per_trade_pct': self.scalper_config.risk_per_scalp * 100}
+                        self.metadata = {'pair': str(getattr(current, 'name', 'pair')), 'tf': signal_timeframe,
+                                         'risk_per_trade_pct': signal_risk_pct}
                         self.confidence = 0.7
                         self.quality = 0.7
 
@@ -1579,6 +1583,8 @@ class UltimateScalperBot:
 
         except Exception as e:
             logger.error(f"Analyze market error: {e}")
+            if self.config.get('debug_errors', False):
+                raise
             return None
 
     # ================================================================

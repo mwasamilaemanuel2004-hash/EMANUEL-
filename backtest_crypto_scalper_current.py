@@ -1,37 +1,63 @@
-"""Current Yahoo intraday validation for CryptoScalperBot."""
+"""Public Binance intraday validation for CryptoScalperBot."""
 import asyncio
 import json
 import sys
 import os
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
-import yfinance as yf
+import requests
 
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "backend"))
 from app.bots.crypto.scalper_bot import CryptoScalperBot
 
 TIMEFRAMES = ("1m", "5m", "10m", "15m")
+BINANCE_URL = "https://api.binance.com/api/v3/klines"
+BINANCE_SYMBOL = "BTCUSDT"
+MAX_BARS = 10000
 
 
 def load_data(timeframe: str) -> pd.DataFrame:
     source_interval = "5m" if timeframe == "10m" else timeframe
-    period = "7d" if source_interval == "1m" else "60d"
-    raw = yf.download(
-        "BTC-USD", period=period, interval=source_interval,
-        auto_adjust=False, progress=False, threads=False, timeout=20,
-    )
-    if isinstance(raw.columns, pd.MultiIndex):
-        raw = raw.xs("BTC-USD", axis=1, level=1)
-    raw.columns = [str(column).lower() for column in raw.columns]
-    data = raw.dropna(subset=["open", "high", "low", "close", "volume"])
+    rows = []
+    end_time = None
+    while len(rows) < MAX_BARS:
+        params = {"symbol": BINANCE_SYMBOL, "interval": source_interval, "limit": 1000}
+        if end_time is not None:
+            params["endTime"] = end_time
+        response = requests.get(BINANCE_URL, params=params, timeout=20)
+        response.raise_for_status()
+        batch = response.json()
+        if not batch:
+            break
+        rows = batch + rows
+        oldest_open = int(batch[0][0])
+        next_end = oldest_open - 1
+        if end_time == next_end:
+            break
+        end_time = next_end
+        if len(batch) < 1000:
+            break
+        time.sleep(0.05)
+
+    rows = rows[-MAX_BARS:]
+    data = pd.DataFrame(rows, columns=[
+        "open_time", "open", "high", "low", "close", "volume",
+        "close_time", "quote_volume", "trades", "taker_buy_volume",
+        "taker_buy_quote_volume", "ignore",
+    ])
+    data.index = pd.to_datetime(data.pop("open_time"), unit="ms", utc=True)
+    for column in ("open", "high", "low", "close", "volume"):
+        data[column] = pd.to_numeric(data[column], errors="coerce")
+    data = data.dropna(subset=["open", "high", "low", "close", "volume"])
     if timeframe == "10m":
         data = data.resample("10min").agg({
             "open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum",
         }).dropna()
-    return data.tail(300)
+    return data
 
 
 async def run_timeframe(timeframe: str) -> dict:
@@ -40,6 +66,8 @@ async def run_timeframe(timeframe: str) -> dict:
         "timeframe": timeframe,
         "risk_per_trade_pct": 1.0,
         "start_background_tasks": False,
+        "debug_errors": True,
+        "reward_risk": 1.25,
     })
     outcomes = []
     signals = 0
@@ -59,12 +87,13 @@ async def run_timeframe(timeframe: str) -> dict:
             risk = entry - stop
             if risk <= 0:
                 continue
+            target_reward = abs(target - entry) / risk
             if stop_hit.any() and target_hit.any():
-                value = -1.0 if stop_hit.idxmax() <= target_hit.idxmax() else 2.5
+                value = -1.0 if stop_hit.idxmax() <= target_hit.idxmax() else target_reward
             elif stop_hit.any():
                 value = -1.0
             elif target_hit.any():
-                value = 2.5
+                value = target_reward
             else:
                 value = (float(future["close"].iloc[-1]) - entry) / risk
         else:
@@ -73,12 +102,13 @@ async def run_timeframe(timeframe: str) -> dict:
             risk = stop - entry
             if risk <= 0:
                 continue
+            target_reward = abs(target - entry) / risk
             if stop_hit.any() and target_hit.any():
-                value = -1.0 if stop_hit.idxmax() <= target_hit.idxmax() else 2.5
+                value = -1.0 if stop_hit.idxmax() <= target_hit.idxmax() else target_reward
             elif stop_hit.any():
                 value = -1.0
             elif target_hit.any():
-                value = 2.5
+                value = target_reward
             else:
                 value = (entry - float(future["close"].iloc[-1])) / risk
         outcomes.append(float(value))
@@ -88,8 +118,8 @@ async def run_timeframe(timeframe: str) -> dict:
     equity = pd.Series(outcomes).cumsum() if outcomes else pd.Series(dtype=float)
     drawdown = float((equity.cummax() - equity).max()) if not equity.empty else 0.0
     return {
-        "source": "Yahoo Finance current",
-        "symbol": "BTC-USD",
+        "source": "Binance public klines",
+        "symbol": BINANCE_SYMBOL,
         "timeframe": timeframe,
         "rows": len(data),
         "start": str(data.index[0]) if not data.empty else None,
