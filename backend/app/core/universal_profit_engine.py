@@ -60,6 +60,24 @@ MARKET_CONFIGS = {
         volatility_factor=1.0,
         trading_hours="22h",
         session_peaks=[8, 13]
+    ),
+    "stocks": MarketConfig(
+        name="Stocks",
+        symbols=["AAPL", "MSFT", "NVDA", "AMZN", "TSLA", "META", "GOOGL"],
+        spread=0.0005,
+        commission=0.01,
+        volatility_factor=1.1,
+        trading_hours="market",
+        session_peaks=[14, 16]
+    ),
+    "deriv": MarketConfig(
+        name="Deriv Indices",
+        symbols=["R_10", "R_25", "R_50", "R_75", "R_100", "VOLATILITY_75"],
+        spread=0.0008,
+        commission=0.0,
+        volatility_factor=1.8,
+        trading_hours="24h",
+        session_peaks=[0, 8, 16]
     )
 }
 
@@ -152,7 +170,7 @@ class UniversalProfitEngine:
     def run_all_markets(self) -> Dict[str, List[StrategyResult]]:
         """Run backtests for all markets and strategies"""
         strategies = ["trend_follow", "mean_reversion", "breakout", "scalping", "smart_money"]
-        markets = ["forex", "crypto", "commodities", "metals"]
+        markets = ["forex", "crypto", "commodities", "metals", "stocks", "deriv"]
         
         for market in markets:
             self.results[market] = []

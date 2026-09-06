@@ -20,6 +20,9 @@ class OrderRequest:
     stop_loss: Optional[float] = None
     take_profit: Optional[float] = None
     client_order_id: Optional[str] = None
+    notional: Optional[float] = None
+    asset_class: Optional[str] = None
+    strategy: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -32,6 +35,7 @@ class OrderResult:
     price: Optional[float]
     status: str
     dry_run: bool
+    asset_class: str = "unknown"
     raw: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -53,16 +57,32 @@ class ExecutionGateway:
     """Risk-aware provider gateway shared by all market bots."""
 
     def __init__(self, adapter: BrokerAdapter, *, live_trading: bool = False,
-                 max_order_value: float = 0.0) -> None:
+                 max_order_value: float = 0.0,
+                 min_order_value: float = 5.0) -> None:
         self.adapter = adapter
         self.live_trading = live_trading
         self.max_order_value = max(0.0, float(max_order_value))
+        self.min_order_value = max(0.0, float(min_order_value))
 
     async def ticker(self, symbol: str) -> Dict[str, Any]:
         return await self.adapter.fetch_ticker(self.normalize_symbol(symbol))
 
     async def submit(self, request: OrderRequest) -> OrderResult:
         request = self.validate(request)
+        if request.notional is None and request.order_type == "market":
+            ticker = await self.ticker(request.symbol)
+            reference_price = float(ticker.get("last") or ticker.get("ask") or 0.0)
+            if reference_price <= 0:
+                raise GatewayError("market order requires a usable reference price")
+            request = OrderRequest(
+                symbol=request.symbol, side=request.side, order_type=request.order_type,
+                amount=request.amount, price=request.price,
+                stop_loss=request.stop_loss, take_profit=request.take_profit,
+                client_order_id=request.client_order_id,
+                notional=request.amount * reference_price,
+                asset_class=request.asset_class, strategy=request.strategy,
+            )
+            request = self.validate(request)
         if not self.live_trading:
             return OrderResult(
                 provider=self.adapter.provider,
@@ -73,6 +93,7 @@ class ExecutionGateway:
                 price=request.price,
                 status="dry_run",
                 dry_run=True,
+                asset_class=request.asset_class or self.classify_symbol(request.symbol),
             )
         return await self.adapter.create_order(request)
 
@@ -88,19 +109,41 @@ class ExecutionGateway:
             raise GatewayError("order amount must be positive")
         if order_type == "limit" and (request.price is None or request.price <= 0):
             raise GatewayError("limit orders require a positive price")
-        if self.max_order_value and request.price:
-            if request.amount * request.price > self.max_order_value:
+        notional = request.notional
+        if notional is None and request.price:
+            notional = request.amount * request.price
+        if notional is not None and notional < self.min_order_value:
+            raise GatewayError(f"order value must be at least {self.min_order_value:g}")
+        if self.max_order_value and notional and notional > self.max_order_value:
                 raise GatewayError("order exceeds gateway notional limit")
         return OrderRequest(
             symbol=symbol, side=side, order_type=order_type,
             amount=float(request.amount), price=request.price,
             stop_loss=request.stop_loss, take_profit=request.take_profit,
-            client_order_id=request.client_order_id,
+            client_order_id=request.client_order_id, notional=notional,
+            asset_class=(request.asset_class or self.classify_symbol(symbol)),
+            strategy=request.strategy,
         )
 
     @staticmethod
     def normalize_symbol(symbol: str) -> str:
         return str(symbol or "").strip().upper().replace("-", "/")
+
+    @staticmethod
+    def classify_symbol(symbol: str) -> str:
+        """Return a broad class for strategy routing without rejecting symbols."""
+        normalized = str(symbol or "").upper().replace("/", "")
+        if normalized.endswith(("USDT", "USDC", "BUSD")):
+            return "crypto"
+        if normalized in {"XAUUSD", "XAGUSD", "XPTUSD", "XPDUSD"}:
+            return "metals"
+        if normalized.startswith(("R_", "VOLATILITY")):
+            return "deriv"
+        if normalized in {"WTI", "BRENT", "NG", "COPPER", "IRON"}:
+            return "commodities"
+        if len(normalized) == 6 and normalized.isalpha():
+            return "forex"
+        return "stocks"
 
 
 class CCXTAdapter:
@@ -140,6 +183,7 @@ class CCXTAdapter:
             symbol=request.symbol, side=request.side, amount=request.amount,
             price=raw.get("average") or raw.get("price"),
             status=str(raw.get("status", "submitted")), dry_run=False,
+            asset_class=request.asset_class or "unknown",
             raw=raw,
         )
 

@@ -1,5 +1,6 @@
 """Contract checks for scalper timeframe and risk configuration."""
 import sys
+from datetime import datetime
 
 sys.path.insert(0, "backend")
 
@@ -37,6 +38,7 @@ def main() -> None:
         volume_ratio=1.0,
         tick_velocity=0.0,
         volume_spike=False,
+        timestamp=datetime.now(),
     )
     sized = crypto._calculate_position_size(TradeSide.BUY, 50000.0, 49850.0, market)
     assert 0 < sized <= crypto.capital * crypto.scalper_config.risk_per_scalp / 150.0
