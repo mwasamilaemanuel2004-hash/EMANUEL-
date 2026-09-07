@@ -11,6 +11,7 @@
 
 import numpy as np
 import pandas as pd
+from dataclasses import dataclass, asdict
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Any, Union
 from loguru import logger
@@ -53,6 +54,87 @@ SUPPORTED_CDL_PATTERNS: List[str] = [
 ]
 
 _EPS = 1e-12
+
+
+@dataclass(frozen=True)
+class StrategyProfile:
+    """Explainable market profile shared by every strategy family."""
+
+    regime: str
+    bias: str
+    recommended_strategy: str
+    confidence: float
+    volatility_pct: float
+    trend_strength: float
+    momentum: float
+    support: float
+    resistance: float
+    risk_multiplier: float
+    explanation: str
+
+    def as_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+def ticks_to_ohlcv(ticks: List[Dict[str, Any]], timeframe: str = "1min") -> pd.DataFrame:
+    """Aggregate broker/exchange ticks into validated OHLCV candles."""
+    if not ticks:
+        return pd.DataFrame(columns=["open", "high", "low", "close", "volume"])
+    frame = pd.DataFrame(ticks)
+    required = {"price"}
+    if not required.issubset(frame.columns):
+        raise ValueError("ticks require a price field")
+    if "timestamp" not in frame.columns:
+        frame["timestamp"] = pd.Timestamp.utcnow()
+    frame["timestamp"] = pd.to_datetime(frame["timestamp"], utc=True, errors="coerce")
+    frame["price"] = pd.to_numeric(frame["price"], errors="coerce")
+    volume = frame["volume"] if "volume" in frame.columns else pd.Series(0.0, index=frame.index)
+    frame["volume"] = pd.to_numeric(volume, errors="coerce").fillna(0.0)
+    frame = frame.dropna(subset=["timestamp", "price"])
+    frame = frame[frame["price"] > 0].set_index("timestamp").sort_index()
+    if frame.empty:
+        return pd.DataFrame(columns=["open", "high", "low", "close", "volume"])
+    return frame["price"].resample(timeframe).ohlc().join(
+        frame["volume"].resample(timeframe).sum()
+    ).dropna(subset=["open", "high", "low", "close"])
+
+
+def analyze_strategy_profile(df: pd.DataFrame, lookback: int = 50) -> StrategyProfile:
+    """Classify regime and return conservative strategy/risk guidance."""
+    required = {"open", "high", "low", "close"}
+    if not required.issubset(df.columns) or len(df) < max(20, lookback):
+        raise ValueError(f"OHLC data with at least {max(20, lookback)} rows is required")
+    close = pd.to_numeric(df["close"], errors="coerce").dropna()
+    high = pd.to_numeric(df["high"], errors="coerce").reindex(close.index)
+    low = pd.to_numeric(df["low"], errors="coerce").reindex(close.index)
+    if len(close) < max(20, lookback) or (close <= 0).any():
+        raise ValueError("OHLC prices must be positive and complete")
+    fast = close.ewm(span=max(5, lookback // 2), adjust=False).mean()
+    slow = close.ewm(span=lookback, adjust=False).mean()
+    returns = close.pct_change().dropna()
+    volatility_pct = float(returns.tail(lookback).std(ddof=0) * 100)
+    momentum = float((close.iloc[-1] / close.iloc[-min(10, len(close))]) - 1)
+    trend_strength = float(abs(fast.iloc[-1] - slow.iloc[-1]) / max(close.iloc[-1], _EPS))
+    support = float(low.tail(lookback).min())
+    resistance = float(high.tail(lookback).max())
+    direction = "BUY" if fast.iloc[-1] > slow.iloc[-1] else "SELL" if fast.iloc[-1] < slow.iloc[-1] else "HOLD"
+    if volatility_pct > 1.5:
+        regime, strategy, risk = "high_volatility", "breakout", 0.5
+    elif trend_strength > 0.002:
+        regime, strategy, risk = "trending", "trend_follow", 1.0
+    else:
+        regime, strategy, risk = "ranging", "mean_reversion", 0.7
+    confidence = min(0.95, max(0.5, 0.5 + trend_strength * 20 + min(abs(momentum) * 5, 0.25)))
+    if regime == "high_volatility":
+        confidence = min(confidence, 0.75)
+    explanation = f"{regime}: {direction} bias, volatility {volatility_pct:.3f}%, strategy {strategy}"
+    return StrategyProfile(
+        regime=regime, bias=direction, recommended_strategy=strategy,
+        confidence=round(confidence, 4), volatility_pct=round(volatility_pct, 6),
+        trend_strength=round(trend_strength, 6), momentum=round(momentum, 6),
+        support=round(support, 8), resistance=round(resistance, 8),
+        risk_multiplier=risk, explanation=explanation,
+    )
 
 
 def _body(open_: np.ndarray, close_: np.ndarray) -> np.ndarray:
