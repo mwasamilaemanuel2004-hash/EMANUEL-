@@ -71,6 +71,7 @@ class StrategyProfile:
     resistance: float
     risk_multiplier: float
     explanation: str
+    data_mode: str = "ohlcv"
 
     def as_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -135,6 +136,23 @@ def analyze_strategy_profile(df: pd.DataFrame, lookback: int = 50) -> StrategyPr
         support=round(support, 8), resistance=round(resistance, 8),
         risk_multiplier=risk, explanation=explanation,
     )
+
+
+def analyze_market_input(data: Any, mode: str = "ohlcv", *, timeframe: str = "1min",
+                         lookback: int = 50) -> StrategyProfile:
+    """Analyze user-selected tick or OHLCV input through one safe interface."""
+    normalized_mode = str(mode).strip().lower()
+    if normalized_mode == "tick":
+        frame = ticks_to_ohlcv(data, timeframe=timeframe)
+    elif normalized_mode in {"ohlcv", "candle", "candles"}:
+        if not isinstance(data, pd.DataFrame):
+            frame = pd.DataFrame(data)
+        else:
+            frame = data.copy()
+    else:
+        raise ValueError("mode must be 'tick' or 'ohlcv'")
+    profile = analyze_strategy_profile(frame, lookback=lookback)
+    return StrategyProfile(**{**profile.as_dict(), "data_mode": normalized_mode})
 
 
 def _body(open_: np.ndarray, close_: np.ndarray) -> np.ndarray:

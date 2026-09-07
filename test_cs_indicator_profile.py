@@ -5,7 +5,7 @@ import pandas as pd
 
 sys.path.insert(0, "backend")
 
-from app.core.cs_indicator_library import analyze_strategy_profile, ticks_to_ohlcv
+from app.core.cs_indicator_library import analyze_market_input, analyze_strategy_profile, ticks_to_ohlcv
 
 
 def main() -> None:
@@ -28,6 +28,10 @@ def main() -> None:
     aggregated = ticks_to_ohlcv(ticks, "5min")
     assert len(aggregated) == 16
     assert set(["open", "high", "low", "close", "volume"]).issubset(aggregated.columns)
+    tick_profile = analyze_market_input(ticks, mode="tick", timeframe="3min", lookback=20)
+    candle_profile = analyze_market_input(candles, mode="ohlcv")
+    assert tick_profile.data_mode == "tick"
+    assert candle_profile.data_mode == "ohlcv"
     print("cs_indicator_profile=ok")
 
 
