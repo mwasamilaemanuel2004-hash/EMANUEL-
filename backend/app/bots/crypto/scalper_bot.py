@@ -409,8 +409,14 @@ class UltimateScalperBot:
         if self.timeframe not in self.timeframes:
             raise ValueError(f"Unsupported scalper timeframe: {self.timeframe}")
         risk_pct = float(config.get('risk_per_trade_pct', config.get('risk_per_trade', 1.0)))
-        if not 0.8 <= risk_pct <= 5.0:
-            raise ValueError("Crypto scalper risk_per_trade_pct must be between 0.8 and 5.0")
+        risk_mode = str(config.get('risk_mode', 'balanced')).lower()
+        if risk_mode not in {'low', 'balanced', 'high'}:
+            raise ValueError("risk_mode must be low, balanced, or high")
+        mode_risk = {'low': 0.5, 'balanced': 1.0, 'high': 2.0}[risk_mode]
+        if 'risk_per_trade_pct' not in config and 'risk_per_trade' not in config:
+            risk_pct = mode_risk
+        if not 0.1 <= risk_pct <= 5.0:
+            raise ValueError("Crypto scalper risk_per_trade_pct must be between 0.1 and 5.0")
 
         # ============================================================
         # SCALPER CONFIG
@@ -424,7 +430,7 @@ class UltimateScalperBot:
             max_daily_scalps=config.get('max_trades_per_day', 500),
             min_scalp_profit=config.get('min_profit_percent', 0.001),
             max_scalp_loss=config.get('max_loss_percent', 0.0005),
-            daily_loss_limit=config.get('daily_loss_limit', 0.03),
+            daily_loss_limit=float(config.get('max_daily_loss_pct', 3.0)) / 100,
             max_consecutive_losses=config.get('max_consecutive_losses', 5),
             max_spread_pct=config.get('max_spread_pct', 0.05),
             target_win_rate=config.get('target_win_rate', 0.60),

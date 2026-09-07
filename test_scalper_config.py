@@ -30,6 +30,16 @@ def main() -> None:
     assert maximum_risk.scalper_config.risk_per_scalp == 0.05
     maximum_risk.stop_scalping()
 
+    low_risk = CryptoScalperBot({"timeframe": "5m", "risk_mode": "low",
+                                 "start_background_tasks": False})
+    high_risk = CryptoScalperBot({"timeframe": "5m", "risk_mode": "high",
+                                  "start_background_tasks": False})
+    assert low_risk.scalper_config.risk_per_scalp == 0.005
+    assert high_risk.scalper_config.risk_per_scalp == 0.02
+    assert low_risk.scalper_config.daily_loss_limit == 0.03
+    low_risk.stop_scalping()
+    high_risk.stop_scalping()
+
     market = MicrostructureAnalysis(
         state=MarketMicrostructure.HIGH_LIQUIDITY,
         imbalance=0.0,

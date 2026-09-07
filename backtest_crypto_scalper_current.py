@@ -60,11 +60,13 @@ def load_data(timeframe: str) -> pd.DataFrame:
     return data
 
 
-async def run_timeframe(timeframe: str) -> dict:
+async def run_timeframe(timeframe: str, risk_mode: str = "balanced",
+                        risk_pct: float = 1.0) -> dict:
     data = load_data(timeframe)
     bot = CryptoScalperBot({
         "timeframe": timeframe,
-        "risk_per_trade_pct": 1.0,
+        "risk_mode": risk_mode,
+        "risk_per_trade_pct": risk_pct,
         "start_background_tasks": False,
         "debug_errors": True,
         "reward_risk": 1.0,
@@ -144,10 +146,21 @@ async def run_timeframe(timeframe: str) -> dict:
         "profit_factor": round(sum(wins) / abs(sum(losses)), 3) if losses else None,
         "expectancy_R": round(sum(outcomes) / len(outcomes), 4) if outcomes else None,
         "max_drawdown_R": round(drawdown, 4),
-        "risk_per_trade_pct": 1.0,
+        "risk_per_trade_pct": risk_pct,
         "fee_rate": fee_rate,
         "validated_at_utc": datetime.now(timezone.utc).isoformat(),
     }
+
+
+async def run_risk_modes(timeframe: str = "5m") -> dict:
+    """Compare risk profiles without changing signal selection."""
+    results = {}
+    for mode, risk_pct in (("low", 0.5), ("balanced", 1.0), ("high", 2.0)):
+        result = await run_timeframe(timeframe, mode, risk_pct)
+        result["risk_mode"] = mode
+        result["configured_risk_per_trade_pct"] = risk_pct
+        results[mode] = result
+    return results
 
 
 async def main() -> None:
@@ -156,7 +169,7 @@ async def main() -> None:
     timeframes = (requested,) if requested else TIMEFRAMES
     for timeframe in timeframes:
         try:
-            results[timeframe] = await run_timeframe(timeframe)
+            results[timeframe] = await run_risk_modes(timeframe)
         except Exception as error:
             results[timeframe] = {"status": "ERROR", "error": str(error)}
         print(f"completed={timeframe}", flush=True)

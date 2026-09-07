@@ -9,7 +9,7 @@ Trading API Endpoints
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, Optional, List, Literal
 from datetime import datetime
 from loguru import logger
 
@@ -115,7 +115,13 @@ class BotConfigRequest(BaseModel):
     dynamic_take_profit: bool = Field(default=True, description="Scale TP from recent results")
     take_profit_pct: Optional[float] = Field(default=None, gt=0, le=0.5, description="Explicit TP fraction override")
     stop_loss_pct: Optional[float] = Field(default=None, gt=0, le=0.5, description="Explicit SL fraction override")
-    risk_per_trade_pct: float = Field(default=1.0, gt=0.8, le=5.0, description="Risk % per trade")
+    risk_mode: Literal["low", "balanced", "high"] = Field(default="balanced", description="Adaptive risk profile")
+    gateway_enabled: bool = Field(default=True, description="Run gateway checks before and during execution")
+    gateway_phase: Literal["before", "during", "before_and_during"] = Field(
+        default="before_and_during", description="When gateway risk checks run")
+    risk_per_trade_pct: float = Field(default=1.0, gt=0.1, le=5.0, description="Risk % per trade")
+    max_daily_loss_pct: float = Field(default=3.0, gt=0.1, le=20.0, description="Daily loss stop percentage")
+    minimum_signal_confidence: float = Field(default=0.6, ge=0.5, le=0.99)
     capital: float = Field(default=1000.0, gt=0, description="Trading capital")
     pairs: List[str] = Field(default_factory=lambda: ["BTCUSDT", "ETHUSDT", "SOLUSDT"])
     timeframe: str = Field(default="1m", description="Primary timeframe")
@@ -187,7 +193,12 @@ def _build_bot(bot_id: str, request: BotConfigRequest) -> Any:
         'dynamic_take_profit': request.dynamic_take_profit,
         'take_profit_pct': request.take_profit_pct,
         'stop_loss_pct': request.stop_loss_pct,
+        'risk_mode': request.risk_mode,
+        'gateway_enabled': request.gateway_enabled,
+        'gateway_phase': request.gateway_phase,
         'risk_per_trade_pct': request.risk_per_trade_pct,
+        'max_daily_loss_pct': request.max_daily_loss_pct,
+        'minimum_signal_confidence': request.minimum_signal_confidence,
         'capital': request.capital,
         'pairs': request.pairs,
         'timeframe': request.timeframe,
