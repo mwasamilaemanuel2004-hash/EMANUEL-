@@ -351,6 +351,19 @@ class AiSignalGate:
         self.config = config
         self.min_confidence = config.get('min_confidence', 0.6)
 
+        # Optional offline ML gate (free local AI via scikit-learn, no API).
+        # Falls back to the legacy neutral score when disabled/untrained.
+        self.ml_gate = None
+        if bool(config.get('ml_enabled', False)):
+            try:
+                try:
+                    from ...core.ml_signal_gate import LocalMLSignalGate
+                except ImportError:
+                    from app.core.ml_signal_gate import LocalMLSignalGate
+                self.ml_gate = LocalMLSignalGate(config.get('ml_artifact'))
+            except Exception:
+                self.ml_gate = None
+
         class Engine:
             def __init__(self):
                 self.cfg = type('Config', (), {'MIN_CONFIDENCE': 0.6})()
@@ -364,6 +377,21 @@ class AiSignalGate:
                 self.total_score = 0.65
                 self.confidence = 0.65
                 self.quality = 0.7
+
+        if self.ml_gate is not None and self.ml_gate.ready and df is not None and len(df) >= 60:
+            try:
+                from app.core.ml_signal_gate import build_features
+                features = build_features(df).iloc[-1]
+                if not features.isna().any():
+                    prob = self.ml_gate.score(features.to_numpy())
+                    if prob is not None:
+                        ml_score = Score()
+                        ml_score.total_score = prob
+                        ml_score.confidence = prob
+                        ml_score.quality = prob
+                        return ml_score
+            except Exception:
+                pass
         return Score()
 
     def make_signal(self, score, side, entry, sl, tp, reason, tags, metadata):
@@ -468,6 +496,24 @@ class UltimateScalperBot:
             config.get('reconnect_max_attempts', self.scalper_config.reconnect_max_attempts))
         self.scalper_config.reconnect_backoff = float(
             config.get('reconnect_backoff', self.scalper_config.reconnect_backoff))
+
+        # ============================================================
+        # REGIME-AWARE ENTRY ENGINE CONFIG (upgrade v12.2)
+        # ============================================================
+        # The market regime (trend vs range, ATR volatility) decides:
+        # strategy (trend continuation vs range mean-reversion), reward,
+        # stop width and trade frequency. Position sizing stays under the
+        # existing risk_mode (low/balanced/high) controls.
+        self.entry_strategy = str(config.get('entry_strategy', 'momentum')).lower()
+        self.stop_atr_mult = float(config.get('stop_atr_mult', 1.5))
+        self.atr_period = int(config.get('atr_period', 14))
+        self.regime_ema_fast = int(config.get('regime_ema_fast', 21))
+        self.regime_ema_slow = int(config.get('regime_ema_slow', 55))
+        self.regime_range_window = int(config.get('regime_range_window', 20))
+        self.trend_atr_threshold = float(config.get('trend_atr_threshold', 1.0))
+        self.reversion_extreme = float(config.get('reversion_extreme', 0.9))
+        self.min_bars_between_trades = int(config.get('min_bars_between_trades', 0))
+        self._last_signal_bar = None
 
         # Per-symbol live tick buffers + feed health (in-memory only, no new files)
         self._tick_buffers: Dict[str, deque] = {}
@@ -1564,8 +1610,103 @@ class UltimateScalperBot:
             entry = current['close']
             stop_loss = entry
             take_profit = entry
+            reason = ""
 
-            if current['close'] > prev['close'] and abs(candle_pressure) > pressure_threshold and volatility_ok:
+            if self.entry_strategy == 'regime':
+                # ========================================================
+                # REGIME-AWARE ENGINE (v12.2): the market regime decides
+                # strategy, stop width, reward and trade frequency.
+                # ========================================================
+                prev_close = df['close'].shift(1)
+                true_range = pd.concat([
+                    (df['high'] - df['low']),
+                    (df['high'] - prev_close).abs(),
+                    (df['low'] - prev_close).abs(),
+                ], axis=1).max(axis=1)
+                atr = float(true_range.rolling(self.atr_period).mean().iloc[-1] or 0)
+                if atr <= 0:
+                    return None
+
+                ema_fast = float(df['close'].ewm(span=self.regime_ema_fast, adjust=False).mean().iloc[-1])
+                ema_slow = float(df['close'].ewm(span=self.regime_ema_slow, adjust=False).mean().iloc[-1])
+                trend_strength = (ema_fast - ema_slow) / atr
+
+                regime_window = df.iloc[-self.regime_range_window:]
+                range_hi = float(regime_window['high'].max())
+                range_lo = float(regime_window['low'].min())
+                range_pos = (float(current['close']) - range_lo) / max(range_hi - range_lo, 1e-12)
+
+                # Trade-frequency control: respect the cooldown window.
+                if self.min_bars_between_trades > 0 and self._last_signal_bar is not None:
+                    if (len(df) - 1 - self._last_signal_bar) < self.min_bars_between_trades:
+                        return None
+
+                # Volatility cap relative to price keeps scalp costs sane.
+                if atr / float(current['close']) >= 0.02:
+                    return None
+
+                stop_width = atr * self.stop_atr_mult
+                trending = abs(trend_strength) >= self.trend_atr_threshold
+
+                if self.entry_strategy == 'breakout':
+                    # Breakout continuation: trade breaks of the prior range
+                    # (current bar excluded) only in the trend direction.
+                    prior_hi = float(regime_window['high'].iloc[:-1].max())
+                    prior_lo = float(regime_window['low'].iloc[:-1].min())
+                    if trend_strength > 0 and float(current['close']) > prior_hi:
+                        side = "BUY"
+                        stop_loss = entry - stop_width
+                        take_profit = entry + stop_width * reward_risk
+                        reason = f"Regime BUY {entry:.4f} trend breakout (TS {trend_strength:.2f})"
+                    elif trend_strength < 0 and float(current['close']) < prior_lo:
+                        side = "SELL"
+                        stop_loss = entry + stop_width
+                        take_profit = entry - stop_width * reward_risk
+                        reason = f"Regime SELL {entry:.4f} trend breakdown (TS {trend_strength:.2f})"
+                elif self.entry_strategy == 'pullback':
+                    # Pullback resume: in an uptrend buy the first up-close
+                    # after price touched the fast EMA; mirrored for shorts.
+                    touched_fast = bool(regime_window['low'].iloc[:-1].min() <= ema_fast) if trend_strength > 0 \
+                        else bool(regime_window['high'].iloc[:-1].max() >= ema_fast)
+                    if trend_strength > 0 and touched_fast and current['close'] > prev['close'] \
+                            and candle_pressure > pressure_threshold:
+                        side = "BUY"
+                        stop_loss = entry - stop_width
+                        take_profit = entry + stop_width * reward_risk
+                        reason = f"Regime BUY {entry:.4f} pullback resume (TS {trend_strength:.2f})"
+                    elif trend_strength < 0 and touched_fast and current['close'] < prev['close'] \
+                            and candle_pressure < -pressure_threshold:
+                        side = "SELL"
+                        stop_loss = entry + stop_width
+                        take_profit = entry - stop_width * reward_risk
+                        reason = f"Regime SELL {entry:.4f} pullback resume (TS {trend_strength:.2f})"
+                elif trending:
+                    # Trend continuation: join the trend on momentum resumption.
+                    if trend_strength > 0 and current['close'] > prev['close'] \
+                            and candle_pressure > pressure_threshold:
+                        side = "BUY"
+                        stop_loss = entry - stop_width
+                        take_profit = entry + stop_width * reward_risk
+                        reason = f"Regime BUY {entry:.4f} trend continuation (TS {trend_strength:.2f})"
+                    elif trend_strength < 0 and current['close'] < prev['close'] \
+                            and candle_pressure < -pressure_threshold:
+                        side = "SELL"
+                        stop_loss = entry + stop_width
+                        take_profit = entry - stop_width * reward_risk
+                        reason = f"Regime SELL {entry:.4f} trend continuation (TS {trend_strength:.2f})"
+                else:
+                    # Range mean-reversion: fade the extremes.
+                    if range_pos >= self.reversion_extreme and candle_pressure < 0:
+                        side = "SELL"
+                        stop_loss = entry + stop_width
+                        take_profit = entry - stop_width * reward_risk
+                        reason = f"Regime SELL {entry:.4f} range fade high (pos {range_pos:.2f})"
+                    elif range_pos <= (1.0 - self.reversion_extreme) and candle_pressure > 0:
+                        side = "BUY"
+                        stop_loss = entry - stop_width
+                        take_profit = entry + stop_width * reward_risk
+                        reason = f"Regime BUY {entry:.4f} range fade low (pos {range_pos:.2f})"
+            elif current['close'] > prev['close'] and abs(candle_pressure) > pressure_threshold and volatility_ok:
                 side = "BUY"
                 stop_loss = entry - risk_distance
                 take_profit = entry + risk_distance * reward_risk
@@ -1579,6 +1720,7 @@ class UltimateScalperBot:
             if side and score and getattr(score, 'total_score', 0.65) >= 0.6:
                 signal_timeframe = self.timeframe
                 signal_risk_pct = self.scalper_config.risk_per_scalp * 100
+                self._last_signal_bar = len(df) - 1
 
                 class Signal:
                     def __init__(self):

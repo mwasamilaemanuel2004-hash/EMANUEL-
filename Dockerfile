@@ -20,12 +20,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc g++ libpq-dev libffi-dev libssl-dev curl git \
     && rm -rf /var/lib/apt/lists/*
 
-# Install dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir --user -r requirements.txt
+# Install dependencies (requirements live in backend/)
+COPY backend/requirements.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 # Copy app code
 COPY backend/ .
+
+# Ensure runtime data dir exists in the image (data/ is not tracked in git)
+RUN mkdir -p /build/data
 
 # ============================================
 # STAGE 2: FINAL (Slim)
@@ -44,13 +47,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy from builder
-COPY --from=builder /root/.local /root/.local
+# Copy from builder (installed to /usr/local so non-root appuser can read them)
+COPY --from=builder /install /usr/local
 COPY --from=builder /build/app /app/app
 COPY --from=builder /build/data /app/data
 
-# Copy .env
-COPY .env /app/.env
+# NOTE: Do NOT COPY .env into the image - it is not committed to git (by design).
+# Set environment variables in the Render/DigitalOcean dashboard instead.
 
 # Create non-root user
 RUN addgroup --system --gid 1001 appuser && \
