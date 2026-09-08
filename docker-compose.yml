@@ -1,0 +1,119 @@
+﻿# ESMH.TRADE - Docker Compose Configuration
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: esmh-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=production
+      - DEBUG=false
+      - DATABASE_URL=postgresql+asyncpg://esmh:esmh_pass@postgres:5432/esmh_trade
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=change-me-in-production
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+    networks:
+      - esmh-net
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: esmh-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - esmh-net
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: esmh-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=esmh
+      - POSTGRES_PASSWORD=esmh_pass
+      - POSTGRES_DB=esmh_trade
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - esmh-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U esmh"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: esmh-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --maxmemory 256mb
+    volumes:
+      - redisdata:/data
+    restart: unless-stopped
+    networks:
+      - esmh-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: esmh-celery
+    command: celery -A app.tasks worker --loglevel=info
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - backend
+      - redis
+    restart: unless-stopped
+    networks:
+      - esmh-net
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: esmh-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./scripts/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    restart: unless-stopped
+    networks:
+      - esmh-net
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: esmh-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    networks:
+      - esmh-net
+
+volumes:
+  pgdata:
+  redisdata:
+
+networks:
+  esmh-net:
+    driver: bridge

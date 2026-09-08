@@ -1,0 +1,49 @@
+﻿[project]
+name = "esmh-trade"
+version = "4.0.0"
+description = "ESMH.TRADE - AI-Powered Trading Platform"
+authors = ["ESMH Team <estradingmachine@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+requires-python = ">=3.11"
+keywords = ["trading", "ai", "crypto", "forex", "fastapi"]
+
+[project.urls]
+Homepage = "https://eshtrade.com"
+Documentation = "https://docs.eshtrade.com"
+Repository = "https://github.com/mwasamilaemanuel2004-hash/EMANUEL-"
+
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["backend"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-v --cov=backend --cov-report=html"
+
+[tool.coverage.run]
+source = ["backend"]
+omit = ["tests/*", "*/migrations/*"]
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "I", "N", "W", "UP"]

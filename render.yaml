@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: esmh-trade-api
+    runtime: python
+    plan: standard
+    region: oregon
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000
+    healthCheckPath: /health
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: PORT
+        value: "8000"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: JWT_SECRET
+        generateValue: true
+      - key: LOG_LEVEL
+        value: info
+  - type: static
+    name: esmh-trade-frontend
+    plan: free
+    staticPublishPath: ./frontend
+    routes:
+      - type: rewrite
+        source: /api/*
+        destination: https://esmh-trade-api.onrender.com/*
+databases:
+  - name: esmh-trade-db
+    plan: standard
+    postgresMajorVersion: "16"
+  - name: esmh-trade-redis
+    plan: standard
