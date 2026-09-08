@@ -5,7 +5,7 @@ NOT GUARANTEEING 98% WIN RATE — uses honest risk/reward filtering.
 """
 from typing import Optional, Dict, Any
 import numpy as np
-from backend.app.core.ai_overseer import TradeScore, TradeGrade, AIOverseer, MarketCondition
+from .ai_overseer import TradeScore, TradeGrade, AIOverseer, MarketCondition
 
 class AdvancedTradeConfig:
     MIN_CONFIDENCE = 70          # 60-69 WATCH, 70+ NORMAL, 80+ HIGH

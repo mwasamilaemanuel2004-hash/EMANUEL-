@@ -43,12 +43,13 @@ app.add_middleware(
 )
 
 # Include API Routers
-from .api import auth, trading, debug, deriv
+from .api import auth, trading, debug, deriv, ultra
 
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(trading.router, prefix="/api/trading", tags=["Trading"])
 app.include_router(debug.router, prefix="/api/debug", tags=["Debug"])
 app.include_router(deriv.router, prefix="/api/deriv", tags=["Deriv Bot"])
+app.include_router(ultra.router, prefix="/api/ultra", tags=["Ultra Profit"])
 
 
 # ============================================

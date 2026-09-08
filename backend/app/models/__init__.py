@@ -27,8 +27,15 @@ Models:
 
 # User Models
 from .user import (
-    User, UserRole, UserStatus, AccountTier, KYCStatus
+    User, AccountTier, KYCStatus, APIKeyStatus
 )
+# UserRole and UserStatus are defined in backend/app/security/SECURITY
+# and data/models/user — import if available, otherwise leave as None
+try:
+    from .user import UserRole, UserStatus
+except ImportError:
+    UserRole = None
+    UserStatus = None
 
 # Trading Models
 from .trade import (

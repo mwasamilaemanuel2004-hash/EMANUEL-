@@ -9,8 +9,8 @@ Core Trading Engine
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from datetime import datetime
-from backend.app.core.advanced_engine import AdvancedEngine, AdvancedTradeConfig
-from backend.app.core.ai_overseer import TradeScore, TradeGrade, AIOverseer
+from .advanced_engine import AdvancedEngine, AdvancedTradeConfig
+from .ai_overseer import TradeScore, TradeGrade, AIOverseer
 from loguru import logger
 from enum import Enum
 
